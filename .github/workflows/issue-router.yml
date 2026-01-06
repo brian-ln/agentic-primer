@@ -1,0 +1,74 @@
+name: Issue Router
+
+on:
+  issues:
+    types: [opened, labeled, reopened]
+
+permissions:
+  issues: write
+  contents: write
+
+jobs:
+  route-issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Route Research Issue
+        if: contains(github.event.issue.labels.*.name, 'research')
+        run: |
+          echo "Research issue detected: ${{ github.event.issue.title }}"
+          echo "Issue #${{ github.event.issue.number }} will be processed by research automation"
+          
+      - name: Route Planning Issue
+        if: contains(github.event.issue.labels.*.name, 'planning')
+        run: |
+          echo "Planning issue detected: ${{ github.event.issue.title }}"
+          echo "Issue #${{ github.event.issue.number }} will be processed by planning automation"
+          
+      - name: Route Implementation Issue
+        if: contains(github.event.issue.labels.*.name, 'implementation')
+        run: |
+          echo "Implementation issue detected: ${{ github.event.issue.title }}"
+          echo "Issue #${{ github.event.issue.number }} will be processed by implementation automation"
+          
+      - name: Add routing comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = context.payload.issue.labels.map(l => l.name);
+            let message = '🤖 **Automated Issue Router**\n\n';
+            
+            if (labels.includes('research')) {
+              message += '✅ This issue has been identified as a **Research Task**\n\n';
+              message += 'The research automation workflow will:\n';
+              message += '- Investigate the research question\n';
+              message += '- Document findings in `docs/knowledge/`\n';
+              message += '- Provide recommendations\n';
+            } else if (labels.includes('planning')) {
+              message += '✅ This issue has been identified as a **Planning Task**\n\n';
+              message += 'The planning automation workflow will:\n';
+              message += '- Create architecture documents\n';
+              message += '- Break down tasks\n';
+              message += '- Generate implementation plans\n';
+            } else if (labels.includes('implementation')) {
+              message += '✅ This issue has been identified as an **Implementation Task**\n\n';
+              message += 'The implementation automation workflow will:\n';
+              message += '- Execute the implementation\n';
+              message += '- Run tests\n';
+              message += '- Create pull requests\n';
+            } else {
+              message += '⚠️ This issue does not have an automation label.\n\n';
+              message += 'Add one of these labels to trigger automation:\n';
+              message += '- `research` - For investigation tasks\n';
+              message += '- `planning` - For design and planning tasks\n';
+              message += '- `implementation` - For coding tasks\n';
+            }
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: message
+            });

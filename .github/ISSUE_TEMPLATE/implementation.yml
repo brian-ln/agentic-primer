@@ -1,0 +1,80 @@
+name: 🔨 Implementation Task
+description: Automated implementation and coding task
+title: "[Implementation] "
+labels: ["implementation", "automated"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Implementation Task
+        This issue will trigger an automated implementation workflow to write code and make changes.
+  
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What needs to be implemented?
+      placeholder: "Example: Implement the issue routing workflow"
+    validations:
+      required: true
+  
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: How will we know this is complete?
+      placeholder: |
+        - [ ] Feature X is implemented
+        - [ ] Tests pass
+        - [ ] Documentation updated
+    validations:
+      required: false
+  
+  - type: textarea
+    id: technical-details
+    attributes:
+      label: Technical Details
+      description: Provide technical specifications or constraints
+      placeholder: |
+        - Technology stack
+        - Architecture decisions
+        - Dependencies
+    validations:
+      required: false
+  
+  - type: textarea
+    id: related-work
+    attributes:
+      label: Related Work
+      description: Link to related issues, PRs, or documentation
+      placeholder: "Related to #XX, depends on #YY"
+    validations:
+      required: false
+  
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How urgent is this implementation?
+      options:
+        - Low
+        - Medium
+        - High
+        - Critical
+      default: 1
+    validations:
+      required: true
+  
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: Complexity
+      description: Expected complexity level
+      options:
+        - Simple
+        - Medium
+        - Complex
+        - Very Complex
+      default: 1
+    validations:
+      required: false
