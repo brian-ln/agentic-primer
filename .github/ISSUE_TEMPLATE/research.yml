@@ -1,0 +1,67 @@
+name: 🔬 Research Task
+description: Automated research and investigation task
+title: "[Research] "
+labels: ["research", "automated"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Research Task
+        This issue will trigger an automated research workflow to investigate and document findings.
+  
+  - type: textarea
+    id: research-question
+    attributes:
+      label: Research Question
+      description: What needs to be researched or investigated?
+      placeholder: "Example: Investigate the best practices for git-based automation systems"
+    validations:
+      required: true
+  
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Provide background information and context
+      placeholder: "Why is this research needed? What problem does it solve?"
+    validations:
+      required: false
+  
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Define the boundaries and focus areas
+      placeholder: "What should be included/excluded from the research?"
+    validations:
+      required: false
+  
+  - type: textarea
+    id: deliverables
+    attributes:
+      label: Expected Deliverables
+      description: What outputs are expected from this research?
+      placeholder: |
+        - Research document in docs/knowledge/
+        - Summary of findings
+        - Recommendations
+      value: |
+        - Research document in docs/knowledge/
+        - Summary of findings
+        - Recommendations
+    validations:
+      required: false
+  
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How urgent is this research?
+      options:
+        - Low
+        - Medium
+        - High
+        - Critical
+      default: 1
+    validations:
+      required: true
