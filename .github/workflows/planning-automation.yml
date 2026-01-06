@@ -47,12 +47,13 @@ jobs:
       - name: Create planning document
         run: |
           mkdir -p docs/knowledge/planning
+          CURRENT_DATE=$(date +%Y-%m-%d)
           
-          cat > docs/knowledge/planning/issue-${{ steps.issue-details.outputs.issue_number }}.md << 'EOF'
+          cat > docs/knowledge/planning/issue-${{ steps.issue-details.outputs.issue_number }}.md << EOF
           # Planning: ${{ steps.issue-details.outputs.issue_title }}
 
           **Issue:** #${{ steps.issue-details.outputs.issue_number }}  
-          **Date:** $(date +%Y-%m-%d)  
+          **Date:** ${CURRENT_DATE}  
           **Status:** In Progress
 
           ## Objective
