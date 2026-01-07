@@ -1,0 +1,50 @@
+name: Research Task
+description: Create a research task for investigation and analysis
+title: "[Research] "
+labels: ["research", "copilot"]
+assignees:
+  - brian-ln
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Research Task
+        Use this template for research and investigation tasks.
+  
+  - type: textarea
+    id: objective
+    attributes:
+      label: Research Objective
+      description: What needs to be researched or investigated?
+      placeholder: Describe the research objective
+    validations:
+      required: true
+  
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Provide background information and context
+      placeholder: Any relevant background information
+    validations:
+      required: false
+  
+  - type: textarea
+    id: questions
+    attributes:
+      label: Key Questions
+      description: List specific questions to answer
+      placeholder: |
+        - Question 1
+        - Question 2
+    validations:
+      required: false
+  
+  - type: textarea
+    id: deliverables
+    attributes:
+      label: Expected Deliverables
+      description: What should be produced from this research?
+      placeholder: Documents, reports, recommendations, etc.
+    validations:
+      required: false

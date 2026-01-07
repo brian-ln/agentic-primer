@@ -1,0 +1,32 @@
+name: Test Issue
+description: Create a test issue to validate the system
+title: "[Test] "
+labels: ["test", "copilot"]
+assignees:
+  - brian-ln
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Test Issue
+        Use this template to test the issue-driven development system.
+  
+  - type: textarea
+    id: test-description
+    attributes:
+      label: Test Description
+      description: Describe what this test is validating
+      placeholder: This test validates...
+    validations:
+      required: true
+  
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: What should happen when processing this issue?
+      placeholder: |
+        - System should...
+        - Copilot should...
+    validations:
+      required: false
