@@ -1,3 +1,4 @@
+---
 name: Auto Assign PR to Owner
 
 on:
@@ -17,12 +18,12 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const prNumber = context.payload.pull_request.number;
-            
+
             await github.rest.issues.addAssignees({
               owner: owner,
               repo: repo,
               issue_number: prNumber,
               assignees: [owner]
             });
-            
+
             console.log(`Assigned PR #${prNumber} to @${owner}`);
