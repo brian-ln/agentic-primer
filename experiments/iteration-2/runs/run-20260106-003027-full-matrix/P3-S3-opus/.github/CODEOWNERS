@@ -1,0 +1,25 @@
+# CODEOWNERS - Automatically assign reviewers to pull requests
+#
+# This file defines code owners for automatic PR review assignment.
+# When a PR is created, GitHub will automatically request review from
+# the matching code owners.
+#
+# Format: <pattern> <owner1> [<owner2> ...]
+#
+# For documentation, see:
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for all files - catches everything
+* @owner
+
+# Specific ownership patterns (examples - customize as needed)
+# /.github/ @devops-team
+# /docs/ @docs-team
+# /src/api/ @api-team
+# /tests/ @qa-team
+
+# Knowledge base ownership - for self-improvement tracking
+/docs/knowledge/ @owner
+
+# GitHub configuration ownership
+/.github/ @owner

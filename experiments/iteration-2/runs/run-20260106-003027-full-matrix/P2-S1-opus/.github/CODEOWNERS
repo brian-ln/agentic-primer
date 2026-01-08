@@ -1,0 +1,8 @@
+# CODEOWNERS - Auto-assign PRs to Repository Owner
+#
+# This file ensures all PRs are automatically assigned to the repository
+# owner for review, implementing the "auto-assign PRs to owner" requirement.
+#
+# Replace @owner with your actual GitHub username.
+
+* @owner

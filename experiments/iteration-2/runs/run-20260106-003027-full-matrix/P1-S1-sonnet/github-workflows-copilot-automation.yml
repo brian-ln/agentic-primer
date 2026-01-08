@@ -1,0 +1,220 @@
+name: Copilot Issue Automation
+
+on:
+  issues:
+    types: [assigned]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  process-copilot-issue:
+    # Only trigger if assigned to copilot
+    if: contains(github.event.issue.assignees.*.login, 'copilot')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract issue metadata
+        id: issue-data
+        run: |
+          echo "issue_number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
+          echo "issue_title=${{ github.event.issue.title }}" >> $GITHUB_OUTPUT
+          echo "issue_body<<EOF" >> $GITHUB_OUTPUT
+          echo "${{ github.event.issue.body }}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create copilot branch
+        run: |
+          BRANCH_NAME="copilot/issue-${{ steps.issue-data.outputs.issue_number }}"
+          git checkout -b "$BRANCH_NAME"
+          echo "Created branch: $BRANCH_NAME"
+
+      - name: Load knowledge base context
+        id: knowledge
+        run: |
+          echo "Loading knowledge base from docs/knowledge/..."
+
+          # Check if knowledge base exists
+          if [ -d "docs/knowledge" ]; then
+            echo "knowledge_available=true" >> $GITHUB_OUTPUT
+
+            # Count knowledge entries
+            PATTERNS_COUNT=$(find docs/knowledge/patterns -name "*.md" -not -name "README.md" 2>/dev/null | wc -l)
+            DECISIONS_COUNT=$(find docs/knowledge/decisions -name "*.md" -not -name "README.md" 2>/dev/null | wc -l)
+            INSIGHTS_COUNT=$(find docs/knowledge/insights -name "*.md" -not -name "README.md" 2>/dev/null | wc -l)
+
+            echo "patterns_count=$PATTERNS_COUNT" >> $GITHUB_OUTPUT
+            echo "decisions_count=$DECISIONS_COUNT" >> $GITHUB_OUTPUT
+            echo "insights_count=$INSIGHTS_COUNT" >> $GITHUB_OUTPUT
+
+            echo "Knowledge base loaded:"
+            echo "  - Patterns: $PATTERNS_COUNT"
+            echo "  - Decisions: $DECISIONS_COUNT"
+            echo "  - Insights: $INSIGHTS_COUNT"
+          else
+            echo "knowledge_available=false" >> $GITHUB_OUTPUT
+            echo "Warning: Knowledge base not found at docs/knowledge/"
+          fi
+
+      - name: Comment on issue (processing started)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `🤖 @copilot processing started...
+
+              **Issue:** #${{ steps.issue-data.outputs.issue_number }}
+              **Branch:** copilot/issue-${{ steps.issue-data.outputs.issue_number }}
+              **Knowledge Base:** ${{ steps.knowledge.outputs.knowledge_available == 'true' && 'Available' || 'Not found' }}
+
+              ${{ steps.knowledge.outputs.knowledge_available == 'true' && format('- Patterns: {0}\n- Decisions: {1}\n- Insights: {2}', steps.knowledge.outputs.patterns_count, steps.knowledge.outputs.decisions_count, steps.knowledge.outputs.insights_count) || '' }}
+
+              I'll create a pull request shortly with my proposed solution.
+              `
+            })
+
+      - name: Invoke GitHub Copilot (simulated)
+        run: |
+          echo "=== COPILOT INVOCATION (SIMULATED) ==="
+          echo "This step would invoke GitHub Copilot in production."
+          echo ""
+          echo "Issue context:"
+          echo "  Number: ${{ steps.issue-data.outputs.issue_number }}"
+          echo "  Title: ${{ steps.issue-data.outputs.issue_title }}"
+          echo ""
+          echo "Knowledge base available: ${{ steps.knowledge.outputs.knowledge_available }}"
+          echo ""
+          echo "In production, Copilot would:"
+          echo "  1. Analyze the issue description"
+          echo "  2. Review knowledge base for relevant context"
+          echo "  3. Generate code changes"
+          echo "  4. Commit to branch: copilot/issue-${{ steps.issue-data.outputs.issue_number }}"
+          echo "  5. Create a draft pull request"
+          echo ""
+          echo "=== END SIMULATION ==="
+
+      - name: Create example commit (simulation)
+        run: |
+          # In a real workflow, Copilot would make actual code changes
+          # This is a simulation to demonstrate the workflow
+
+          mkdir -p .copilot
+          cat > .copilot/issue-${{ steps.issue-data.outputs.issue_number }}.md << 'EOF'
+          # Copilot Processing Record
+
+          **Issue:** #${{ steps.issue-data.outputs.issue_number }}
+          **Title:** ${{ steps.issue-data.outputs.issue_title }}
+          **Processed:** $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          ## Actions Taken
+
+          This file represents where Copilot's code changes would be committed.
+
+          In production, this workflow would:
+          1. Generate actual code modifications
+          2. Commit them to this branch
+          3. Create a pull request
+
+          ## Knowledge Base Used
+
+          - Patterns: ${{ steps.knowledge.outputs.patterns_count }} available
+          - Decisions: ${{ steps.knowledge.outputs.decisions_count }} available
+          - Insights: ${{ steps.knowledge.outputs.insights_count }} available
+          EOF
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .copilot/
+          git commit -m "copilot: Process issue #${{ steps.issue-data.outputs.issue_number }}"
+
+      - name: Push branch
+        run: |
+          BRANCH_NAME="copilot/issue-${{ steps.issue-data.outputs.issue_number }}"
+          git push origin "$BRANCH_NAME"
+          echo "Pushed branch: $BRANCH_NAME"
+
+      - name: Create pull request
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue_number = ${{ steps.issue-data.outputs.issue_number }};
+            const branch_name = `copilot/issue-${issue_number}`;
+
+            const pr = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[Copilot] Fix #${issue_number}: ${{ steps.issue-data.outputs.issue_title }}`,
+              head: branch_name,
+              base: 'main',
+              body: `## Copilot-Generated Solution
+
+              Resolves #${issue_number}
+
+              ### Summary
+
+              This PR was automatically generated by @copilot in response to the assigned issue.
+
+              ### Changes Made
+
+              (In production, Copilot would list specific code changes here)
+
+              ### Knowledge Base Context
+
+              ${{ steps.knowledge.outputs.knowledge_available == 'true' && 'Copilot accessed the following knowledge:' || 'Knowledge base not available' }}
+
+              ${{ steps.knowledge.outputs.knowledge_available == 'true' && format('- {0} pattern(s)\n- {1} decision(s)\n- {2} insight(s)', steps.knowledge.outputs.patterns_count, steps.knowledge.outputs.decisions_count, steps.knowledge.outputs.insights_count) || '' }}
+
+              ### Testing
+
+              (In production, Copilot would include test results here)
+
+              ### Review Notes
+
+              Please review the changes and:
+              - Verify correctness
+              - Check for edge cases
+              - Ensure coding standards are met
+              - Run additional tests if needed
+
+              ---
+
+              🤖 This PR was created by GitHub Copilot automation
+              `,
+              draft: true
+            });
+
+            // Link PR back to issue
+            await github.rest.issues.createComment({
+              issue_number: issue_number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `✅ Pull request created: #${pr.data.number}
+
+              @copilot has finished processing this issue and created a draft PR.
+
+              **Next steps:**
+              1. Review the PR: #${pr.data.number}
+              2. Request changes if needed
+              3. Approve and merge when ready
+
+              The PR will be automatically assigned reviewers based on CODEOWNERS.
+              `
+            });
+
+      - name: Report completion
+        run: |
+          echo "✅ Copilot automation completed successfully"
+          echo "   - Issue: #${{ steps.issue-data.outputs.issue_number }}"
+          echo "   - Branch: copilot/issue-${{ steps.issue-data.outputs.issue_number }}"
+          echo "   - PR: Created (draft)"
+          echo "   - Reviewers: Auto-assigned via CODEOWNERS"

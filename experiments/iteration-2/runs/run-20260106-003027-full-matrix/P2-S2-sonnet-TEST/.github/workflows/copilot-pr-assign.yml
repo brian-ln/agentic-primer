@@ -1,0 +1,174 @@
+name: Copilot PR Auto-Assign
+
+on:
+  pull_request:
+    types: [opened, reopened]
+
+permissions:
+  pull-requests: write
+  issues: read
+
+jobs:
+  auto-assign:
+    # Only run for PRs from copilot/* branches
+    if: startsWith(github.head_ref, 'copilot/')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Extract issue number from branch
+        id: extract-issue
+        run: |
+          BRANCH_NAME="${{ github.head_ref }}"
+          echo "Branch name: $BRANCH_NAME"
+
+          # Extract issue number from branch name (format: copilot/issue-123-description)
+          ISSUE_NUMBER=$(echo "$BRANCH_NAME" | grep -oP 'issue-\K\d+' || echo "")
+
+          if [ -z "$ISSUE_NUMBER" ]; then
+            echo "⚠️ Could not extract issue number from branch name"
+            echo "issue_number=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "Extracted issue number: $ISSUE_NUMBER"
+          echo "issue_number=$ISSUE_NUMBER" >> $GITHUB_OUTPUT
+
+      - name: Get issue creator
+        id: get-creator
+        if: steps.extract-issue.outputs.issue_number != ''
+        run: |
+          ISSUE_NUMBER="${{ steps.extract-issue.outputs.issue_number }}"
+
+          # Get issue details
+          ISSUE_DATA=$(gh issue view "$ISSUE_NUMBER" --repo "${{ github.repository }}" --json author)
+          CREATOR=$(echo "$ISSUE_DATA" | jq -r '.author.login')
+
+          echo "Issue creator: $CREATOR"
+          echo "creator=$CREATOR" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Assign PR to issue creator
+        if: steps.get-creator.outputs.creator != ''
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const creator = '${{ steps.get-creator.outputs.creator }}';
+
+            // Assign PR to issue creator
+            await github.rest.issues.addAssignees({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              assignees: [creator]
+            });
+
+            console.log(`✅ Assigned PR to ${creator}`);
+
+      - name: Request review from issue creator
+        if: steps.get-creator.outputs.creator != ''
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const creator = '${{ steps.get-creator.outputs.creator }}';
+            const prAuthor = context.payload.pull_request.user.login;
+
+            // Only request review if creator is not the PR author
+            if (creator !== prAuthor) {
+              try {
+                await github.rest.pulls.requestReviewers({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: context.issue.number,
+                  reviewers: [creator]
+                });
+                console.log(`✅ Requested review from ${creator}`);
+              } catch (error) {
+                console.log(`⚠️ Could not request review: ${error.message}`);
+              }
+            }
+
+      - name: Link PR to issue
+        if: steps.extract-issue.outputs.issue_number != ''
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issueNumber = '${{ steps.extract-issue.outputs.issue_number }}';
+            const currentBody = context.payload.pull_request.body || '';
+
+            // Check if PR body already has issue reference
+            const hasReference = currentBody.includes(`#${issueNumber}`);
+
+            if (!hasReference) {
+              const linkText = `\n\n---\n\n**Closes #${issueNumber}**\n\n🤖 This PR was automatically created by @copilot to resolve the issue.`;
+
+              await github.rest.pulls.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+                body: currentBody + linkText
+              });
+
+              console.log(`✅ Linked PR to issue #${issueNumber}`);
+            }
+
+      - name: Add labels to PR
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: ['copilot-generated', 'needs-review']
+            });
+
+            console.log('✅ Added labels to PR');
+
+      - name: Comment on issue
+        if: steps.extract-issue.outputs.issue_number != ''
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issueNumber = '${{ steps.extract-issue.outputs.issue_number }}';
+            const prNumber = context.issue.number;
+            const creator = '${{ steps.get-creator.outputs.creator }}';
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: parseInt(issueNumber),
+              body: `🔀 **Pull Request Created:** #${prNumber}\n\n@${creator} - This PR has been assigned to you for review. Please check the implementation and convert from draft when ready.`
+            });
+
+            console.log(`✅ Commented on issue #${issueNumber}`);
+
+      - name: Fallback assignment
+        if: steps.get-creator.outputs.creator == ''
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            // If we couldn't get the issue creator, assign to repo owner or workflow triggerer
+            const fallbackAssignee = context.payload.repository.owner.login;
+
+            await github.rest.issues.addAssignees({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              assignees: [fallbackAssignee]
+            });
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `⚠️ Could not determine issue creator, assigned to @${fallbackAssignee} as fallback.`
+            });
+
+            console.log(`✅ Fallback assignment to ${fallbackAssignee}`);

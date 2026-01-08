@@ -1,0 +1,56 @@
+name: Auto-Assign PR to Creator
+
+on:
+  pull_request_target:
+    types: [opened, reopened]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  assign:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Assign PR to Creator
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const creator = context.payload.pull_request.user.login;
+
+            console.log(`Assigning PR #${prNumber} to creator: ${creator}`);
+
+            try {
+              await github.rest.issues.addAssignees({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                assignees: [creator]
+              });
+
+              console.log(`✓ Successfully assigned PR #${prNumber} to ${creator}`);
+            } catch (error) {
+              console.error(`✗ Failed to assign PR: ${error.message}`);
+              // Don't fail the workflow if assignment fails
+              // (e.g., creator doesn't have write access)
+            }
+
+      - name: Add Auto-Assigned Label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+
+            try {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                labels: ['auto-assigned']
+              });
+
+              console.log(`✓ Added 'auto-assigned' label to PR #${prNumber}`);
+            } catch (error) {
+              console.log(`Note: Could not add label (may not exist): ${error.message}`);
+            }

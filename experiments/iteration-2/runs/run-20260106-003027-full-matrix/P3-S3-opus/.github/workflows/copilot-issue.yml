@@ -1,0 +1,368 @@
+name: Copilot Issue Processor
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+env:
+  KNOWLEDGE_BASE_PATH: docs/knowledge
+
+jobs:
+  validate-issue:
+    name: Validate Issue Format
+    if: github.event.label.name == 'copilot'
+    runs-on: ubuntu-latest
+    outputs:
+      is-valid: ${{ steps.validate.outputs.valid }}
+      description: ${{ steps.parse.outputs.description }}
+      success-criteria: ${{ steps.parse.outputs.success-criteria }}
+      agent: ${{ steps.parse.outputs.agent }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Parse Issue Body
+        id: parse
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issueBody = context.payload.issue.body;
+
+            // Parse structured fields from issue template
+            const descMatch = issueBody.match(/### Task Description\s*\n([\s\S]*?)(?=###|$)/);
+            const criteriaMatch = issueBody.match(/### Success Criteria\s*\n([\s\S]*?)(?=###|$)/);
+            const agentMatch = issueBody.match(/### Agent\s*\n([\s\S]*?)(?=###|$)/);
+
+            const description = descMatch ? descMatch[1].trim() : '';
+            const criteria = criteriaMatch ? criteriaMatch[1].trim() : '';
+            const agent = agentMatch ? agentMatch[1].trim() : 'copilot (default)';
+
+            core.setOutput('description', description);
+            core.setOutput('success-criteria', criteria);
+            core.setOutput('agent', agent);
+
+      - name: Validate Required Fields
+        id: validate
+        run: |
+          if [ -z "${{ steps.parse.outputs.description }}" ]; then
+            echo "Error: Task description is required"
+            echo "valid=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          if [ -z "${{ steps.parse.outputs.success-criteria }}" ]; then
+            echo "Error: Success criteria is required"
+            echo "valid=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          echo "valid=true" >> $GITHUB_OUTPUT
+
+  process-with-copilot:
+    name: Process with Copilot
+    needs: validate-issue
+    if: needs.validate-issue.outputs.is-valid == 'true' && needs.validate-issue.outputs.agent == 'copilot (default)'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Create Feature Branch
+        id: branch
+        run: |
+          BRANCH_NAME="copilot/issue-${{ github.event.issue.number }}"
+          git checkout -b "$BRANCH_NAME"
+          echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+      - name: Add Progress Comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `## Processing Started
+
+              Branch: \`${{ steps.branch.outputs.branch }}\`
+              Agent: Copilot
+              Status: In Progress
+
+              I will create a PR when the implementation is complete.`
+            });
+
+      - name: Invoke Copilot Agent
+        id: copilot
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          echo "Copilot processing issue #$ISSUE_NUMBER"
+          echo "Title: $ISSUE_TITLE"
+          echo "---"
+          echo "This step would invoke the Copilot agent to:"
+          echo "1. Read the issue description"
+          echo "2. Analyze the codebase"
+          echo "3. Implement the solution"
+          echo "4. Run tests"
+          echo "5. Commit changes"
+          echo "---"
+          echo "success=true" >> $GITHUB_OUTPUT
+
+      - name: Push Branch
+        if: steps.copilot.outputs.success == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git push origin "${{ steps.branch.outputs.branch }}"
+
+      - name: Create Pull Request
+        if: steps.copilot.outputs.success == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[Copilot] ${{ github.event.issue.title }}`,
+              head: '${{ steps.branch.outputs.branch }}',
+              base: 'main',
+              body: `## Summary
+
+              Automated implementation for issue #${{ github.event.issue.number }}
+
+              ## Changes
+
+              [Implementation details would be listed here]
+
+              ## Success Criteria Verification
+
+              ${{ needs.validate-issue.outputs.success-criteria }}
+
+              ---
+
+              Closes #${{ github.event.issue.number }}
+
+              Generated by Copilot Issue Processor`
+            });
+
+            core.info(`Created PR #${pr.data.number}`);
+
+  process-with-claude:
+    name: Process with Claude
+    needs: validate-issue
+    if: needs.validate-issue.outputs.is-valid == 'true' && contains(needs.validate-issue.outputs.agent, 'claude')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Determine Claude Model
+        id: model
+        run: |
+          AGENT="${{ needs.validate-issue.outputs.agent }}"
+          case "$AGENT" in
+            *opus*) MODEL="claude-opus" ;;
+            *sonnet*) MODEL="claude-sonnet" ;;
+            *haiku*) MODEL="claude-haiku" ;;
+            *) MODEL="claude-sonnet" ;;
+          esac
+          echo "model=$MODEL" >> $GITHUB_OUTPUT
+
+      - name: Create Feature Branch
+        id: branch
+        run: |
+          BRANCH_NAME="claude/issue-${{ github.event.issue.number }}"
+          git checkout -b "$BRANCH_NAME"
+          echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+      - name: Add Progress Comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `## Processing Started
+
+              Branch: \`${{ steps.branch.outputs.branch }}\`
+              Agent: ${{ steps.model.outputs.model }}
+              Status: In Progress
+
+              I will create a PR when the implementation is complete.`
+            });
+
+      - name: Invoke Claude Agent
+        id: claude
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MODEL: ${{ steps.model.outputs.model }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          echo "Claude ($MODEL) processing issue"
+          echo "---"
+          echo "This step would invoke Claude via API to:"
+          echo "1. Read the issue description"
+          echo "2. Analyze the codebase"
+          echo "3. Implement the solution"
+          echo "4. Run tests"
+          echo "5. Commit changes"
+          echo "---"
+          echo "success=true" >> $GITHUB_OUTPUT
+
+      - name: Push Branch
+        if: steps.claude.outputs.success == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git push origin "${{ steps.branch.outputs.branch }}"
+
+      - name: Create Pull Request
+        if: steps.claude.outputs.success == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[Claude] ${{ github.event.issue.title }}`,
+              head: '${{ steps.branch.outputs.branch }}',
+              base: 'main',
+              body: `## Summary
+
+              Automated implementation for issue #${{ github.event.issue.number }}
+
+              ## Changes
+
+              [Implementation details would be listed here]
+
+              ## Success Criteria Verification
+
+              ${{ needs.validate-issue.outputs.success-criteria }}
+
+              ---
+
+              Closes #${{ github.event.issue.number }}
+
+              Generated by Claude (${{ steps.model.outputs.model }})`
+            });
+
+            core.info(`Created PR #${pr.data.number}`);
+
+  capture-insights:
+    name: Capture Insights
+    needs: [validate-issue, process-with-copilot, process-with-claude]
+    if: always() && needs.validate-issue.outputs.is-valid == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Determine Outcome
+        id: outcome
+        run: |
+          COPILOT_RESULT="${{ needs.process-with-copilot.result }}"
+          CLAUDE_RESULT="${{ needs.process-with-claude.result }}"
+
+          if [ "$COPILOT_RESULT" == "success" ] || [ "$CLAUDE_RESULT" == "success" ]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+          elif [ "$COPILOT_RESULT" == "skipped" ] && [ "$CLAUDE_RESULT" == "skipped" ]; then
+            echo "status=skipped" >> $GITHUB_OUTPUT
+          else
+            echo "status=failure" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Insight File
+        if: steps.outcome.outputs.status != 'skipped'
+        run: |
+          INSIGHT_DATE=$(date +%Y-%m-%d)
+          ISSUE_NUMBER=${{ github.event.issue.number }}
+          AGENT=${{ needs.validate-issue.outputs.agent }}
+          STATUS=${{ steps.outcome.outputs.status }}
+
+          # Find next insight number
+          LAST_INSIGHT=$(ls -1 $KNOWLEDGE_BASE_PATH/insights/*.md 2>/dev/null | tail -1 | grep -oP '\d{3}' || echo "000")
+          NEXT_NUM=$(printf "%03d" $((10#$LAST_INSIGHT + 1)))
+
+          INSIGHT_FILE="$KNOWLEDGE_BASE_PATH/insights/${NEXT_NUM}-auto-issue-${ISSUE_NUMBER}.md"
+
+          cat > "$INSIGHT_FILE" << EOF
+          # Insight: [AUTO] Issue #${ISSUE_NUMBER} Processing
+
+          ## Category
+
+          ${STATUS^}
+
+          ## Date
+
+          ${INSIGHT_DATE}
+
+          ## Context
+
+          Automated processing of issue #${ISSUE_NUMBER} using ${AGENT}.
+
+          ## Observation
+
+          Processing completed with status: ${STATUS}
+
+          ## Analysis
+
+          [Auto-generated - detailed analysis would be added by agent]
+
+          ## Recommendation
+
+          [Auto-generated - recommendations would be added by agent]
+
+          ## Related Issues/PRs
+
+          - Issue #${ISSUE_NUMBER}
+          EOF
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$INSIGHT_FILE"
+          git commit -m "docs: Add auto-generated insight for issue #${ISSUE_NUMBER}"
+          git push
+
+  self-improvement:
+    name: Self-Improvement Check
+    needs: capture-insights
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Analyze for Patterns
+        id: analyze
+        run: |
+          echo "Analyzing recent insights for patterns..."
+
+          # Count success vs failure insights
+          SUCCESS_COUNT=$(grep -l "Category.*Success" $KNOWLEDGE_BASE_PATH/insights/*.md 2>/dev/null | wc -l || echo "0")
+          FAILURE_COUNT=$(grep -l "Category.*Failure" $KNOWLEDGE_BASE_PATH/insights/*.md 2>/dev/null | wc -l || echo "0")
+
+          echo "Successes: $SUCCESS_COUNT"
+          echo "Failures: $FAILURE_COUNT"
+
+          # Check if we have enough data for pattern detection
+          TOTAL=$((SUCCESS_COUNT + FAILURE_COUNT))
+          if [ "$TOTAL" -ge 10 ]; then
+            echo "should-create-pattern=true" >> $GITHUB_OUTPUT
+          else
+            echo "should-create-pattern=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Improvement PR
+        if: steps.analyze.outputs.should-create-pattern == 'true'
+        run: |
+          echo "Would create improvement PR based on detected patterns"
+          echo "This step would:"
+          echo "1. Extract common patterns from successful insights"
+          echo "2. Create new pattern documentation"
+          echo "3. Open a PR for human review"

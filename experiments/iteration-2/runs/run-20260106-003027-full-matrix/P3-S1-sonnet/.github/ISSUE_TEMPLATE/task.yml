@@ -1,0 +1,90 @@
+name: Copilot Task
+description: Create a task for @copilot to complete autonomously
+title: "[TASK] "
+labels: ["copilot-task"]
+assignees:
+  - copilot
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Task for @copilot
+        Fill out this template to create a task that @copilot will complete autonomously.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Task Description
+      description: What needs to be done? Be specific and clear.
+      placeholder: |
+        Example: Add a new API endpoint for user profile retrieval.
+        The endpoint should accept a user ID and return profile data in JSON format.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: How will we know the task is complete?
+      placeholder: |
+        - [ ] Endpoint responds at /api/users/:id
+        - [ ] Returns 200 with valid user data
+        - [ ] Returns 404 for non-existent users
+        - [ ] Includes tests
+        - [ ] Documentation updated
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context & Background
+      description: Any additional context, constraints, or related issues?
+      placeholder: |
+        - Related to #123
+        - Must use existing authentication middleware
+        - Follow REST API conventions in /docs/api-style.md
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How urgent is this task?
+      options:
+        - Low
+        - Medium
+        - High
+        - Critical
+      default: 1
+    validations:
+      required: true
+
+  - type: textarea
+    id: files
+    attributes:
+      label: Files to Modify/Create
+      description: Which files are likely involved? (optional, helps copilot scope)
+      placeholder: |
+        - src/api/routes/users.js
+        - tests/api/users.test.js
+        - docs/api/users.md
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Task Checklist
+      description: Mark which steps @copilot should complete
+      options:
+        - label: Implementation
+          required: false
+        - label: Tests
+          required: false
+        - label: Documentation
+          required: false
+        - label: Update changelog
+          required: false

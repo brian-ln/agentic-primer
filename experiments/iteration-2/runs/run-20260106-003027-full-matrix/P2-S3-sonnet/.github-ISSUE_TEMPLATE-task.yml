@@ -1,0 +1,143 @@
+name: AI Agent Task
+description: Create a task for @copilot or other AI agents to execute
+title: "[TASK] "
+labels: ["agent-task", "needs-review"]
+assignees:
+  - copilot
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## AI Agent Task Template
+
+        This template creates structured tasks that AI agents (@copilot, etc.) can execute autonomously.
+
+        **Workflow**: Issue created → Agent assigned → PR created → Human review → Merge
+
+  - type: input
+    id: title
+    attributes:
+      label: Task Title
+      description: Brief, actionable description of the task
+      placeholder: "Add user authentication to API endpoints"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Detailed explanation of what needs to be done and why
+      placeholder: |
+        Current state: API endpoints are publicly accessible
+        Desired state: All endpoints require JWT authentication
+        Context: Security audit identified this as high priority
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Observable outcomes that define "done"
+      placeholder: |
+        - [ ] All API endpoints check for valid JWT token
+        - [ ] Unauthorized requests return 401 status
+        - [ ] Tests pass for authenticated and unauthenticated scenarios
+        - [ ] Documentation updated with auth requirements
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: Urgency level for this task
+      options:
+        - P0 - Critical (blocking)
+        - P1 - High (important)
+        - P2 - Medium (normal)
+        - P3 - Low (nice to have)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: Estimated Complexity
+      description: Rough size estimate
+      options:
+        - XS - Trivial (< 1 hour)
+        - S - Small (1-4 hours)
+        - M - Medium (1-2 days)
+        - L - Large (3-5 days)
+        - XL - Extra Large (> 1 week)
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Links, files, related issues, constraints
+      placeholder: |
+        Related: #123 (API design issue)
+        Files: src/api/routes.js, src/middleware/auth.js
+        Constraints: Must use existing JWT library, no breaking changes
+    validations:
+      required: false
+
+  - type: textarea
+    id: knowledge-base
+    attributes:
+      label: Relevant Knowledge Base Entries
+      description: Point agent to existing patterns, decisions, or insights
+      placeholder: |
+        - docs/knowledge/patterns/authentication-middleware.md
+        - docs/knowledge/decisions/002-jwt-vs-session.md
+    validations:
+      required: false
+
+  - type: dropdown
+    id: agent-model
+    attributes:
+      label: Preferred Agent Model
+      description: Which AI model should handle this task
+      options:
+        - Any (agent decides)
+        - Opus (complex reasoning)
+        - Sonnet (balanced)
+        - Haiku (quick tasks)
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: validations
+    attributes:
+      label: Required Validations
+      description: Which checks must pass before merge
+      options:
+        - label: Syntax validation (yamllint, shellcheck, markdownlint)
+          required: true
+        - label: Tests pass (unit, integration, e2e)
+          required: true
+        - label: Documentation updated
+          required: false
+        - label: Knowledge base updated with learnings
+          required: false
+        - label: No breaking changes (backward compatible)
+          required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+
+        **After submitting**:
+        1. Assign to @copilot (or another AI agent)
+        2. Agent will create draft PR automatically
+        3. Review PR and provide feedback
+        4. Merge when acceptance criteria met
+
+        **Need help?** See [WORKFLOW_GUIDE.md](../WORKFLOW_GUIDE.md) for detailed process.

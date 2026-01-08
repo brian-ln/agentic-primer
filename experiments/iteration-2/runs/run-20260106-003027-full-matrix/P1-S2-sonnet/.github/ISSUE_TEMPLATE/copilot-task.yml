@@ -1,0 +1,106 @@
+name: Copilot Task
+description: Assign a task to @copilot agent for autonomous execution
+title: "[TASK] "
+labels: ["copilot-task", "automation"]
+assignees:
+  - copilot
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## @copilot Task Assignment
+
+        Use this template to assign a task to the GitHub Copilot coding agent. The agent will:
+        1. Analyze the task description and context
+        2. Explore the repository for relevant code
+        3. Implement the requested changes
+        4. Run tests and validation
+        5. Open a pull request for your review
+
+        **Important:** Provide clear, specific task descriptions for best results.
+
+  - type: input
+    id: task_summary
+    attributes:
+      label: Task Summary
+      description: Brief one-line description of what needs to be done
+      placeholder: "Add user authentication to the API"
+    validations:
+      required: true
+
+  - type: textarea
+    id: task_description
+    attributes:
+      label: Detailed Description
+      description: Explain what needs to be built, fixed, or improved
+      placeholder: |
+        Describe the task in detail:
+        - What is the current behavior?
+        - What should the new behavior be?
+        - Are there any specific requirements?
+      value: ""
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context and Background
+      description: Provide relevant context, related issues, or background information
+      placeholder: |
+        - Related issues: #123
+        - Affected files: src/auth/
+        - Dependencies: OAuth 2.0 library
+      value: ""
+    validations:
+      required: false
+
+  - type: textarea
+    id: success_criteria
+    attributes:
+      label: Success Criteria
+      description: How will you know the task is complete and correct?
+      placeholder: |
+        - [ ] All tests pass
+        - [ ] Authentication flow works end-to-end
+        - [ ] Documentation updated
+        - [ ] No security vulnerabilities introduced
+      value: ""
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How urgent is this task?
+      options:
+        - Low
+        - Medium
+        - High
+        - Critical
+      default: 1
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional_notes
+    attributes:
+      label: Additional Notes
+      description: Any other information that might help @copilot complete this task
+      placeholder: "Code style preferences, edge cases to consider, performance requirements, etc."
+      value: ""
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: acknowledgment
+    attributes:
+      label: Acknowledgment
+      description: Please confirm you understand how @copilot works
+      options:
+        - label: I understand that @copilot will create a pull request that requires my review before merging
+          required: true
+        - label: I have provided clear success criteria for this task
+          required: true

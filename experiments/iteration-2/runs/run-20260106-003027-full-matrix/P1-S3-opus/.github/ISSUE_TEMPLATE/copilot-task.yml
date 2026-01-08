@@ -1,0 +1,127 @@
+name: "@copilot Task"
+description: "Create a task for @copilot to work on autonomously"
+title: "[Task]: "
+labels: ["copilot-task"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## @copilot Task Template
+
+        Use this template to create tasks that @copilot can work on autonomously.
+        Please fill out all required sections for best results.
+
+  - type: textarea
+    id: task-description
+    attributes:
+      label: Task Description
+      description: "Clear description of what needs to be done"
+      placeholder: |
+        Describe the task in detail:
+        - What should be created/changed?
+        - What is the expected outcome?
+        - Any specific requirements?
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: "How will we know this task is complete?"
+      placeholder: |
+        - [ ] Criterion 1
+        - [ ] Criterion 2
+        - [ ] Criterion 3
+    validations:
+      required: true
+
+  - type: dropdown
+    id: task-type
+    attributes:
+      label: Task Type
+      description: "What type of task is this?"
+      options:
+        - Feature
+        - Bug Fix
+        - Refactor
+        - Documentation
+        - Test
+        - Infrastructure
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: "How urgent is this task?"
+      options:
+        - Low
+        - Medium
+        - High
+        - Critical
+    validations:
+      required: true
+
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: Estimated Complexity
+      description: "How complex is this task?"
+      options:
+        - Trivial (< 30 min)
+        - Simple (< 2 hours)
+        - Medium (< 1 day)
+        - Complex (> 1 day)
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: "Any additional context, links, or references"
+      placeholder: |
+        - Related issues: #123
+        - Documentation: [link]
+        - Files to modify: path/to/file.ts
+    validations:
+      required: false
+
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints
+      description: "Any constraints or limitations to be aware of"
+      placeholder: |
+        - Must maintain backward compatibility
+        - Must not break existing tests
+        - Must follow existing patterns
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: agent-options
+    attributes:
+      label: Agent Options
+      description: "Additional options for @copilot processing"
+      options:
+        - label: "Run tests after changes"
+          required: false
+        - label: "Update documentation"
+          required: false
+        - label: "Create detailed PR description"
+          required: false
+        - label: "Request human review before merge"
+          required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        **Note:** Once submitted, this issue will be automatically validated and labeled.
+        @copilot will pick up issues with the `copilot-ready` label.

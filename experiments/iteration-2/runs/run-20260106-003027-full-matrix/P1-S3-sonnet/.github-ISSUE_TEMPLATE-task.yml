@@ -1,0 +1,132 @@
+name: AI Agent Task
+description: Create a task for @copilot or other AI agents to execute autonomously
+title: "[Task]: "
+labels: ["ai-task", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 🤖 AI Agent Task Template
+
+        This template helps structure tasks for autonomous execution by AI agents like @copilot.
+        Fill out the sections below to provide clear context and success criteria.
+
+  - type: input
+    id: task-title
+    attributes:
+      label: Task Title
+      description: Short, descriptive title for this task
+      placeholder: "Implement user authentication API endpoint"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Detailed description of what needs to be done
+      placeholder: |
+        Create a RESTful API endpoint for user authentication that:
+        - Accepts email and password
+        - Returns JWT token on success
+        - Returns appropriate error codes
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Observable outcomes that define success
+      placeholder: |
+        - [ ] Endpoint responds to POST /api/auth/login
+        - [ ] Valid credentials return 200 with JWT token
+        - [ ] Invalid credentials return 401
+        - [ ] Tests pass with >90% coverage
+        - [ ] Documentation updated
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context & Constraints
+      description: Additional information, dependencies, or constraints
+      placeholder: |
+        - Use existing User model from src/models/user.js
+        - JWT secret should be read from environment variable
+        - Follow existing API error response format
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: Task urgency level
+      options:
+        - "P0 - Critical"
+        - "P1 - High"
+        - "P2 - Medium"
+        - "P3 - Low"
+      default: 2
+    validations:
+      required: true
+
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: Estimated Complexity
+      description: Rough estimate of task complexity
+      options:
+        - "Simple (< 1 hour)"
+        - "Medium (1-4 hours)"
+        - "Complex (4-8 hours)"
+        - "Epic (> 8 hours, should be broken down)"
+      default: 1
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: agent-preferences
+    attributes:
+      label: Agent Preferences
+      description: Which AI agents are suitable for this task?
+      options:
+        - label: "@copilot (GitHub Copilot coding agent)"
+        - label: "Claude Opus (complex reasoning)"
+        - label: "Claude Sonnet (balanced performance)"
+        - label: "Claude Haiku (simple tasks)"
+        - label: "Human review required before merge"
+
+  - type: textarea
+    id: related-issues
+    attributes:
+      label: Related Issues/PRs
+      description: Links to related work
+      placeholder: |
+        - Blocks #123
+        - Related to #456
+        - Depends on #789
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+
+        ### 📋 Next Steps
+
+        1. **Review**: Ensure all required fields are complete
+        2. **Assign**: Assign to @copilot or another AI agent
+        3. **Monitor**: Watch for PR creation in Actions tab
+        4. **Review**: Review and merge the generated PR
+
+        The system will automatically:
+        - Trigger GitHub Actions workflow on assignment
+        - Create a PR with implementation
+        - Request review from CODEOWNERS
+        - Run validation checks

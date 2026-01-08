@@ -1,0 +1,52 @@
+# CODEOWNERS - Automatic PR Review Assignment
+#
+# When a PR is created, GitHub automatically requests review from the owners
+# of the files being changed. This ensures human oversight for all AI agent work.
+#
+# Format: <pattern> <owner1> <owner2> ...
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for all files
+# Replace @owner with your GitHub username
+* @owner
+
+# Configuration files require extra scrutiny
+/.github/ @owner
+/.github/workflows/ @owner
+/scripts/ @owner
+
+# Knowledge base can be updated by agents
+# but still requires review for quality
+/docs/knowledge/ @owner
+
+# Core application code (adjust to your project structure)
+/src/ @owner
+/lib/ @owner
+/tests/ @owner
+
+# Documentation can be more lenient
+# (agents often update docs based on code changes)
+*.md @owner
+/docs/ @owner
+
+# Dependencies and tooling
+package.json @owner
+package-lock.json @owner
+Gemfile @owner
+requirements.txt @owner
+go.mod @owner
+Cargo.toml @owner
+
+# CI/CD changes are critical
+.gitlab-ci.yml @owner
+.travis.yml @owner
+Jenkinsfile @owner
+/.circleci/ @owner
+
+# Infrastructure as Code
+/terraform/ @owner
+/cloudformation/ @owner
+/ansible/ @owner
+/kubernetes/ @owner
+docker-compose.yml @owner
+Dockerfile @owner

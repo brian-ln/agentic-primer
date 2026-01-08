@@ -1,0 +1,131 @@
+name: Copilot PR Auto-Assign
+
+on:
+  pull_request:
+    types: [opened, reopened]
+
+permissions:
+  pull-requests: write
+  issues: read
+
+jobs:
+  auto-assign:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check if PR was created by copilot
+        id: check_copilot
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const isCopilotPR = pr.user.login.includes('copilot') ||
+                               pr.head.ref.startsWith('copilot/');
+            core.setOutput('is_copilot', isCopilotPR);
+            return isCopilotPR;
+
+      - name: Extract issue number from PR
+        if: steps.check_copilot.outputs.is_copilot == 'true'
+        id: extract_issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+
+            // Try to extract from branch name (copilot/issue-123-...)
+            let issueNumber = null;
+            const branchMatch = pr.head.ref.match(/copilot\/issue-(\d+)/);
+            if (branchMatch) {
+              issueNumber = parseInt(branchMatch[1]);
+            }
+
+            // Try to extract from PR body (Closes #123)
+            if (!issueNumber) {
+              const bodyMatch = pr.body?.match(/(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/i);
+              if (bodyMatch) {
+                issueNumber = parseInt(bodyMatch[1]);
+              }
+            }
+
+            core.setOutput('issue_number', issueNumber || '');
+            return issueNumber;
+
+      - name: Get issue creator
+        if: steps.extract_issue.outputs.issue_number != ''
+        id: get_creator
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issueNumber = ${{ steps.extract_issue.outputs.issue_number }};
+
+            try {
+              const issue = await github.rest.issues.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber
+              });
+
+              const creator = issue.data.user.login;
+              core.setOutput('creator', creator);
+              return creator;
+            } catch (error) {
+              core.warning(`Could not fetch issue #${issueNumber}: ${error.message}`);
+              return null;
+            }
+
+      - name: Assign PR to issue creator
+        if: steps.get_creator.outputs.creator != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const creator = '${{ steps.get_creator.outputs.creator }}';
+            const prNumber = context.payload.pull_request.number;
+
+            try {
+              // Assign the PR
+              await github.rest.issues.addAssignees({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                assignees: [creator]
+              });
+
+              // Request review from creator
+              await github.rest.pulls.requestReviewers({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: prNumber,
+                reviewers: [creator]
+              });
+
+              console.log(`✅ Assigned PR #${prNumber} to @${creator}`);
+            } catch (error) {
+              core.warning(`Failed to assign PR: ${error.message}`);
+            }
+
+      - name: Add comment about assignment
+        if: steps.get_creator.outputs.creator != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const creator = '${{ steps.get_creator.outputs.creator }}';
+            const issueNumber = ${{ steps.extract_issue.outputs.issue_number }};
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: `👋 @${creator} - This PR has been automatically assigned to you as the creator of issue #${issueNumber}.\n\nPlease review the implementation and merge when ready, or request changes if needed.`
+            });
+
+      - name: Add labels
+        if: steps.check_copilot.outputs.is_copilot == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              labels: ['copilot-generated', 'auto-assigned']
+            });

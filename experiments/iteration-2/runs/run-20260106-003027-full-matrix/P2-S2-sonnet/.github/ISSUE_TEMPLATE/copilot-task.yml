@@ -1,0 +1,117 @@
+name: Copilot Task
+description: Create a task for GitHub Copilot agent to execute autonomously
+title: "[Task]: "
+labels: ["copilot-task", "automated"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Task for GitHub Copilot Agent
+        This issue will be automatically processed by the Copilot agent.
+        Provide clear context and acceptance criteria for best results.
+
+  - type: input
+    id: task_title
+    attributes:
+      label: Task Title
+      description: Brief, descriptive title for the task
+      placeholder: "Implement user authentication feature"
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context & Background
+      description: Provide context about why this task is needed
+      placeholder: |
+        Current situation:
+        - What exists today
+        - What problem needs solving
+        - Why this matters
+    validations:
+      required: true
+
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requirements
+      description: What specifically needs to be implemented
+      placeholder: |
+        The implementation should:
+        - Requirement 1
+        - Requirement 2
+        - Requirement 3
+      value: |
+        -
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria
+      description: How will we know this task is complete?
+      placeholder: |
+        - [ ] Criterion 1 is met
+        - [ ] Criterion 2 is met
+        - [ ] Tests pass
+        - [ ] Documentation updated
+      value: |
+        - [ ]
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: Task priority level
+      options:
+        - Low
+        - Medium
+        - High
+        - Critical
+      default: 1
+    validations:
+      required: true
+
+  - type: textarea
+    id: technical_notes
+    attributes:
+      label: Technical Notes (Optional)
+      description: Any technical constraints, patterns to follow, or implementation hints
+      placeholder: |
+        - Use existing authentication library X
+        - Follow pattern documented in docs/knowledge/patterns/auth-pattern.md
+        - Ensure compatibility with module Y
+    validations:
+      required: false
+
+  - type: textarea
+    id: knowledge_references
+    attributes:
+      label: Related Knowledge Base Articles (Optional)
+      description: Reference relevant patterns, decisions, or insights
+      placeholder: |
+        - docs/knowledge/patterns/error-handling.md
+        - docs/knowledge/decisions/003-authentication-choice.md
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: validation_requirements
+    attributes:
+      label: Validation Requirements
+      description: Select all that apply
+      options:
+        - label: Must pass syntax validation (yamllint, shellcheck)
+          required: false
+        - label: Must include tests
+          required: false
+        - label: Must update documentation
+          required: false
+        - label: Requires security review
+          required: false

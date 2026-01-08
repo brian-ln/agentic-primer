@@ -1,0 +1,21 @@
+{
+  "execution_id": "exec-20260108-051234-42",
+  "issue_number": 42,
+  "issue_title": "Add greeting function",
+  "start_time": "2026-01-08T10:12:33Z",
+  "end_time": "2026-01-08T10:12:34Z",
+  "duration_seconds": 37,
+  "status": "success",
+  "agent": "copilot",
+  "branch": "copilot/issue-42-greeting",
+  "pr_number": 43,
+  "files_created": [
+    "src/greeting.ts",
+    "src/greeting.test.ts"
+  ],
+  "tests_passed": true,
+  "coverage_percent": 100,
+  "review_status": "approved",
+  "errors": [],
+  "simulation": true
+}

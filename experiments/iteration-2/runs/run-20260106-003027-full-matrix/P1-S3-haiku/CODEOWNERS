@@ -1,0 +1,8 @@
+# Global owner for all files
+* @code-reviewer
+
+# Specific path owners
+src/            @backend-team
+docs/           @docs-team
+.github/        @devops-team
+.copilot/       @copilot-maintainer

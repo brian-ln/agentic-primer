@@ -1,0 +1,11 @@
+# CODEOWNERS - Automatically assigns PR reviewers
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything in the repository
+# Replace @owner with your GitHub username
+* @owner
+
+# Specific ownership rules (optional - uncomment and customize)
+# .github/ @owner
+# docs/ @owner
+# src/ @owner

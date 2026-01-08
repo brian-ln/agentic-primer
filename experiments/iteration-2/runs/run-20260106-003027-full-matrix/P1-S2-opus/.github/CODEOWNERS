@@ -1,0 +1,16 @@
+# CODEOWNERS - Auto-assign reviewers for pull requests
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owners for everything in the repo
+* @owner
+
+# GitHub configuration requires careful review
+.github/ @owner
+
+# Documentation changes
+docs/ @owner
+*.md @owner
+
+# Source code (customize per your team structure)
+# src/ @dev-team
+# tests/ @qa-team

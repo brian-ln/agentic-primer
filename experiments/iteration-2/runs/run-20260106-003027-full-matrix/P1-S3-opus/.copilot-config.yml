@@ -1,0 +1,110 @@
+# @copilot Agent Configuration
+#
+# This file configures agent behavior for issue-driven automation.
+
+version: "1.0"
+
+# Agent settings
+agent:
+  # Supported agents
+  supported:
+    - name: github-copilot
+      method: native
+      enabled: true
+    - name: claude-opus
+      method: instructions
+      enabled: true
+    - name: claude-sonnet
+      method: instructions
+      enabled: true
+    - name: claude-haiku
+      method: instructions
+      enabled: true
+
+  # Default behavior
+  defaults:
+    branch_prefix: "copilot/"
+    commit_style: "conventional"
+    require_tests: true
+    require_docs: false
+    auto_merge: false
+
+# Issue processing
+issues:
+  # Required template sections
+  required_sections:
+    - "Task Description"
+    - "Acceptance Criteria"
+    - "Additional Context"
+
+  # Labels
+  labels:
+    task: "copilot-task"
+    ready: "copilot-ready"
+    in_progress: "copilot-in-progress"
+    completed: "copilot-completed"
+    blocked: "copilot-blocked"
+
+  # Timeouts
+  timeouts:
+    validation_minutes: 5
+    processing_hours: 24
+    review_hours: 48
+
+# PR handling
+pull_requests:
+  # Template
+  template: |
+    ## Summary
+    [Brief description of changes]
+
+    ## Related Issue
+    Closes #[issue_number]
+
+    ## Changes Made
+    - [Change 1]
+    - [Change 2]
+
+    ## Testing
+    - [ ] Tests added/updated
+    - [ ] Existing tests pass
+
+    ## Checklist
+    - [ ] Code follows style guidelines
+    - [ ] Documentation updated
+    - [ ] No new warnings
+
+  # Auto-review settings
+  auto_review:
+    enabled: true
+    syntax_check: true
+    test_check: true
+    coverage_threshold: 0
+
+# Self-improvement
+self_improvement:
+  enabled: true
+  schedule: "0 6 * * *"  # Daily at 6 AM UTC
+  min_confidence: 0.7
+  max_prs_per_day: 3
+
+# Knowledge base
+knowledge_base:
+  enabled: true
+  log_issues: true
+  log_prs: true
+  patterns_dir: "docs/knowledge/patterns"
+  decisions_dir: "docs/knowledge/decisions"
+  insights_dir: "docs/knowledge/insights"
+
+# Validation
+validation:
+  yaml:
+    enabled: true
+    config: ".yamllint.yml"
+  shell:
+    enabled: true
+    tool: "shellcheck"
+  markdown:
+    enabled: true
+    tool: "markdownlint"

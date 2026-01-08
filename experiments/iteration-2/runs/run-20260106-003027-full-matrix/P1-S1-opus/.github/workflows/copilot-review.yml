@@ -1,0 +1,88 @@
+name: Copilot Auto-Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+
+# Scoped permissions - principle of least privilege
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  automated-checks:
+    name: Run automated checks
+    runs-on: ubuntu-latest
+    if: "!github.event.pull_request.draft"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+        continue-on-error: true
+
+      - name: Run linter
+        id: lint
+        run: npm run lint --if-present
+        continue-on-error: true
+
+      - name: Run tests
+        id: test
+        run: npm test --if-present
+        continue-on-error: true
+
+      - name: Security audit
+        id: audit
+        run: npm audit --audit-level=moderate
+        continue-on-error: true
+
+      - name: Add review summary
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const prAuthor = context.payload.pull_request.user.login;
+            const branch = context.payload.pull_request.head.ref;
+
+            // Collect check results
+            const lintResult = '${{ steps.lint.outcome }}';
+            const testResult = '${{ steps.test.outcome }}';
+            const auditResult = '${{ steps.audit.outcome }}';
+
+            const statusEmoji = (result) => result === 'success' ? '✅' : (result === 'failure' ? '❌' : '⚠️');
+
+            const summary = `## Automated Review Summary
+
+            | Check | Status |
+            |-------|--------|
+            | Linting | ${statusEmoji(lintResult)} ${lintResult} |
+            | Tests | ${statusEmoji(testResult)} ${testResult} |
+            | Security Audit | ${statusEmoji(auditResult)} ${auditResult} |
+
+            **Branch:** \`${branch}\`
+            **Author:** @${prAuthor}
+
+            ---
+
+            ${lintResult === 'success' && testResult === 'success' ? '✅ **All automated checks passed.** Ready for CODEOWNERS review.' : '⚠️ **Some checks need attention.** Please review the workflow logs.'}
+
+            *This is an automated review. Human review is still required via CODEOWNERS.*`;
+
+            await github.rest.pulls.createReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+              event: 'COMMENT',
+              body: summary
+            });
+
+            console.log(`Auto-review complete for PR #${prNumber}`);

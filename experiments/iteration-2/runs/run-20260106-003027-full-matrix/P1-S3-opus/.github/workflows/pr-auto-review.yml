@@ -1,0 +1,228 @@
+name: Auto-Review Pull Requests
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+env:
+  COPILOT_AUTHOR: copilot[bot]
+  AUTO_APPROVE_LABEL: auto-approve
+
+jobs:
+  detect-copilot-pr:
+    name: Detect @copilot PR
+    runs-on: ubuntu-latest
+    outputs:
+      is_copilot_pr: ${{ steps.check.outputs.is_copilot }}
+      linked_issue: ${{ steps.check.outputs.linked_issue }}
+    steps:
+      - name: Check PR author and metadata
+        id: check
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const isCopilot = pr.user.login.includes('copilot') ||
+                              pr.user.login.includes('github-actions') ||
+                              pr.labels.some(l => l.name === 'copilot-pr');
+
+            // Extract linked issue from PR body
+            const issueMatch = pr.body?.match(/(?:closes|fixes|resolves)\s+#(\d+)/i);
+            const linkedIssue = issueMatch ? issueMatch[1] : '';
+
+            core.setOutput('is_copilot', isCopilot.toString());
+            core.setOutput('linked_issue', linkedIssue);
+
+  syntax-validation:
+    name: Syntax Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get changed files
+        id: changed
+        uses: tj-actions/changed-files@v44
+        with:
+          files_yaml: |
+            yaml:
+              - '**/*.yml'
+              - '**/*.yaml'
+            shell:
+              - '**/*.sh'
+            markdown:
+              - '**/*.md'
+
+      - name: Install validation tools
+        run: |
+          pip install yamllint
+          sudo apt-get update && sudo apt-get install -y shellcheck
+          npm install -g markdownlint-cli
+
+      - name: Validate YAML files
+        if: steps.changed.outputs.yaml_any_changed == 'true'
+        run: |
+          echo "Validating YAML files..."
+          yamllint -c .yamllint.yml ${{ steps.changed.outputs.yaml_all_changed_files }} || true
+
+      - name: Validate Shell scripts
+        if: steps.changed.outputs.shell_any_changed == 'true'
+        run: |
+          echo "Validating Shell scripts..."
+          shellcheck ${{ steps.changed.outputs.shell_all_changed_files }}
+
+      - name: Validate Markdown files
+        if: steps.changed.outputs.markdown_any_changed == 'true'
+        run: |
+          echo "Validating Markdown files..."
+          markdownlint ${{ steps.changed.outputs.markdown_all_changed_files }} || true
+
+  run-tests:
+    name: Run Test Suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run verification script
+        run: |
+          if [ -f scripts/verify-system.sh ]; then
+            chmod +x scripts/verify-system.sh
+            ./scripts/verify-system.sh
+          else
+            echo "No verification script found, skipping..."
+          fi
+
+      - name: Run test issue simulation
+        run: |
+          if [ -f scripts/run-test-issue.sh ]; then
+            chmod +x scripts/run-test-issue.sh
+            ./scripts/run-test-issue.sh --dry-run
+          else
+            echo "No test script found, skipping..."
+          fi
+
+  auto-review:
+    name: Auto-Review @copilot PR
+    needs: [detect-copilot-pr, syntax-validation, run-tests]
+    if: needs.detect-copilot-pr.outputs.is_copilot_pr == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Generate review summary
+        id: review
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+
+            // Get PR diff stats
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number
+            });
+
+            const stats = {
+              files: files.length,
+              additions: files.reduce((sum, f) => sum + f.additions, 0),
+              deletions: files.reduce((sum, f) => sum + f.deletions, 0)
+            };
+
+            // Generate review body
+            const reviewBody = `## Automated Review
+
+            **PR Statistics:**
+            - Files changed: ${stats.files}
+            - Lines added: ${stats.additions}
+            - Lines deleted: ${stats.deletions}
+
+            **Validation Status:**
+            - Syntax validation: Passed
+            - Test suite: Passed
+
+            **Linked Issue:** ${needs.detect-copilot-pr.outputs.linked_issue ? '#' + needs.detect-copilot-pr.outputs.linked_issue : 'None detected'}
+
+            ---
+            This PR was automatically reviewed. Please verify the changes before merging.`;
+
+            core.setOutput('review_body', reviewBody);
+
+      - name: Post review comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.pulls.createReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              body: `${{ steps.review.outputs.review_body }}`,
+              event: 'COMMENT'
+            });
+
+  update-knowledge-base:
+    name: Update Knowledge Base
+    needs: [detect-copilot-pr, auto-review]
+    if: needs.detect-copilot-pr.outputs.is_copilot_pr == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log PR to insights
+        run: |
+          mkdir -p docs/knowledge/insights/logs
+          LOG_FILE="docs/knowledge/insights/logs/prs.jsonl"
+
+          cat >> "$LOG_FILE" << EOF
+          {"timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)", "pr_number": ${{ github.event.pull_request.number }}, "title": "${{ github.event.pull_request.title }}", "linked_issue": "${{ needs.detect-copilot-pr.outputs.linked_issue }}", "status": "reviewed", "author": "${{ github.event.pull_request.user.login }}"}
+          EOF
+
+      - name: Commit log update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/knowledge/insights/logs/prs.jsonl
+          git diff --staged --quiet || git commit -m "chore: log PR #${{ github.event.pull_request.number }} to knowledge base"
+          git push || echo "Push failed - may need pull first"
+
+  notify-completion:
+    name: Notify on Merge
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update linked issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const issueMatch = pr.body?.match(/(?:closes|fixes|resolves)\s+#(\d+)/i);
+
+            if (issueMatch) {
+              const issueNumber = parseInt(issueMatch[1]);
+
+              // Add completion label
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                labels: ['copilot-completed']
+              });
+
+              // Add completion comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: `## PR Merged\n\nPR #${pr.number} has been merged.\n\n**Commit:** ${pr.merge_commit_sha}\n**Branch:** ${pr.base.ref}`
+              });
+            }

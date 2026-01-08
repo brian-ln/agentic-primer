@@ -1,0 +1,253 @@
+name: Copilot System Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      test-type:
+        description: 'Type of test to run'
+        required: true
+        default: 'end-to-end'
+        type: choice
+        options:
+          - end-to-end
+          - validation-only
+          - kb-query-only
+  schedule:
+    # Run validation tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+permissions:
+  issues: write
+  contents: write
+  pull-requests: write
+
+jobs:
+  validate-files:
+    name: Validate Configuration Files
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install validation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y yamllint shellcheck jq
+          pip install check-jsonschema
+
+      - name: Validate YAML syntax
+        run: |
+          echo "🔍 Validating YAML files..."
+          yamllint -d "{extends: default, rules: {line-length: {max: 200}}}" .github/ISSUE_TEMPLATE/*.yml
+          yamllint .github/workflows/*.yml
+
+          if [ -d "knowledge-base" ]; then
+            find knowledge-base -name "*.yml" -exec yamllint {} \;
+          fi
+
+          echo "✅ YAML validation passed"
+
+      - name: Validate issue templates
+        run: |
+          echo "🔍 Validating issue templates against GitHub schema..."
+
+          for template in .github/ISSUE_TEMPLATE/*.yml; do
+            if [ -f "$template" ] && [ "$(basename $template)" != "config.yml" ]; then
+              echo "Validating $template"
+              check-jsonschema --schemafile https://json.schemastore.org/github-issue-forms.json "$template"
+            fi
+          done
+
+          echo "✅ Issue template validation passed"
+
+      - name: Validate shell scripts
+        run: |
+          echo "🔍 Validating shell scripts..."
+
+          if [ -d ".github/scripts" ]; then
+            find .github/scripts -name "*.sh" -exec shellcheck {} \;
+          fi
+
+          echo "✅ Shell script validation passed"
+
+      - name: Check required files
+        run: |
+          echo "🔍 Checking for required files..."
+
+          REQUIRED_FILES=(
+            ".github/ISSUE_TEMPLATE/config.yml"
+            ".github/ISSUE_TEMPLATE/copilot-feature.yml"
+            ".github/workflows/copilot-issue-handler.yml"
+            ".github/workflows/copilot-pr-assign.yml"
+            ".github/scripts/copilot-worker.sh"
+            ".github/scripts/validate-issue.sh"
+            ".github/scripts/knowledge-query.sh"
+          )
+
+          MISSING_FILES=()
+          for file in "${REQUIRED_FILES[@]}"; do
+            if [ ! -f "$file" ]; then
+              MISSING_FILES+=("$file")
+            fi
+          done
+
+          if [ ${#MISSING_FILES[@]} -gt 0 ]; then
+            echo "❌ Missing required files:"
+            printf '%s\n' "${MISSING_FILES[@]}"
+            exit 1
+          fi
+
+          echo "✅ All required files present"
+
+  test-kb-query:
+    name: Test Knowledge Base Query
+    runs-on: ubuntu-latest
+    if: github.event.inputs.test-type == 'kb-query-only' || github.event.inputs.test-type == 'end-to-end' || github.event_name == 'schedule'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq yq
+
+      - name: Test KB query script
+        run: |
+          echo "🔍 Testing knowledge base query..."
+
+          if [ -f ".github/scripts/knowledge-query.sh" ]; then
+            chmod +x .github/scripts/knowledge-query.sh
+
+            # Test with sample query
+            TEST_QUERY="authentication oauth login"
+            echo "Test query: $TEST_QUERY"
+
+            RESULT=$(.github/scripts/knowledge-query.sh "$TEST_QUERY")
+            echo "Result: $RESULT"
+
+            if [ -n "$RESULT" ]; then
+              echo "✅ KB query returned results"
+            else
+              echo "⚠️ KB query returned empty (may be expected if KB is not populated)"
+            fi
+          else
+            echo "⚠️ KB query script not found, skipping test"
+          fi
+
+  test-validation:
+    name: Test Issue Validation
+    runs-on: ubuntu-latest
+    if: github.event.inputs.test-type == 'validation-only' || github.event.inputs.test-type == 'end-to-end'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Test validation script
+        run: |
+          echo "🔍 Testing issue validation script..."
+
+          if [ -f ".github/scripts/validate-issue.sh" ]; then
+            chmod +x .github/scripts/validate-issue.sh
+
+            # SIMULATION: In production, this would test against a real issue
+            # For now, we verify the script is executable and has valid syntax
+            bash -n .github/scripts/validate-issue.sh
+
+            echo "✅ Validation script syntax check passed"
+          else
+            echo "❌ Validation script not found"
+            exit 1
+          fi
+
+  test-end-to-end:
+    name: End-to-End Workflow Test
+    runs-on: ubuntu-latest
+    if: github.event.inputs.test-type == 'end-to-end'
+    needs: [validate-files, test-kb-query, test-validation]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq yq
+
+      - name: Create test issue
+        id: create-issue
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            // SIMULATION: In production, this would create a real issue
+            // For testing, we just log what would happen
+
+            const issueBody = `
+            ## Test Issue for @copilot
+
+            This is an automated test issue to verify the end-to-end workflow.
+
+            **Description:** Add a simple "Hello World" test file
+
+            **Acceptance Criteria:**
+            - [ ] File created at tests/hello-world.test.js
+            - [ ] Contains basic test case
+            - [ ] Test passes when run
+
+            **Technical Context:**
+            - Framework: Jest
+            - Location: tests/ directory
+            `;
+
+            console.log('Would create issue with body:', issueBody);
+            console.log('Would apply label: copilot');
+
+            // Return a simulated issue number for testing
+            return { number: 999, url: 'https://github.com/test/test/issues/999' };
+
+      - name: Verify workflow triggers
+        run: |
+          echo "🔍 Verifying workflow configuration..."
+
+          # Check that issue handler workflow has correct triggers
+          WORKFLOW=".github/workflows/copilot-issue-handler.yml"
+
+          if grep -q "issues:" "$WORKFLOW" && grep -q "types: \[opened, labeled\]" "$WORKFLOW"; then
+            echo "✅ Issue handler has correct triggers"
+          else
+            echo "❌ Issue handler triggers not configured correctly"
+            exit 1
+          fi
+
+          # Check that PR assign workflow has correct triggers
+          WORKFLOW=".github/workflows/copilot-pr-assign.yml"
+
+          if grep -q "pull_request:" "$WORKFLOW" && grep -q "types: \[opened, reopened\]" "$WORKFLOW"; then
+            echo "✅ PR assign workflow has correct triggers"
+          else
+            echo "❌ PR assign workflow triggers not configured correctly"
+            exit 1
+          fi
+
+      - name: Test summary
+        run: |
+          echo "## Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ All validation checks passed" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Workflow triggers configured correctly" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Required files present" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Note" >> $GITHUB_STEP_SUMMARY
+          echo "Full end-to-end testing requires:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Creating a real issue with 'copilot' label" >> $GITHUB_STEP_SUMMARY
+          echo "2. Monitoring workflow execution" >> $GITHUB_STEP_SUMMARY
+          echo "3. Reviewing generated PR" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "This automated test validates configuration only." >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,41 @@
+# CODEOWNERS file for automatic PR assignment
+# This file routes PRs to appropriate team members based on file paths
+
+# Global: default owner
+* @default-owner
+
+# GitHub configuration
+.github/ @maintainers
+
+# Issue templates
+.github/ISSUE_TEMPLATE/ @maintainers
+.github/workflows/ @devops-team
+
+# Documentation
+docs/ @documentation-team
+docs/knowledge/ @architects
+docs/AGENT_INSTRUCTIONS.md @maintainers
+
+# Knowledge base
+docs/knowledge/patterns/ @architects
+docs/knowledge/decisions/ @architects
+docs/knowledge/insights/ @developers
+
+# Scripts
+scripts/ @devops-team
+
+# Tests
+tests/ @qa-team
+
+# Configuration files
+CODEOWNERS @maintainers
+README.md @documentation-team
+
+# Default fallback - if no specific rule matches
+# PR goes to repository default
+
+# Notes:
+# - Replace @default-owner with actual GitHub handle or team
+# - Replace @maintainers, @devops-team, etc. with actual teams
+# - Teams should be created in the GitHub organization
+# - Example team: @org-name/maintainers or @org-name/backend-team

@@ -1,0 +1,174 @@
+name: Copilot Task Automation
+
+on:
+  issues:
+    types: [assigned]
+
+jobs:
+  process-copilot-assignment:
+    # Only trigger when issue is assigned to @copilot
+    if: github.event.assignee.login == 'copilot'
+    runs-on: ubuntu-latest
+
+    permissions:
+      issues: write
+      pull-requests: write
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for context
+
+      - name: Add processing label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: ['copilot-processing']
+            });
+
+      - name: Comment on issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comment = `🤖 **Copilot Task Received**
+
+            I've been assigned this issue and will begin working on it shortly.
+
+            **Next Steps:**
+            1. Analyze issue requirements and acceptance criteria
+            2. Review knowledge base for relevant patterns/decisions
+            3. Create feature branch (\`copilot/issue-${context.issue.number}\`)
+            4. Implement changes with tests
+            5. Open draft PR for review
+
+            **Knowledge Base Access:**
+            - Patterns: \`docs/knowledge/patterns/\`
+            - Decisions: \`docs/knowledge/decisions/\`
+            - Insights: \`docs/knowledge/insights/\`
+
+            You can track progress by watching for commits and PR updates.
+
+            _This is an automated workflow. The actual implementation will be handled by GitHub Copilot coding agent._`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });
+
+      - name: Load knowledge base context
+        id: knowledge
+        run: |
+          echo "Loading knowledge base for Copilot context..."
+
+          # Create context file from knowledge base
+          CONTEXT_FILE="copilot-context.md"
+
+          echo "# Knowledge Base Context" > $CONTEXT_FILE
+          echo "" >> $CONTEXT_FILE
+
+          # Include patterns
+          if [ -d "docs/knowledge/patterns" ]; then
+            echo "## Patterns" >> $CONTEXT_FILE
+            find docs/knowledge/patterns -name "*.md" -type f | while read file; do
+              echo "### $(basename $file .md)" >> $CONTEXT_FILE
+              cat "$file" >> $CONTEXT_FILE
+              echo "" >> $CONTEXT_FILE
+            done
+          fi
+
+          # Include decisions
+          if [ -d "docs/knowledge/decisions" ]; then
+            echo "## Decisions" >> $CONTEXT_FILE
+            find docs/knowledge/decisions -name "*.md" -type f | while read file; do
+              echo "### $(basename $file .md)" >> $CONTEXT_FILE
+              cat "$file" >> $CONTEXT_FILE
+              echo "" >> $CONTEXT_FILE
+            done
+          fi
+
+          # Include insights
+          if [ -d "docs/knowledge/insights" ]; then
+            echo "## Insights" >> $CONTEXT_FILE
+            find docs/knowledge/insights -name "*.md" -type f | while read file; do
+              echo "### $(basename $file .md)" >> $CONTEXT_FILE
+              cat "$file" >> $CONTEXT_FILE
+              echo "" >> $CONTEXT_FILE
+            done
+          fi
+
+          echo "Knowledge base loaded: $(wc -l < $CONTEXT_FILE) lines"
+          echo "context_file=$CONTEXT_FILE" >> $GITHUB_OUTPUT
+
+      - name: Trigger Copilot (Simulated)
+        run: |
+          echo "🚀 SIMULATED: Triggering GitHub Copilot coding agent"
+          echo ""
+          echo "In production, this would:"
+          echo "1. Invoke Copilot coding agent via GitHub API"
+          echo "2. Pass issue context + knowledge base context"
+          echo "3. Copilot creates branch: copilot/issue-${{ github.event.issue.number }}"
+          echo "4. Copilot implements changes"
+          echo "5. Copilot opens draft PR with changes"
+          echo ""
+          echo "API call would be:"
+          echo "POST /repos/${{ github.repository }}/copilot/runs"
+          echo '{"issue_number": ${{ github.event.issue.number }}, "context_file": "${{ steps.knowledge.outputs.context_file }}"}'
+
+      - name: Create placeholder branch (simulation)
+        run: |
+          echo "Creating placeholder branch for simulation..."
+          BRANCH_NAME="copilot/issue-${{ github.event.issue.number }}"
+          git checkout -b "$BRANCH_NAME"
+
+          echo "# Copilot Work in Progress" > COPILOT_WORK.md
+          echo "" >> COPILOT_WORK.md
+          echo "Issue: #${{ github.event.issue.number }}" >> COPILOT_WORK.md
+          echo "Status: In Progress" >> COPILOT_WORK.md
+          echo "Started: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> COPILOT_WORK.md
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add COPILOT_WORK.md
+          git commit -m "feat: Initialize Copilot work for issue #${{ github.event.issue.number }}"
+
+          echo "✓ Branch created: $BRANCH_NAME"
+          echo "✓ In production, Copilot would push commits here"
+
+      - name: Update issue with status
+        uses: actions/github-script@v7
+        if: success()
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: '✅ Workflow triggered successfully! Branch `copilot/issue-' + context.issue.number + '` created.\n\n_In production, GitHub Copilot would now be actively working on this issue._'
+            });
+
+      - name: Handle errors
+        uses: actions/github-script@v7
+        if: failure()
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: '❌ Workflow failed. Please check the [Action logs](' + context.payload.repository.html_url + '/actions) for details.'
+            });
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: ['copilot-error']
+            });

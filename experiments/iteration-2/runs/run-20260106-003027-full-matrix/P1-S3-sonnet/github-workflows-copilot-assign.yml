@@ -1,0 +1,287 @@
+name: Copilot Issue Assignment
+
+on:
+  issues:
+    types: [assigned, labeled]
+
+permissions:
+  issues: write
+  pull-requests: write
+  contents: write
+
+jobs:
+  process-issue:
+    name: Process Copilot Assignment
+    runs-on: ubuntu-latest
+    if: |
+      (github.event.assignee.login == 'copilot') ||
+      contains(github.event.issue.labels.*.name, 'copilot')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Parse issue body
+        id: parse
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+
+            // Extract structured data from issue body
+            const body = issue.body || '';
+
+            // Parse form fields (GitHub issue forms use ### headers)
+            const parseField = (fieldName) => {
+              const regex = new RegExp(`### ${fieldName}\\s*\\n([\\s\\S]*?)(?=\\n###|$)`, 'i');
+              const match = body.match(regex);
+              return match ? match[1].trim() : '';
+            };
+
+            const taskTitle = parseField('Task Title') || issue.title;
+            const description = parseField('Description');
+            const acceptanceCriteria = parseField('Acceptance Criteria');
+            const context = parseField('Additional Context');
+            const priority = parseField('Priority');
+            const complexity = parseField('Estimated Complexity');
+
+            // Store parsed data
+            core.setOutput('task_title', taskTitle);
+            core.setOutput('description', description);
+            core.setOutput('acceptance_criteria', acceptanceCriteria);
+            core.setOutput('context', context);
+            core.setOutput('priority', priority);
+            core.setOutput('complexity', complexity);
+            core.setOutput('issue_number', issue.number);
+
+            console.log('Parsed issue data:', {
+              taskTitle,
+              description: description.substring(0, 100) + '...',
+              priority,
+              complexity
+            });
+
+      - name: Search knowledge base
+        id: search-kb
+        run: |
+          echo "Searching knowledge base for relevant patterns..."
+
+          # Search for relevant patterns based on task description
+          TASK_DESC="${{ steps.parse.outputs.description }}"
+
+          # Initialize results
+          PATTERNS=""
+          DECISIONS=""
+          INSIGHTS=""
+
+          # Search patterns directory if it exists
+          if [ -d "docs/knowledge/patterns" ]; then
+            PATTERNS=$(grep -ril "${TASK_DESC:0:50}" docs/knowledge/patterns/ 2>/dev/null || echo "")
+          fi
+
+          # Search decisions directory
+          if [ -d "docs/knowledge/decisions" ]; then
+            DECISIONS=$(grep -ril "architecture\|design" docs/knowledge/decisions/ 2>/dev/null || echo "")
+          fi
+
+          # Search insights directory
+          if [ -d "docs/knowledge/insights" ]; then
+            INSIGHTS=$(grep -ril "learning\|improvement" docs/knowledge/insights/ 2>/dev/null || echo "")
+          fi
+
+          # Output findings
+          echo "Found patterns: ${PATTERNS:-none}"
+          echo "Found decisions: ${DECISIONS:-none}"
+          echo "Found insights: ${INSIGHTS:-none}"
+
+          # Save to output
+          echo "patterns=${PATTERNS}" >> $GITHUB_OUTPUT
+          echo "decisions=${DECISIONS}" >> $GITHUB_OUTPUT
+          echo "insights=${INSIGHTS}" >> $GITHUB_OUTPUT
+
+      - name: Select AI model
+        id: select-model
+        run: |
+          # Default to Sonnet, but allow override via environment variable
+          MODEL="${COPILOT_MODEL:-sonnet-4.5}"
+          echo "Using AI model: ${MODEL}"
+          echo "model=${MODEL}" >> $GITHUB_OUTPUT
+        env:
+          COPILOT_MODEL: ${{ vars.COPILOT_MODEL }}
+
+      - name: Generate implementation (SIMULATED)
+        id: generate
+        run: |
+          echo "=== SIMULATION MODE ==="
+          echo "In production, this step would:"
+          echo "1. Call AI model API (${MODEL}) with context:"
+          echo "   - Task: ${{ steps.parse.outputs.task_title }}"
+          echo "   - Description: ${{ steps.parse.outputs.description }}"
+          echo "   - Acceptance Criteria: ${{ steps.parse.outputs.acceptance_criteria }}"
+          echo "   - Knowledge Base Patterns: ${{ steps.search-kb.outputs.patterns }}"
+          echo "2. Generate code/configuration based on requirements"
+          echo "3. Create files in appropriate locations"
+          echo ""
+          echo "For simulation, creating sample implementation..."
+
+          # Create sample implementation file
+          mkdir -p src/generated
+          cat > src/generated/copilot-implementation.txt << 'EOF'
+          # Copilot Generated Implementation
+          # Issue: ${{ steps.parse.outputs.issue_number }}
+          # Task: ${{ steps.parse.outputs.task_title }}
+
+          This file represents the implementation generated by @copilot.
+          In production, this would contain actual code based on the task requirements.
+
+          ## Implementation Notes
+          - Generated by: ${{ steps.select-model.outputs.model }}
+          - Knowledge base patterns applied: ${{ steps.search-kb.outputs.patterns }}
+          - Complexity estimate: ${{ steps.parse.outputs.complexity }}
+
+          ## Acceptance Criteria
+          ${{ steps.parse.outputs.acceptance_criteria }}
+          EOF
+
+          echo "branch_name=copilot/issue-${{ steps.parse.outputs.issue_number }}" >> $GITHUB_OUTPUT
+        env:
+          MODEL: ${{ steps.select-model.outputs.model }}
+
+      - name: Create feature branch
+        run: |
+          BRANCH="${{ steps.generate.outputs.branch_name }}"
+          git checkout -b "${BRANCH}"
+          echo "Created branch: ${BRANCH}"
+
+      - name: Commit changes
+        run: |
+          git add .
+
+          # Create detailed commit message
+          cat > commit_message.txt << 'EOF'
+          feat: Implement ${{ steps.parse.outputs.task_title }}
+
+          Automated implementation by @copilot for issue #${{ steps.parse.outputs.issue_number }}
+
+          Description:
+          ${{ steps.parse.outputs.description }}
+
+          Acceptance Criteria:
+          ${{ steps.parse.outputs.acceptance_criteria }}
+
+          Model: ${{ steps.select-model.outputs.model }}
+          Complexity: ${{ steps.parse.outputs.complexity }}
+          Priority: ${{ steps.parse.outputs.priority }}
+
+          Closes #${{ steps.parse.outputs.issue_number }}
+          EOF
+
+          git commit -F commit_message.txt
+          rm commit_message.txt
+
+      - name: Push branch (SIMULATED)
+        run: |
+          echo "=== SIMULATION MODE ==="
+          echo "Would push branch: ${{ steps.generate.outputs.branch_name }}"
+          echo "Command: git push origin ${{ steps.generate.outputs.branch_name }}"
+          echo ""
+          echo "Skipping actual push in simulation."
+
+      - name: Create pull request (SIMULATED)
+        id: create-pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            console.log('=== SIMULATION MODE ===');
+            console.log('Would create PR with:');
+            console.log('Title: [Copilot] ${{ steps.parse.outputs.task_title }}');
+            console.log('Body: Automated implementation for #${{ steps.parse.outputs.issue_number }}');
+            console.log('Base: main');
+            console.log('Head: ${{ steps.generate.outputs.branch_name }}');
+            console.log('');
+            console.log('Skipping actual PR creation in simulation.');
+
+            // In production, would use:
+            // const pr = await github.rest.pulls.create({
+            //   owner: context.repo.owner,
+            //   repo: context.repo.repo,
+            //   title: `[Copilot] ${{ steps.parse.outputs.task_title }}`,
+            //   body: `...`,
+            //   base: 'main',
+            //   head: '${{ steps.generate.outputs.branch_name }}'
+            // });
+
+            // Simulate PR number
+            core.setOutput('pr_number', 'SIMULATED_PR');
+
+      - name: Add comment to issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = '${{ steps.create-pr.outputs.pr_number }}';
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ steps.parse.outputs.issue_number }},
+              body: `🤖 **@copilot has processed this issue**\n\n` +
+                    `✅ Implementation complete\n` +
+                    `📝 Pull request: ${prNumber === 'SIMULATED_PR' ? '(simulated)' : '#' + prNumber}\n` +
+                    `🧠 Model used: ${{ steps.select-model.outputs.model }}\n` +
+                    `⏱️ Complexity: ${{ steps.parse.outputs.complexity }}\n\n` +
+                    `**Next steps:**\n` +
+                    `- Automated validation checks will run\n` +
+                    `- Code owners will be notified for review\n` +
+                    `- Merge when approved\n\n` +
+                    `*Note: This is a simulated run. In production, a real PR would be created.*`
+            });
+
+      - name: Update issue labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ steps.parse.outputs.issue_number }},
+              labels: ['in-progress', 'pr-created']
+            });
+
+  handle-failure:
+    name: Handle Workflow Failure
+    runs-on: ubuntu-latest
+    needs: process-issue
+    if: failure()
+    steps:
+      - name: Comment on issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              body: `⚠️ **@copilot encountered an error**\n\n` +
+                    `The automated processing workflow failed. ` +
+                    `Please check the [workflow run logs](${context.payload.repository.html_url}/actions/runs/${context.runId}) for details.\n\n` +
+                    `**Common causes:**\n` +
+                    `- Malformed issue template data\n` +
+                    `- Knowledge base search errors\n` +
+                    `- Branch creation conflicts\n\n` +
+                    `A human will need to investigate and retry.`
+            });
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              labels: ['copilot-error']
+            });

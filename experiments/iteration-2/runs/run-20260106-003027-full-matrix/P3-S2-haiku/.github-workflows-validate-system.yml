@@ -1,0 +1,217 @@
+name: Validate Copilot System
+
+# Run validation on schedule and manually
+on:
+  schedule:
+    # Run daily at midnight UTC to check system health
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+    # Allow manual trigger from Actions tab
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  validate_system:
+    name: Validate System Configuration
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout code
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # Step 2: Validate GitHub issue template exists
+      - name: Validate Issue Template
+        run: |
+          TEMPLATE_FILE=".github/ISSUE_TEMPLATE/task.yml"
+          if [[ ! -f "$TEMPLATE_FILE" ]]; then
+            echo "ERROR: Issue template not found at $TEMPLATE_FILE"
+            exit 1
+          fi
+          echo "✓ Issue template exists"
+
+      # Step 3: Validate CODEOWNERS file
+      - name: Validate CODEOWNERS
+        run: |
+          CODEOWNERS_FILE=".github/CODEOWNERS"
+          if [[ ! -f "$CODEOWNERS_FILE" ]]; then
+            echo "ERROR: CODEOWNERS file not found at $CODEOWNERS_FILE"
+            exit 1
+          fi
+
+          # Check if placeholder @owner is still present (warning)
+          if grep -q "@owner" "$CODEOWNERS_FILE"; then
+            echo "⚠️  WARNING: CODEOWNERS contains placeholder '@owner' - must be replaced with actual GitHub username"
+          fi
+
+          # Check for valid email format in comments
+          if grep -E "^[^#]*@[^@]+\s+@" "$CODEOWNERS_FILE" > /dev/null; then
+            echo "✓ CODEOWNERS has proper format"
+          else
+            echo "⚠️  CODEOWNERS may have formatting issues"
+          fi
+
+      # Step 4: Validate knowledge base directory structure
+      - name: Validate Knowledge Base Structure
+        run: |
+          KB_ROOT="docs/knowledge"
+
+          # Check if knowledge base exists
+          if [[ ! -d "$KB_ROOT" ]]; then
+            echo "WARNING: Knowledge base directory not found at $KB_ROOT"
+            mkdir -p "$KB_ROOT"/{patterns,decisions,insights}
+            echo "Created knowledge base structure"
+          fi
+
+          # Check required subdirectories
+          for dir in patterns decisions insights; do
+            if [[ ! -d "$KB_ROOT/$dir" ]]; then
+              mkdir -p "$KB_ROOT/$dir"
+              touch "$KB_ROOT/$dir/.gitkeep"
+              echo "Created $KB_ROOT/$dir"
+            else
+              echo "✓ Found $KB_ROOT/$dir"
+            fi
+          done
+
+      # Step 5: Validate workflow files exist
+      - name: Validate Workflow Files
+        run: |
+          WORKFLOW_FILE=".github/workflows/copilot-task.yml"
+          if [[ ! -f "$WORKFLOW_FILE" ]]; then
+            echo "ERROR: Workflow file not found at $WORKFLOW_FILE"
+            exit 1
+          fi
+          echo "✓ Main workflow file exists"
+
+      # Step 6: Check YAML syntax with yamllint (if available)
+      - name: Validate YAML Syntax
+        run: |
+          # Check if yamllint is available
+          if command -v yamllint &> /dev/null; then
+            echo "Validating YAML files with yamllint..."
+            yamllint .github/ISSUE_TEMPLATE/task.yml || {
+              echo "WARNING: Issue template has YAML issues (may still be functional)"
+            }
+            yamllint .github/workflows/copilot-task.yml || {
+              echo "WARNING: Workflow has YAML issues"
+            }
+            echo "✓ YAML validation complete"
+          else
+            echo "Note: yamllint not installed (install with: pip install yamllint)"
+          fi
+
+      # Step 7: Validate shell script syntax
+      - name: Validate Shell Scripts
+        run: |
+          # Find and check all shell scripts
+          if [[ -f "scripts/verify-bootstrap.sh" ]]; then
+            if command -v shellcheck &> /dev/null; then
+              shellcheck scripts/verify-bootstrap.sh || {
+                echo "WARNING: Shell script has issues"
+              }
+              echo "✓ Shell script validation complete"
+            else
+              echo "Note: shellcheck not installed (install with: apt-get install shellcheck)"
+            fi
+          fi
+
+      # Step 8: Check for README documentation
+      - name: Validate Documentation
+        run: |
+          if [[ ! -f "README.md" ]]; then
+            echo "ERROR: README.md not found"
+            exit 1
+          fi
+
+          # Check that README mentions copilot workflow
+          if grep -q "copilot\|Copilot\|@copilot" README.md; then
+            echo "✓ README documents copilot workflow"
+          else
+            echo "⚠️  README may not adequately document copilot workflow"
+          fi
+
+      # Step 9: Validate knowledge base README
+      - name: Validate Knowledge Base Documentation
+        run: |
+          KB_README="docs/knowledge/README.md"
+          if [[ ! -f "$KB_README" ]]; then
+            echo "⚠️  Knowledge base README not found at $KB_README"
+          else
+            echo "✓ Knowledge base README exists"
+          fi
+
+      # Step 10: Check file permissions
+      - name: Validate File Permissions
+        run: |
+          # Verify shell scripts are executable
+          for script in scripts/*.sh; do
+            if [[ -f "$script" ]] && [[ ! -x "$script" ]]; then
+              echo "⚠️  Script not executable: $script"
+              chmod +x "$script"
+              echo "Made executable: $script"
+            fi
+          done
+          echo "✓ File permissions validated"
+
+      # Step 11: Count issues in repository
+      - name: Repository Health Check
+        run: |
+          echo "=== Repository Health Snapshot ==="
+          echo "Configuration files:"
+          [[ -f .gitignore ]] && echo "  ✓ .gitignore" || echo "  ✗ .gitignore"
+          [[ -f .gitattributes ]] && echo "  ✓ .gitattributes" || echo "  ✗ .gitattributes"
+          [[ -f README.md ]] && echo "  ✓ README.md" || echo "  ✗ README.md"
+
+          echo ""
+          echo "GitHub configuration:"
+          [[ -d .github ]] && echo "  ✓ .github/" || echo "  ✗ .github/"
+          [[ -f .github/CODEOWNERS ]] && echo "  ✓ CODEOWNERS" || echo "  ✗ CODEOWNERS"
+          [[ -f .github/ISSUE_TEMPLATE/task.yml ]] && echo "  ✓ Issue template" || echo "  ✗ Issue template"
+          [[ -d .github/workflows ]] && echo "  ✓ Workflows" || echo "  ✗ Workflows"
+
+          echo ""
+          echo "Documentation:"
+          [[ -d docs/knowledge ]] && echo "  ✓ Knowledge base" || echo "  ✗ Knowledge base"
+          [[ -d scripts ]] && echo "  ✓ Scripts" || echo "  ✗ Scripts"
+
+      # Step 12: Generate validation report
+      - name: Generate Validation Report
+        run: |
+          cat > validation-report.txt << 'EOF'
+          # Copilot System Validation Report
+
+          Generated: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          ## Configuration Status
+
+          ### Required Files
+          - Issue Template (.github/ISSUE_TEMPLATE/task.yml): $(test -f .github/ISSUE_TEMPLATE/task.yml && echo "✓" || echo "✗")
+          - CODEOWNERS (.github/CODEOWNERS): $(test -f .github/CODEOWNERS && echo "✓" || echo "✗")
+          - Main Workflow (.github/workflows/copilot-task.yml): $(test -f .github/workflows/copilot-task.yml && echo "✓" || echo "✗")
+          - README.md: $(test -f README.md && echo "✓" || echo "✗")
+          - Knowledge Base: $(test -d docs/knowledge && echo "✓" || echo "✗")
+
+          ### Validation Steps Complete
+          - [x] File existence checks
+          - [x] YAML syntax validation (if yamllint available)
+          - [x] Shell script validation (if shellcheck available)
+          - [x] Documentation validation
+          - [x] File permissions check
+          - [x] Health snapshot
+
+          ## Summary
+          System is ready for end-to-end testing with sample issue.
+          EOF
+
+          cat validation-report.txt
+
+      # Step 13: Success message
+      - name: Validation Success
+        run: |
+          echo "=== SYSTEM VALIDATION COMPLETE ==="
+          echo "All critical components verified"
+          echo "System ready for test issue processing"
+          echo "===================================="

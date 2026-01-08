@@ -1,0 +1,96 @@
+name: Copilot Task
+description: Create a task for @copilot to execute autonomously
+title: "[Copilot Task] "
+labels: ["copilot", "ai-task"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Task for @copilot
+
+        This template creates a structured task that @copilot can parse and execute autonomously.
+        Fill in all required fields for best results.
+
+  - type: textarea
+    id: task-description
+    attributes:
+      label: Task Description
+      description: Clearly describe what needs to be implemented or changed
+      placeholder: |
+        Implement a function that...
+        Add a new feature to...
+        Fix the bug where...
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Define what "done" looks like with checkable items
+      placeholder: |
+        - [ ] Function exists and is exported
+        - [ ] Unit tests cover all edge cases
+        - [ ] Documentation is updated
+        - [ ] No linting errors
+      value: |
+        - [ ] Implementation complete
+        - [ ] Tests passing
+        - [ ] Documentation updated
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Any additional context, constraints, or background information
+      placeholder: |
+        Related files: src/utils/...
+        Dependencies: Uses library X
+        Constraints: Must be backwards compatible
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How urgent is this task?
+      options:
+        - Low
+        - Medium
+        - High
+        - Critical
+      default: 1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: agent-preference
+    attributes:
+      label: Agent Preference
+      description: Preferred AI agent for this task (if any)
+      options:
+        - Any
+        - Opus (complex tasks)
+        - Sonnet (balanced)
+        - Haiku (simple tasks)
+      default: 0
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      description: Verify before submitting
+      options:
+        - label: Task description is clear and actionable
+          required: true
+        - label: Acceptance criteria are specific and testable
+          required: true
+        - label: I have reviewed similar past issues for context
+          required: false

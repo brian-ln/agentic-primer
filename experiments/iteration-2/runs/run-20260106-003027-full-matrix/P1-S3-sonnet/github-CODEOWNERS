@@ -1,0 +1,32 @@
+# CODEOWNERS
+#
+# This file defines code ownership for automatic PR review assignment.
+# When a PR is opened, GitHub automatically requests reviews from the owners.
+#
+# Documentation: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything in the repo
+# This ensures no PR goes unreviewed
+*       @REPO_OWNER
+
+# GitHub configuration files
+# Changes to workflows and templates require careful review
+/.github/                       @REPO_OWNER
+/.github/workflows/*.yml        @REPO_OWNER
+/.github/ISSUE_TEMPLATE/*.yml   @REPO_OWNER
+
+# Scripts that power automation
+# Must be reviewed for security and correctness
+/scripts/*.sh                   @REPO_OWNER
+
+# Knowledge base
+# Requires review to ensure quality and relevance
+/docs/knowledge/                @REPO_OWNER
+
+# Critical configuration files
+# Changes affect entire system behavior
+/README.md                      @REPO_OWNER
+/.markdownlint.json            @REPO_OWNER
+
+# Note: Replace @REPO_OWNER with actual GitHub username during bootstrap
+# Example: * @myusername

@@ -1,0 +1,77 @@
+{
+  "version": "1.0.0",
+  "last_updated": "2026-01-06T00:31:27Z",
+  "patterns": {
+    "count": 3,
+    "items": [
+      {
+        "id": "rest-api-crud",
+        "title": "REST API CRUD Operations Pattern",
+        "path": "docs/knowledge/patterns/rest-api-crud.md",
+        "tags": ["api", "rest", "crud", "validation", "testing"],
+        "complexity": "moderate",
+        "description": "Comprehensive pattern for implementing REST CRUD endpoints with validation, error handling, and testing"
+      },
+      {
+        "id": "error-handling",
+        "title": "Error Handling and Logging Pattern",
+        "path": "docs/knowledge/patterns/error-handling.md",
+        "tags": ["errors", "logging", "debugging", "monitoring"],
+        "complexity": "simple",
+        "description": "Structured approach to error handling and logging across the application"
+      },
+      {
+        "id": "database-migration",
+        "title": "Database Schema Migration Pattern",
+        "path": "docs/knowledge/patterns/database-migration.md",
+        "tags": ["database", "migration", "schema", "compatibility"],
+        "complexity": "complex",
+        "description": "Safe pattern for evolving database schema with rollback capabilities"
+      }
+    ]
+  },
+  "decisions": {
+    "count": 2,
+    "items": [
+      {
+        "id": "adr-001-api-versioning",
+        "title": "API Versioning Strategy",
+        "path": "docs/knowledge/decisions/adr-001-api-versioning.md",
+        "status": "accepted",
+        "date": "2026-01-01",
+        "summary": "Use URL-based versioning (/v1/, /v2/) with deprecation warnings"
+      },
+      {
+        "id": "adr-002-database-choice",
+        "title": "Database Technology Selection",
+        "path": "docs/knowledge/decisions/adr-002-database-choice.md",
+        "status": "accepted",
+        "date": "2026-01-01",
+        "summary": "PostgreSQL 14+ as primary database for ACID guarantees and rich query capabilities"
+      }
+    ]
+  },
+  "insights": {
+    "count": 1,
+    "items": [
+      {
+        "id": "insight-001",
+        "title": "Common Pitfalls in Authentication",
+        "path": "docs/knowledge/insights/insight-001-auth-pitfalls.md",
+        "issue_id": 42,
+        "learned_at": "2026-01-06T00:31:27Z",
+        "summary": "Key learnings from implementing user authentication endpoints"
+      }
+    ]
+  },
+  "search_index": {
+    "api": ["rest-api-crud", "adr-001-api-versioning"],
+    "database": ["database-migration", "adr-002-database-choice"],
+    "error": ["error-handling"],
+    "validation": ["rest-api-crud"],
+    "auth": ["insight-001-auth-pitfalls"],
+    "rest": ["rest-api-crud"],
+    "migration": ["database-migration"],
+    "logging": ["error-handling"]
+  }
+}

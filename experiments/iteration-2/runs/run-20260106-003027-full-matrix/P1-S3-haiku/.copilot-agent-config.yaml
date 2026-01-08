@@ -1,0 +1,106 @@
+agent_configuration:
+  identity:
+    name: '@copilot'
+    version: '1.0.0'
+    role: 'Autonomous GitHub issue resolution agent'
+
+  api:
+    provider: 'anthropic'
+    endpoint: 'https://api.anthropic.com/v1'
+    models:
+      opus:
+        name: 'claude-opus-4-5'
+        max_tokens: 4096
+        cost_per_request: 0.03
+        latency_ms: 3000-5000
+      sonnet:
+        name: 'claude-sonnet-4-5'
+        max_tokens: 4096
+        cost_per_request: 0.01
+        latency_ms: 1000-2000
+      haiku:
+        name: 'claude-haiku-4-5'
+        max_tokens: 1024
+        cost_per_request: 0.001
+        latency_ms: 200-500
+
+  model_selection:
+    enabled: true
+    strategy: 'adaptive'
+    rules:
+      simple:
+        trigger: 'word_count < 200'
+        model: 'haiku'
+        confidence: 0.8
+      medium:
+        trigger: 'word_count >= 200 AND word_count < 500'
+        model: 'sonnet'
+        confidence: 0.9
+      complex:
+        trigger: 'word_count >= 500'
+        model: 'opus'
+        confidence: 0.95
+      architecture:
+        trigger: 'has_label("architecture")'
+        model: 'opus'
+        confidence: 0.95
+      quick_fix:
+        trigger: 'has_label("bug") AND has_label("small")'
+        model: 'haiku'
+        confidence: 0.7
+
+  processing:
+    timeout_seconds: 300
+    max_retries: 3
+    retry_delay_seconds: 5
+    knowledge_base:
+      enabled: true
+      update_frequency: 'hourly'
+      cache_ttl_seconds: 3600
+      max_results_per_query: 5
+
+  validation:
+    auto_review_enabled: true
+    run_tests_before_pr: true
+    minimum_test_coverage: 90
+    lint_on_pr: true
+    security_scan_enabled: true
+
+  logging:
+    level: 'info'
+    format: 'json'
+    retention_days: 30
+    metrics_collection: true
+
+  notifications:
+    slack:
+      enabled: false
+      channel: '#copilot-updates'
+    email:
+      enabled: false
+    github_comments:
+      enabled: true
+      include_metrics: true
+
+  safety:
+    max_file_size_mb: 10
+    max_files_per_issue: 20
+    max_processing_time_minutes: 15
+    disable_dangerous_operations: true
+    require_approval_for:
+      - breaking_api_changes
+      - database_migrations
+      - security_related_changes
+
+  metrics:
+    track_success_rate: true
+    track_processing_time: true
+    track_cost_per_issue: true
+    track_pr_merge_rate: true
+    sample_rate: 1.0
+
+  pricing:
+    budget:
+      daily_limit_dollars: 50
+      monthly_limit_dollars: 1000
+      alert_threshold_percent: 80

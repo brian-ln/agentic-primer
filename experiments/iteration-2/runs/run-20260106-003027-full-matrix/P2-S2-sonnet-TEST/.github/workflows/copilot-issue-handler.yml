@@ -1,0 +1,162 @@
+name: Copilot Issue Handler
+
+on:
+  issues:
+    types: [opened, labeled]
+
+permissions:
+  issues: write
+  contents: write
+  pull-requests: write
+
+jobs:
+  validate-and-process:
+    # Only run if issue has 'copilot' label
+    if: contains(github.event.issue.labels.*.name, 'copilot')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq yq
+
+      - name: Validate issue format
+        id: validate
+        run: |
+          # Run validation script
+          bash .github/scripts/validate-issue.sh "${{ github.event.issue.number }}"
+
+          # Check exit code
+          if [ $? -eq 0 ]; then
+            echo "validation=passed" >> $GITHUB_OUTPUT
+            echo "✅ Issue validation passed"
+          else
+            echo "validation=failed" >> $GITHUB_OUTPUT
+            echo "❌ Issue validation failed"
+            exit 1
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+
+      - name: Comment validation status
+        if: steps.validate.outputs.validation == 'failed'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '❌ **Issue validation failed**\n\nPlease ensure your issue includes all required fields:\n- Clear title\n- Detailed description\n- Acceptance criteria\n- Technical context\n\nRefer to the issue template for guidance.'
+            })
+
+      - name: Query knowledge base
+        id: kb-query
+        if: steps.validate.outputs.validation == 'passed'
+        run: |
+          # Extract keywords from issue for KB query
+          ISSUE_BODY=$(gh issue view ${{ github.event.issue.number }} --json body -q .body)
+
+          # Run KB query script
+          bash .github/scripts/knowledge-query.sh "$ISSUE_BODY" > kb-context.txt
+
+          # Store KB context as output
+          KB_CONTEXT=$(cat kb-context.txt)
+          echo "kb_context<<EOF" >> $GITHUB_OUTPUT
+          echo "$KB_CONTEXT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Comment KB context
+        if: steps.validate.outputs.validation == 'passed'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const kbContext = `${{ steps.kb-query.outputs.kb_context }}`;
+            if (kbContext && kbContext.trim().length > 0) {
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `🤖 **@copilot starting work**\n\n📚 **Knowledge Base Context:**\n\`\`\`\n${kbContext}\n\`\`\`\n\nI'll use this context to implement your request. Watch for a draft PR soon!`
+              });
+            } else {
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `🤖 **@copilot starting work**\n\nI'll implement your request based on the issue description. Watch for a draft PR soon!`
+              });
+            }
+
+      - name: Run copilot worker
+        id: worker
+        if: steps.validate.outputs.validation == 'passed'
+        run: |
+          # Make script executable
+          chmod +x .github/scripts/copilot-worker.sh
+
+          # Run worker script with issue context
+          bash .github/scripts/copilot-worker.sh \
+            --issue-number "${{ github.event.issue.number }}" \
+            --repo "${{ github.repository }}" \
+            --kb-context-file "kb-context.txt"
+
+          # Capture outputs
+          echo "branch_name=$(cat worker-output/branch-name.txt)" >> $GITHUB_OUTPUT
+          echo "pr_number=$(cat worker-output/pr-number.txt)" >> $GITHUB_OUTPUT
+          echo "status=$(cat worker-output/status.txt)" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Comment on success
+        if: steps.worker.outputs.status == 'success'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `✅ **Implementation complete!**\n\n🔀 **Pull Request:** #${{ steps.worker.outputs.pr_number }}\n🌿 **Branch:** \`${{ steps.worker.outputs.branch_name }}\`\n\nPlease review the changes and convert the draft PR to "Ready for review" when satisfied.`
+            })
+
+      - name: Comment on failure
+        if: steps.worker.outputs.status == 'failed'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const logs = `${{ steps.worker.outputs.logs }}`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `❌ **Implementation failed**\n\nI encountered an error while implementing this issue. Please check the workflow logs for details.\n\n<details>\n<summary>Error logs</summary>\n\n\`\`\`\n${logs}\n\`\`\`\n</details>\n\nYou may need to:\n- Clarify the requirements\n- Check for conflicting changes\n- Manually implement this issue`
+            })
+
+      - name: Add labels
+        if: steps.worker.outputs.status == 'success'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.issues.addLabels({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ['copilot-completed', 'needs-review']
+            })

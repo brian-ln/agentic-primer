@@ -1,0 +1,133 @@
+name: Copilot Feature Request
+description: Request a new feature to be implemented by @copilot
+title: "[FEATURE] "
+labels: ["copilot", "enhancement"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Feature Request for @copilot
+
+        This issue will be automatically assigned to @copilot for implementation.
+        Please provide as much context as possible to help the AI understand your needs.
+
+        **Based on GitHub's WRAP framework:**
+        - Write effective issues with clear context
+        - Refine instructions with specifics
+        - And get the most out of coding agent
+
+  - type: input
+    id: feature-title
+    attributes:
+      label: Feature Title
+      description: Short, descriptive name for the feature
+      placeholder: "Add user authentication with OAuth"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Detailed Description
+      description: Explain what the feature should do and why it's needed
+      placeholder: |
+        We need to add OAuth authentication to allow users to log in with GitHub, Google, and Microsoft accounts.
+        This will improve user onboarding and reduce password management overhead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Checklist of conditions that must be met for this feature to be complete
+      placeholder: |
+        - [ ] User can click "Sign in with GitHub" button
+        - [ ] OAuth flow redirects to provider and back successfully
+        - [ ] User profile is created/updated with OAuth data
+        - [ ] Existing sessions are preserved across OAuth login
+        - [ ] Unit tests cover OAuth flow
+        - [ ] Integration tests verify end-to-end flow
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How urgent is this feature?
+      options:
+        - Low (nice to have)
+        - Medium (should have)
+        - High (must have)
+        - Critical (blocking other work)
+    validations:
+      required: true
+
+  - type: textarea
+    id: technical-context
+    attributes:
+      label: Technical Context
+      description: Relevant technical details that will help @copilot understand the codebase
+      placeholder: |
+        - Current auth system: JWT tokens in cookies
+        - Framework: Next.js 14 with App Router
+        - Database: PostgreSQL with Prisma ORM
+        - Related files: src/app/api/auth/*, src/lib/auth.ts
+    validations:
+      required: true
+
+  - type: textarea
+    id: knowledge-base-refs
+    attributes:
+      label: Knowledge Base References
+      description: Link to relevant docs, patterns, or standards from the knowledge base
+      placeholder: |
+        - Architecture: authentication-patterns
+        - Standards: api-design-guide
+        - Components: user-service, auth-middleware
+    validations:
+      required: false
+
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints and Considerations
+      description: Any limitations, security concerns, or special requirements
+      placeholder: |
+        - Must support PKCE flow for security
+        - Should handle token refresh automatically
+        - Need to comply with GDPR (user data handling)
+        - Cannot break existing JWT-based sessions
+    validations:
+      required: false
+
+  - type: textarea
+    id: related-issues
+    attributes:
+      label: Related Issues
+      description: Link to related issues or PRs
+      placeholder: |
+        - Blocked by: #123 (API rate limiting)
+        - Related to: #456 (User profile redesign)
+        - Depends on: #789 (Database migration)
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      description: Confirm you've provided sufficient context
+      options:
+        - label: I have provided a clear description of the feature
+          required: true
+        - label: I have listed specific acceptance criteria
+          required: true
+        - label: I have included relevant technical context
+          required: true
+        - label: I have checked the knowledge base for existing patterns
+          required: false
+        - label: I understand this will be implemented by an AI agent
+          required: true

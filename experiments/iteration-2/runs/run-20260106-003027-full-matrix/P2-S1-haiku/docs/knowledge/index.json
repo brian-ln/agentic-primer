@@ -1,0 +1,130 @@
+{
+  "version": "1.0.0",
+  "last_updated": "2026-01-06T00:00:00Z",
+  "total_entries": 9,
+  "patterns": [
+    {
+      "id": "api-design-001",
+      "title": "API Design Patterns",
+      "file": "docs/knowledge/patterns/api-design.md",
+      "topics": ["api", "rest", "design", "conventions"],
+      "keywords": ["endpoint", "request", "response", "versioning"],
+      "relevance_score": 0.95,
+      "last_updated": "2026-01-06T00:00:00Z",
+      "version": "1.0"
+    },
+    {
+      "id": "testing-strategies-001",
+      "title": "Testing Strategies and Best Practices",
+      "file": "docs/knowledge/patterns/testing.md",
+      "topics": ["testing", "quality", "coverage", "validation"],
+      "keywords": ["unit", "integration", "mock", "assertion"],
+      "relevance_score": 0.90,
+      "last_updated": "2026-01-06T00:00:00Z",
+      "version": "1.0"
+    },
+    {
+      "id": "deployment-process-001",
+      "title": "Deployment and Release Process",
+      "file": "docs/knowledge/patterns/deployment.md",
+      "topics": ["deployment", "ci-cd", "release", "automation"],
+      "keywords": ["pipeline", "environment", "staging", "production"],
+      "relevance_score": 0.85,
+      "last_updated": "2026-01-06T00:00:00Z",
+      "version": "1.0"
+    }
+  ],
+  "decisions": [
+    {
+      "id": "db-choice-001",
+      "title": "Database Technology Choice",
+      "file": "docs/knowledge/decisions/db-choice.md",
+      "topics": ["database", "technology", "architecture"],
+      "keywords": ["postgresql", "selection", "rationale", "trade-offs"],
+      "relevance_score": 0.92,
+      "last_updated": "2026-01-06T00:00:00Z",
+      "decision_date": "2025-12-15"
+    },
+    {
+      "id": "framework-choice-001",
+      "title": "Web Framework Selection",
+      "file": "docs/knowledge/decisions/framework.md",
+      "topics": ["framework", "technology", "architecture"],
+      "keywords": ["express", "fastapi", "selection", "rationale"],
+      "relevance_score": 0.88,
+      "last_updated": "2026-01-06T00:00:00Z",
+      "decision_date": "2025-12-10"
+    },
+    {
+      "id": "deployment-strategy-001",
+      "title": "Deployment Strategy and Infrastructure",
+      "file": "docs/knowledge/decisions/deployment.md",
+      "topics": ["deployment", "infrastructure", "architecture"],
+      "keywords": ["kubernetes", "docker", "cloud", "aws"],
+      "relevance_score": 0.87,
+      "last_updated": "2026-01-06T00:00:00Z",
+      "decision_date": "2025-11-20"
+    }
+  ],
+  "insights": [
+    {
+      "id": "performance-learnings-001",
+      "title": "Performance Optimization Insights",
+      "file": "docs/knowledge/insights/performance.md",
+      "topics": ["performance", "optimization", "lessons-learned"],
+      "keywords": ["caching", "indexing", "profiling", "bottleneck"],
+      "relevance_score": 0.83,
+      "last_updated": "2026-01-06T00:00:00Z",
+      "source": "production-incidents"
+    },
+    {
+      "id": "security-learnings-001",
+      "title": "Security Best Practices and Incidents",
+      "file": "docs/knowledge/insights/security.md",
+      "topics": ["security", "safety", "lessons-learned"],
+      "keywords": ["authentication", "authorization", "vulnerability", "audit"],
+      "relevance_score": 0.91,
+      "last_updated": "2026-01-06T00:00:00Z",
+      "source": "security-reviews"
+    },
+    {
+      "id": "team-processes-001",
+      "title": "Team Processes and Workflow Insights",
+      "file": "docs/knowledge/insights/team-processes.md",
+      "topics": ["process", "team", "workflow"],
+      "keywords": ["review", "standards", "collaboration", "efficiency"],
+      "relevance_score": 0.82,
+      "last_updated": "2026-01-06T00:00:00Z",
+      "source": "retrospectives"
+    }
+  ],
+  "search": {
+    "enabled": true,
+    "indexes": [
+      {
+        "name": "by_topic",
+        "type": "topic_search"
+      },
+      {
+        "name": "by_keyword",
+        "type": "keyword_search"
+      },
+      {
+        "name": "by_relevance",
+        "type": "relevance_ranking"
+      }
+    ]
+  },
+  "maintenance": {
+    "auto_update_enabled": true,
+    "retention_policy": {
+      "max_age_days": 730,
+      "archive_after_days": 365,
+      "delete_after_days": 1095
+    },
+    "compression": {
+      "enabled": true,
+      "algorithm": "gzip"
+    }
+  }
+}

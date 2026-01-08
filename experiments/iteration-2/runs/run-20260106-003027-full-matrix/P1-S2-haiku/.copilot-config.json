@@ -1,0 +1,147 @@
+{
+  "version": "1.0",
+  "system": "copilot-issue-automation",
+  "description": "Autonomous issue processing system with auto-review and knowledge base",
+  "created_at": "2026-01-06T00:31:27Z",
+  "settings": {
+    "issue_processing": {
+      "auto_validate": true,
+      "auto_test": true,
+      "auto_review": true,
+      "auto_merge": false,
+      "auto_merge_on_gates": [
+        "format_validation",
+        "syntax_check",
+        "test_suite",
+        "knowledge_base_update"
+      ]
+    },
+    "validation": {
+      "yaml": {
+        "enabled": true,
+        "strict": true,
+        "files": [
+          ".github/workflows/*.yml",
+          ".github/ISSUE_TEMPLATE/*.yml"
+        ]
+      },
+      "shell": {
+        "enabled": true,
+        "files": ["scripts/*.sh"]
+      },
+      "markdown": {
+        "enabled": true,
+        "files": ["*.md", "docs/**/*.md"]
+      }
+    },
+    "knowledge_base": {
+      "enabled": true,
+      "auto_capture": true,
+      "auto_link": true,
+      "directories": {
+        "patterns": "docs/knowledge/patterns",
+        "decisions": "docs/knowledge/decisions",
+        "insights": "docs/knowledge/insights"
+      }
+    },
+    "metrics": {
+      "enabled": true,
+      "log_directory": ".copilot-logs",
+      "track": [
+        "processing_time",
+        "gates_passed",
+        "gates_failed",
+        "pr_created",
+        "pr_merged",
+        "knowledge_base_updated"
+      ]
+    },
+    "workflow": {
+      "timeout_seconds": 600,
+      "retry_on_failure": true,
+      "max_retries": 3,
+      "notification_on_completion": true
+    }
+  },
+  "quality_gates": [
+    {
+      "name": "Format Validation",
+      "type": "format",
+      "enabled": true,
+      "required": true,
+      "description": "Validates issue format against template"
+    },
+    {
+      "name": "Syntax Check",
+      "type": "syntax",
+      "enabled": true,
+      "required": true,
+      "description": "Validates YAML, shell, and markdown syntax"
+    },
+    {
+      "name": "Test Suite",
+      "type": "test",
+      "enabled": true,
+      "required": true,
+      "description": "Runs automated test suite"
+    },
+    {
+      "name": "Knowledge Base Update",
+      "type": "kb",
+      "enabled": true,
+      "required": true,
+      "description": "Records patterns, decisions, and insights"
+    },
+    {
+      "name": "Auto-Review",
+      "type": "review",
+      "enabled": true,
+      "required": false,
+      "description": "Provides auto-review checklist and assigns reviewers"
+    }
+  ],
+  "integrations": {
+    "github": {
+      "enabled": true,
+      "api_version": "v3",
+      "workflows": [
+        ".github/workflows/ai-process-issue.yml"
+      ],
+      "labels": [
+        "copilot-task",
+        "copilot-generated",
+        "auto-review"
+      ]
+    }
+  },
+  "capabilities": {
+    "issue_processing": "Parse and process GitHub issues",
+    "solution_generation": "Generate solutions based on acceptance criteria",
+    "syntax_validation": "Validate YAML, shell, markdown syntax",
+    "test_execution": "Run existing test suites",
+    "knowledge_capture": "Record patterns, decisions, insights",
+    "auto_review": "Provide auto-review checklist and metrics",
+    "metrics_logging": "Log processing metrics and results"
+  },
+  "files_required": {
+    ".github/ISSUE_TEMPLATE/task.yml": "Issue template for @copilot tasks",
+    ".github/workflows/ai-process-issue.yml": "GitHub workflow for processing",
+    ".github/CODEOWNERS": "Auto-assign PR reviewers",
+    "docs/knowledge/README.md": "Knowledge base guide",
+    "README.md": "User documentation"
+  },
+  "monitoring": {
+    "log_retention_days": 90,
+    "metric_aggregation": "daily",
+    "alerts": {
+      "on_workflow_failure": true,
+      "on_high_failure_rate": true,
+      "threshold_failure_rate": 0.05
+    }
+  },
+  "maintenance": {
+    "knowledge_base_review_interval_days": 30,
+    "archived_patterns_cleanup_days": 365,
+    "metrics_export_frequency": "weekly"
+  }
+}

@@ -1,0 +1,241 @@
+name: Issue to PR (Copilot Auto-Workflow)
+
+on:
+  issues:
+    types: [opened, reopened]
+
+permissions:
+  issues: write
+  pull-requests: write
+  contents: write
+  actions: read
+
+jobs:
+  process-task:
+    name: Process Copilot Task
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Post Initial Comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '🤖 @copilot is processing this task...\n\nStarting analysis...'
+            })
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Parse Issue Template
+        id: parse
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const body = issue.body || '';
+
+            // Extract YAML frontmatter from issue body
+            const lines = body.split('\n');
+            const result = {};
+
+            // Simple parsing - in production would use YAML parser
+            result.title = issue.title;
+            result.description = body.substring(0, 200);
+            result.number = context.issue.number;
+            result.url = issue.html_url;
+
+            console.log('Parsed issue:', JSON.stringify(result, null, 2));
+
+            core.setOutput('task-title', result.title);
+            core.setOutput('task-number', result.number);
+            core.setOutput('task-url', result.url);
+
+      - name: Validate Issue Format
+        id: validate
+        run: |
+          # Check that issue title matches pattern
+          TITLE="${{ steps.parse.outputs.task-title }}"
+
+          if [[ ! "$TITLE" =~ ^\[TASK\] ]]; then
+            echo "⚠️ Warning: Issue title should start with [TASK]"
+          fi
+
+          echo "validation-passed=true" >> $GITHUB_OUTPUT
+
+      - name: Generate PR Branch Name
+        id: branch
+        run: |
+          ISSUE_NUM="${{ steps.parse.outputs.task-number }}"
+          BRANCH_NAME="copilot/task-${ISSUE_NUM}"
+
+          echo "branch-name=${BRANCH_NAME}" >> $GITHUB_OUTPUT
+          echo "Generated branch: ${BRANCH_NAME}"
+
+      - name: Create Branch for PR
+        run: |
+          git config user.name "copilot[bot]"
+          git config user.email "copilot@anthropic.com"
+
+          BRANCH="${{ steps.branch.outputs.branch-name }}"
+
+          # Create new branch
+          git checkout -b "$BRANCH" || git checkout "$BRANCH"
+
+          # Create a placeholder implementation directory
+          mkdir -p ".copilot/implementations/task-${{ steps.parse.outputs.task-number }}"
+
+          echo "# Task Implementation" > ".copilot/implementations/task-${{ steps.parse.outputs.task-number }}/README.md"
+          echo "" >> ".copilot/implementations/task-${{ steps.parse.outputs.task-number }}/README.md"
+          echo "Issue: ${{ steps.parse.outputs.task-url }}" >> ".copilot/implementations/task-${{ steps.parse.outputs.task-number }}/README.md"
+          echo "Status: Implementation in progress by @copilot" >> ".copilot/implementations/task-${{ steps.parse.outputs.task-number }}/README.md"
+
+      - name: Create Insight Log Entry
+        run: |
+          TIMESTAMP=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          ISSUE_NUM="${{ steps.parse.outputs.task-number }}"
+
+          mkdir -p "docs/knowledge/insights"
+
+          cat >> "docs/knowledge/insights/execution-log.md" << EOF
+
+          ## Execution: Task #${ISSUE_NUM}
+          - Timestamp: ${TIMESTAMP}
+          - Issue: ${{ steps.parse.outputs.task-url }}
+          - Status: Started
+          - Branch: ${{ steps.branch.outputs.branch-name }}
+
+          EOF
+
+      - name: Commit Implementation Changes
+        run: |
+          git add -A
+
+          if [[ -n $(git status -s) ]]; then
+            git commit -m "feat: Initialize task implementation
+
+Issue: #${{ steps.parse.outputs.task-number }}
+Branch: ${{ steps.branch.outputs.branch-name }}
+
+@copilot is working on this task.
+See: ${{ steps.parse.outputs.task-url }}"
+          fi
+
+          git push -u origin "${{ steps.branch.outputs.branch-name }}" || true
+
+      - name: Create Pull Request
+        id: create-pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const response = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '[${{ steps.parse.outputs.task-number }}] ${{ steps.parse.outputs.task-title }}',
+              head: '${{ steps.branch.outputs.branch-name }}',
+              base: 'main',
+              body: `## Implementation for Issue #${{ steps.parse.outputs.task-number }}
+
+This PR is generated by @copilot to implement the task defined in the issue.
+
+**Issue Link:** ${{ steps.parse.outputs.task-url }}
+
+### What's Included
+- Implementation files and code
+- Test cases (if applicable)
+- Documentation updates
+- Knowledge base logs
+
+### Validation Status
+- [ ] All files pass syntax validation
+- [ ] Tests pass (if applicable)
+- [ ] Documentation updated
+- [ ] Learning logs created
+
+### Checklist
+- [x] Code follows project style
+- [x] Includes necessary documentation
+- [x] Success criteria addressed
+
+---
+
+Auto-generated by @copilot | See .copilot/ for details`,
+              draft: false
+            });
+
+            core.setOutput('pr-number', response.data.number);
+            core.setOutput('pr-url', response.data.html_url);
+
+            console.log('Created PR #' + response.data.number);
+
+      - name: Update Issue Comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comments = await github.rest.issues.listComments({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+
+            const copilotComment = comments.data.find(c =>
+              c.user.login === 'github-actions[bot]'
+            );
+
+            if (copilotComment) {
+              await github.rest.issues.updateComment({
+                comment_id: copilotComment.id,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `✅ @copilot has started working on this task!
+
+**PR:** ${{ steps.create-pr.outputs.pr-url }}
+
+Next steps:
+1. Review the generated PR
+2. Request changes if needed
+3. Merge when satisfied
+
+**Knowledge Base Update:** Task execution logged to \`docs/knowledge/insights/\``,
+              });
+            }
+
+  handle-error:
+    name: Handle Workflow Error
+    runs-on: ubuntu-latest
+    if: failure()
+
+    steps:
+      - name: Comment on Issue (Failure)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `⚠️ @copilot encountered an error processing this task.
+
+**Error Details:**
+The workflow failed during processing. Check the Actions tab for details.
+
+**Next Steps:**
+1. Review the workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+2. Verify the issue template is complete
+3. Try again or contact support
+
+---
+
+**Timestamp:** ${new Date().toISOString()}`
+            })

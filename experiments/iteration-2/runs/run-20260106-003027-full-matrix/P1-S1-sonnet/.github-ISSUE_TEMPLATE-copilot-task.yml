@@ -1,0 +1,109 @@
+name: Copilot Task
+description: Assign a task to GitHub Copilot for autonomous implementation
+title: "[TASK] "
+labels: ["copilot-task", "automation"]
+assignees:
+  - copilot
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Task Assignment for @copilot
+
+        This issue will be automatically processed by GitHub Copilot when assigned.
+        Provide clear requirements and acceptance criteria for best results.
+
+  - type: input
+    id: title
+    attributes:
+      label: Task Title
+      description: Brief, descriptive title for this task
+      placeholder: "Add user authentication endpoint"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Detailed description of what needs to be implemented
+      placeholder: |
+        What problem does this solve?
+        What functionality is needed?
+        Any relevant context or background?
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Define what "done" looks like (use checkboxes)
+      placeholder: |
+        - [ ] User can log in with email and password
+        - [ ] JWT token is returned on successful authentication
+        - [ ] Invalid credentials return 401 status
+        - [ ] All tests pass
+      value: |
+        - [ ]
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How urgent is this task?
+      options:
+        - Low
+        - Medium
+        - High
+        - Critical
+      default: 1
+    validations:
+      required: true
+
+  - type: textarea
+    id: files-to-modify
+    attributes:
+      label: Files to Modify
+      description: Hint which files need changes (optional)
+      placeholder: |
+        src/auth/login.js
+        tests/auth.test.js
+    validations:
+      required: false
+
+  - type: textarea
+    id: knowledge-references
+    attributes:
+      label: Knowledge Base References
+      description: Link to relevant patterns, decisions, or insights (optional)
+      placeholder: |
+        - docs/knowledge/patterns/authentication.md
+        - docs/knowledge/decisions/002-jwt-over-sessions.md
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Screenshots, links, examples, or any other helpful information
+      placeholder: "Reference API: https://example.com/api-docs"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-Assignment Checklist
+      description: Verify before assigning to @copilot
+      options:
+        - label: Description is clear and complete
+          required: true
+        - label: Acceptance criteria are testable
+          required: true
+        - label: Required files/dependencies are available
+          required: false

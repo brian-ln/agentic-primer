@@ -1,0 +1,92 @@
+name: Copilot Task
+description: Create a task for @copilot to implement autonomously
+title: "[TASK] "
+labels: ["copilot"]
+assignees:
+  - copilot
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Task for @copilot
+        Fill out this form to create a well-defined task that @copilot can implement autonomously.
+        Be specific and include all relevant context.
+
+  - type: dropdown
+    id: task-type
+    attributes:
+      label: Task Type
+      description: What kind of work is this?
+      options:
+        - feature
+        - bugfix
+        - refactor
+        - test
+        - docs
+        - chore
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe what needs to be done. Be specific and include examples if helpful.
+      placeholder: |
+        Add a function that calculates the factorial of a number.
+        It should handle edge cases like 0 and negative numbers.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: List the specific conditions that must be met for this task to be complete.
+      placeholder: |
+        - [ ] Function returns 1 for input 0
+        - [ ] Function returns correct factorial for positive integers
+        - [ ] Function throws error for negative inputs
+        - [ ] Unit tests cover all edge cases
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Technical Context
+      description: Provide relevant context like file locations, dependencies, constraints, or related issues.
+      placeholder: |
+        - File: src/utils/math.ts
+        - Uses TypeScript strict mode
+        - Related to #123
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How urgent is this task?
+      options:
+        - low
+        - medium
+        - high
+        - critical
+      default: 1
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: requirements
+    attributes:
+      label: Requirements
+      description: Confirm that the task meets these requirements
+      options:
+        - label: This task can be completed without human input during implementation
+          required: true
+        - label: Acceptance criteria are testable and verifiable
+          required: true
+        - label: No sensitive data or credentials are required
+          required: true

@@ -1,0 +1,81 @@
+name: Copilot Task
+description: Create a task for @copilot to work on autonomously
+title: "[Copilot] "
+labels: ["copilot"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Issue-Driven Development with @copilot
+
+        This template creates a structured task that @copilot can process autonomously.
+        Fill out the sections below to define your task clearly.
+
+  - type: textarea
+    id: task
+    attributes:
+      label: Task Description
+      description: What should @copilot accomplish? Be specific and clear.
+      placeholder: |
+        Describe the task in detail:
+        - What needs to be created, modified, or fixed
+        - Expected behavior or output
+        - Any constraints or requirements
+        - Files or areas of code involved
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: How do we know the task is complete? List measurable criteria.
+      placeholder: |
+        - [ ] Criterion 1: Specific measurable outcome
+        - [ ] Criterion 2: Another measurable outcome
+        - [ ] Criterion 3: Tests pass
+        - [ ] Criterion 4: Documentation updated
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Additional context, related issues, or dependencies
+      placeholder: |
+        - Related files: src/...
+        - Dependencies: package X, module Y
+        - Related issues: #123, #456
+        - Background: Why this task matters
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How urgent is this task?
+      options:
+        - Low - Nice to have
+        - Medium - Should be done soon
+        - High - Important, needed this sprint
+        - Critical - Blocking other work
+      default: 1
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Pre-flight Checks
+      description: Confirm the task is ready for @copilot
+      options:
+        - label: Task description is clear and specific
+          required: true
+        - label: Acceptance criteria are measurable
+          required: true
+        - label: No sensitive data or credentials in this issue
+          required: true

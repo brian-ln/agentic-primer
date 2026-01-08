@@ -1,0 +1,29 @@
+# CODEOWNERS - Automatic PR Reviewer Assignment
+#
+# Purpose: Ensures all pull requests receive human review before merge
+# Syntax: <pattern> <owner>[@team]
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for all files
+* @owner
+
+# Specific overrides (examples)
+# /docs/ @documentation-team
+# /.github/ @devops-team
+# /scripts/ @automation-team
+
+# Why this file exists:
+# - Success criterion: PR auto-assignment
+# - Prevents auto-merge of AI-generated code
+# - Ensures human oversight on all changes
+# - GitHub native feature, no plugins needed
+
+# Assumptions:
+# - Repository has a user/team named @owner
+# - Branch protection requires PR reviews
+# - CODEOWNERS checks enabled in branch protection rules
+
+# How @copilot decided this was necessary:
+# - Bootstrap prompt requires "CODEOWNERS (* @owner) for PR auto-assignment"
+# - Explicit requirement in original specification
+# - Critical for safety: AI code needs human review

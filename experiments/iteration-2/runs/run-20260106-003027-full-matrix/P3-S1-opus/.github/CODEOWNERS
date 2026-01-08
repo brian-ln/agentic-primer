@@ -1,0 +1,13 @@
+# CODEOWNERS - Automatic PR reviewer assignment
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for all files
+# PRs created by @copilot will automatically request review from this owner
+* @owner
+
+# Specific path overrides (uncomment and customize as needed)
+# /docs/ @docs-team
+# /src/api/ @backend-team
+# /src/ui/ @frontend-team
+# *.yml @devops-team
+# /tests/ @qa-team

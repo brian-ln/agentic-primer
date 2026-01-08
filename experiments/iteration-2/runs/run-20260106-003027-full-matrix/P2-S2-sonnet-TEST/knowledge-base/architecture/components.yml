@@ -1,0 +1,171 @@
+# System Components
+#
+# Major components and modules in the system, their responsibilities,
+# and relationships.
+
+version: "1.0"
+
+description: |
+  Overview of major system components, their purposes, and how they interact.
+
+components:
+  - name: API Layer
+    path: src/app/api/
+    responsibility: Handle HTTP requests, route to services, format responses
+    technologies:
+      - Next.js App Router
+      - TypeScript
+    key_files:
+      - src/app/api/auth/route.ts
+      - src/app/api/users/route.ts
+    dependencies:
+      - Service Layer
+      - Middleware
+    patterns:
+      - REST API design
+      - Route handlers
+      - Request validation
+
+  - name: Service Layer
+    path: src/services/
+    responsibility: Business logic, orchestration, data transformation
+    technologies:
+      - TypeScript
+      - Domain models
+    key_files:
+      - src/services/user-service.ts
+      - src/services/auth-service.ts
+    dependencies:
+      - Repository Layer
+      - External APIs
+    patterns:
+      - Service classes
+      - Dependency injection
+      - Error handling
+
+  - name: Repository Layer
+    path: src/repositories/
+    responsibility: Data access abstraction, database operations
+    technologies:
+      - Prisma ORM
+      - PostgreSQL
+    key_files:
+      - src/repositories/user-repository.ts
+      - src/repositories/session-repository.ts
+    dependencies:
+      - Database
+      - Cache (Redis)
+    patterns:
+      - Repository pattern
+      - Query builders
+      - Transaction management
+
+  - name: Frontend Components
+    path: src/components/
+    responsibility: UI presentation, user interactions, client-side logic
+    technologies:
+      - React 18
+      - TypeScript
+      - Tailwind CSS
+    key_files:
+      - src/components/LoginForm.tsx
+      - src/components/Dashboard.tsx
+    dependencies:
+      - API Layer (via fetch)
+      - Context/State management
+    patterns:
+      - Functional components
+      - Hooks
+      - Composition
+
+  - name: Authentication System
+    path: src/lib/auth.ts
+    responsibility: User authentication, session management, authorization
+    technologies:
+      - JWT
+      - bcrypt
+      - OAuth providers
+    key_files:
+      - src/lib/auth.ts
+      - src/lib/jwt.ts
+      - src/middleware/auth.ts
+    dependencies:
+      - User Service
+      - Session Repository
+    patterns:
+      - JWT tokens
+      - OAuth 2.0
+      - Role-based access control
+
+  - name: Middleware
+    path: src/middleware/
+    responsibility: Request preprocessing, validation, authentication
+    technologies:
+      - Next.js middleware
+      - TypeScript
+    key_files:
+      - src/middleware/auth.ts
+      - src/middleware/validation.ts
+      - src/middleware/error-handler.ts
+    dependencies:
+      - Authentication System
+      - Validation utilities
+    patterns:
+      - Middleware chain
+      - Request/response decoration
+
+data_flow:
+  - flow: User Login
+    steps:
+      1. User submits credentials via LoginForm component
+      2. POST /api/auth/login endpoint receives request
+      3. Auth middleware validates CSRF token
+      4. Auth service verifies credentials
+      5. JWT token generated and set in HTTP-only cookie
+      6. User redirected to dashboard
+
+  - flow: Protected API Request
+    steps:
+      1. Client makes request with JWT cookie
+      2. Auth middleware extracts and validates token
+      3. User context added to request
+      4. Route handler processes request
+      5. Service layer performs business logic
+      6. Repository layer queries database
+      7. Response formatted and returned
+
+integration_points:
+  - component: API Layer
+    integrates_with:
+      - External OAuth providers (GitHub, Google)
+      - Payment gateway (Stripe)
+      - Email service (SendGrid)
+    notes: Use service wrappers for external APIs, implement retry logic
+
+  - component: Frontend
+    integrates_with:
+      - Analytics (Google Analytics)
+      - Error tracking (Sentry)
+      - Feature flags (custom system)
+    notes: Initialize in _app.tsx, use environment variables for keys
+
+security_boundaries:
+  - boundary: API Layer
+    protections:
+      - Rate limiting
+      - CORS configuration
+      - Input validation
+      - SQL injection prevention (via ORM)
+
+  - boundary: Authentication
+    protections:
+      - Password hashing (bcrypt)
+      - JWT signature verification
+      - Token expiration
+      - Secure cookie flags (HttpOnly, Secure, SameSite)
+
+maintenance:
+  - component: All components
+    update_frequency: As needed
+    responsible_team: Engineering
+    documentation: Update this file when adding new major components

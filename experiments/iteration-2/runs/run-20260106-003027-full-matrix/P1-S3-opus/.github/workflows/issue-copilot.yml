@@ -1,0 +1,172 @@
+name: Issue Automation for @copilot
+
+on:
+  issues:
+    types: [opened, edited, labeled]
+  issue_comment:
+    types: [created]
+
+permissions:
+  issues: write
+  contents: read
+  pull-requests: write
+
+env:
+  COPILOT_LABEL: copilot-task
+  READY_LABEL: copilot-ready
+  IN_PROGRESS_LABEL: copilot-in-progress
+  COMPLETED_LABEL: copilot-completed
+
+jobs:
+  validate-issue:
+    name: Validate Issue Structure
+    if: github.event_name == 'issues' && github.event.action == 'opened'
+    runs-on: ubuntu-latest
+    outputs:
+      is_copilot_task: ${{ steps.check.outputs.is_copilot_task }}
+      validation_passed: ${{ steps.validate.outputs.passed }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check if copilot task
+        id: check
+        run: |
+          BODY="${{ github.event.issue.body }}"
+          if echo "$BODY" | grep -q "## Task Description"; then
+            echo "is_copilot_task=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_copilot_task=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate issue structure
+        id: validate
+        if: steps.check.outputs.is_copilot_task == 'true'
+        run: |
+          BODY="${{ github.event.issue.body }}"
+          ERRORS=""
+
+          # Check required sections
+          if ! echo "$BODY" | grep -q "## Task Description"; then
+            ERRORS="${ERRORS}- Missing: Task Description\n"
+          fi
+          if ! echo "$BODY" | grep -q "## Acceptance Criteria"; then
+            ERRORS="${ERRORS}- Missing: Acceptance Criteria\n"
+          fi
+          if ! echo "$BODY" | grep -q "## Additional Context"; then
+            ERRORS="${ERRORS}- Missing: Additional Context\n"
+          fi
+
+          if [ -n "$ERRORS" ]; then
+            echo "passed=false" >> "$GITHUB_OUTPUT"
+            echo "errors<<EOF" >> "$GITHUB_OUTPUT"
+            echo -e "$ERRORS" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+          else
+            echo "passed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  label-issue:
+    name: Apply Labels
+    needs: validate-issue
+    if: needs.validate-issue.outputs.is_copilot_task == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add copilot-task label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: ['${{ env.COPILOT_LABEL }}']
+            });
+
+      - name: Add ready label if validation passed
+        if: needs.validate-issue.outputs.validation_passed == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: ['${{ env.READY_LABEL }}']
+            });
+
+            // Add welcome comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: '## Issue Ready for @copilot\n\nThis issue has been validated and is ready for processing.\n\n**Status:** Ready for automation\n**Labels:** `copilot-task`, `copilot-ready`\n\n@copilot will pick up this issue shortly.'
+            });
+
+      - name: Request fixes if validation failed
+        if: needs.validate-issue.outputs.validation_passed == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: '## Issue Validation Failed\n\nPlease fix the following issues:\n\n${{ needs.validate-issue.outputs.validation_errors }}\n\nOnce fixed, edit the issue to trigger re-validation.'
+            });
+
+  log-to-knowledge-base:
+    name: Log Issue to Knowledge Base
+    needs: [validate-issue, label-issue]
+    if: needs.validate-issue.outputs.validation_passed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Append to issue log
+        run: |
+          mkdir -p docs/knowledge/insights/logs
+          LOG_FILE="docs/knowledge/insights/logs/issues.jsonl"
+
+          # Create log entry
+          cat >> "$LOG_FILE" << 'EOF'
+          {"timestamp": "${{ github.event.issue.created_at }}", "issue_number": ${{ github.event.issue.number }}, "title": "${{ github.event.issue.title }}", "status": "ready", "labels": ["copilot-task", "copilot-ready"]}
+          EOF
+
+      - name: Commit log update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/knowledge/insights/logs/issues.jsonl
+          git diff --staged --quiet || git commit -m "chore: log issue #${{ github.event.issue.number }} to knowledge base"
+          git push || echo "Push failed - may need pull first"
+
+  monitor-completion:
+    name: Monitor for Completion
+    if: github.event_name == 'issues' && github.event.action == 'labeled'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for completion label
+        if: contains(github.event.label.name, 'copilot-completed')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Get linked PRs
+            const { data: timeline } = await github.rest.issues.listEventsForTimeline({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+
+            const linkedPRs = timeline
+              .filter(e => e.event === 'cross-referenced' && e.source?.issue?.pull_request)
+              .map(e => `#${e.source.issue.number}`);
+
+            // Add completion comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `## Task Completed\n\n@copilot has completed this task.\n\n**Linked PRs:** ${linkedPRs.join(', ') || 'None found'}\n\nPlease review the associated pull request(s).`
+            });

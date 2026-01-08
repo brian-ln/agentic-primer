@@ -1,0 +1,81 @@
+{
+  "agent": {
+    "name": "@copilot",
+    "version": "1.0",
+    "description": "GitHub Copilot issue-driven development agent"
+  },
+  "workflow": {
+    "trigger": {
+      "type": "github_issue",
+      "events": ["opened", "labeled"],
+      "required_label": "copilot-task"
+    },
+    "branch_prefix": "copilot",
+    "branch_naming": "copilot/issue-{number}",
+    "base_branch": "main"
+  },
+  "validation": {
+    "yaml": {
+      "enabled": true,
+      "tool": "yamllint",
+      "profiles": ["relaxed"],
+      "files": ["**/*.yml", "**/*.yaml"]
+    },
+    "shell": {
+      "enabled": true,
+      "tool": "shellcheck",
+      "exclude": ["SC1091"],
+      "files": ["**/*.sh"]
+    },
+    "optional": true,
+    "fail_on_error": false
+  },
+  "knowledge_base": {
+    "paths": {
+      "patterns": "docs/knowledge/patterns",
+      "decisions": "docs/knowledge/decisions",
+      "insights": "docs/knowledge/insights"
+    },
+    "scan_on_issue": true,
+    "include_in_pr": true
+  },
+  "pr_creation": {
+    "title_template": "Copilot: {issue_title}",
+    "body_template": "implementation_pr_template.md",
+    "auto_assign_creator": true,
+    "labels": ["copilot-generated"],
+    "request_review": false
+  },
+  "issue_processing": {
+    "auto_assign_creator": true,
+    "processing_label": "copilot-processing",
+    "completed_label": "copilot-completed",
+    "add_comment": true,
+    "comment_template": "issue_completion_template.md"
+  },
+  "output": {
+    "location": "src/features",
+    "naming": "issue-{number}-implementation.md",
+    "format": "markdown",
+    "include_metadata": true
+  },
+  "logging": {
+    "level": "info",
+    "format": "text",
+    "verbose": true,
+    "include_timestamps": true
+  },
+  "behavior": {
+    "continue_on_validation_error": true,
+    "continue_on_kb_missing": true,
+    "create_pr_on_no_changes": false,
+    "max_retries": 3,
+    "timeout_seconds": 300
+  },
+  "models": {
+    "primary": "claude-opus-4.5",
+    "fallback": "claude-sonnet-4",
+    "temperature": 0.7,
+    "max_tokens": 2000
+  }
+}

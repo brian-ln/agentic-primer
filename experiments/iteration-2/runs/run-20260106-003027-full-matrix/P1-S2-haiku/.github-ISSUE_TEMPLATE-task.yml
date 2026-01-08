@@ -1,0 +1,55 @@
+name: "@copilot Task"
+description: "Assign a task to @copilot for autonomous execution"
+title: "[copilot] "
+labels: ["copilot-task"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: "Task Description"
+      description: "What needs to be done?"
+      placeholder: "Implement feature X, fix bug Y, add documentation for Z"
+      required: true
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: "Acceptance Criteria"
+      description: "How will we know this is complete? (numbered list preferred)"
+      placeholder: |
+        1. Code passes all tests
+        2. Documentation is updated
+        3. No linting errors
+      required: true
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: "Additional Context"
+      description: "Links to related issues, design docs, or examples"
+      placeholder: "Relates to issue #123, see design in docs/ARCHITECTURE.md"
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: "Priority"
+      options:
+        - "Low"
+        - "Medium"
+        - "High"
+        - "Critical"
+      default: 1
+    validations:
+      required: false
+
+  - type: checkbox
+    id: auto_merge
+    attributes:
+      label: "Allow Auto-Merge"
+      description: "If @copilot passes all validation gates, automatically merge the PR"
+      required: false

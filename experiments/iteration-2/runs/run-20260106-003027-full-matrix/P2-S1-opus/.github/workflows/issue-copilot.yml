@@ -1,0 +1,92 @@
+name: Issue-Driven Copilot Processing
+
+on:
+  issues:
+    types: [opened, labeled]
+
+permissions:
+  issues: write
+  contents: write
+  pull-requests: write
+
+jobs:
+  process-copilot-issue:
+    runs-on: ubuntu-latest
+    if: contains(github.event.issue.labels.*.name, 'copilot')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate issue structure
+        id: validate
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const body = issue.body || '';
+
+            // Check for required sections
+            const hasTask = body.includes('Task Description') || body.includes('## Task');
+            const hasCriteria = body.includes('Acceptance Criteria') || body.includes('## Acceptance');
+
+            if (!hasTask || !hasCriteria) {
+              console.log('Warning: Issue may be missing required sections');
+              console.log('Has Task:', hasTask);
+              console.log('Has Criteria:', hasCriteria);
+            }
+
+            return {
+              valid: true,
+              issue_number: issue.number,
+              title: issue.title
+            };
+
+      - name: Log issue details
+        run: |
+          echo "========================================="
+          echo "Processing Issue #${{ github.event.issue.number }}"
+          echo "========================================="
+          echo "Title: ${{ github.event.issue.title }}"
+          echo "Author: ${{ github.event.issue.user.login }}"
+          echo "Labels: ${{ join(github.event.issue.labels.*.name, ', ') }}"
+          echo "Created: ${{ github.event.issue.created_at }}"
+          echo "========================================="
+
+      - name: Acknowledge @copilot assignment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              body: `## @copilot Processing Started
+
+            This issue has been picked up for automated processing.
+
+            **Status:** In Progress
+            **Branch:** \`copilot/issue-${issue.number}\`
+
+            A pull request will be created when the implementation is complete.
+
+            ---
+            *Automated by issue-driven development workflow*`
+            });
+
+      - name: Trigger @copilot Workspace
+        run: |
+          echo "Initiating @copilot Workspace for issue #${{ github.event.issue.number }}"
+          echo "Target branch: copilot/issue-${{ github.event.issue.number }}"
+          # Note: Actual @copilot processing is handled by GitHub Copilot Workspace
+          # This workflow prepares the environment and logs the event
+
+      - name: Update knowledge base
+        run: |
+          echo "Recording issue in knowledge base..."
+          mkdir -p docs/knowledge/insights
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "| #${{ github.event.issue.number }} | ${{ github.event.issue.title }} | ${TIMESTAMP} | Processing |" >> docs/knowledge/insights/issue-log.md
+          echo "Issue logged to knowledge base"

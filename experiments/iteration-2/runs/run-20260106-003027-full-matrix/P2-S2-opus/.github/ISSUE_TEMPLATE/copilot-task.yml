@@ -1,0 +1,83 @@
+name: Copilot Task
+description: Create a task for @copilot to process autonomously
+title: "[Task]: "
+labels: ["copilot", "enhancement"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Copilot Task Template
+        Use this form to create a task that @copilot will process automatically.
+        Provide clear, specific requirements for best results.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Task Summary
+      description: Brief description of what needs to be accomplished
+      placeholder: Describe the task in 1-2 sentences
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Detailed Description
+      description: Provide context and implementation details
+      placeholder: |
+        What should be implemented?
+        What files should be created or modified?
+        Any specific requirements or constraints?
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: How will we know this task is complete?
+      placeholder: |
+        - [ ] Criterion 1
+        - [ ] Criterion 2
+        - [ ] Criterion 3
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How urgent is this task?
+      options:
+        - Low
+        - Medium
+        - High
+        - Critical
+    validations:
+      required: true
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Task Type
+      description: What kind of work is this?
+      options:
+        - Feature
+        - Bug Fix
+        - Refactor
+        - Documentation
+        - Test
+        - Chore
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any other information that would help @copilot
+      placeholder: Links, references, related issues, etc.
+    validations:
+      required: false

@@ -1,0 +1,96 @@
+name: '@copilot Task'
+description: 'Create a task for @copilot autonomous agent'
+labels: ['copilot-task']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        # @copilot Task Template
+
+        Use this form to create a task for the @copilot autonomous development agent.
+
+        **How it works:**
+        1. Fill out this form with task details
+        2. Submit the issue
+        3. @copilot will analyze, implement, and create a PR
+        4. Review the PR and merge when ready
+
+  - type: textarea
+    id: objective
+    attributes:
+      label: 'Objective'
+      description: 'What should @copilot build or fix?'
+      placeholder: 'Example: Add user authentication middleware with JWT support'
+      validations:
+        required: true
+
+  - type: textarea
+    id: requirements
+    attributes:
+      label: 'Requirements'
+      description: 'List specific requirements (one per line)'
+      placeholder: |
+        - Support JWT tokens
+        - Implement refresh token rotation
+        - Add 401/403 error handling
+        - Create comprehensive tests
+      validations:
+        required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: 'Acceptance Criteria'
+      description: 'How will we know this is done?'
+      placeholder: |
+        - [ ] All unit tests pass (>90% coverage)
+        - [ ] Integration tests pass
+        - [ ] Documentation updated
+        - [ ] No security vulnerabilities
+      validations:
+        required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: 'Additional Context'
+      description: 'Any design docs, examples, or links?'
+      placeholder: 'Links to related PRs, design docs, etc.'
+      validations:
+        required: false
+
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: 'Task Complexity'
+      description: 'How complex is this task?'
+      options:
+        - 'Simple (1-2 hours)'
+        - 'Medium (2-4 hours)'
+        - 'Complex (4+ hours)'
+      validations:
+        required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 'Priority'
+      description: 'How urgent is this task?'
+      options:
+        - 'Low'
+        - 'Medium'
+        - 'High'
+        - 'Critical'
+      validations:
+        required: true
+
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: 'Confirmation'
+      description: 'Please confirm:'
+      options:
+        - label: 'I have read the @copilot documentation'
+          required: true
+        - label: 'This task is well-defined and has clear acceptance criteria'
+          required: true

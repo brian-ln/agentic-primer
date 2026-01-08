@@ -1,0 +1,373 @@
+# Testing Practices
+#
+# Testing standards, requirements, and best practices for this project.
+
+version: "1.0"
+
+description: |
+  Guidelines for writing and maintaining tests to ensure code quality
+  and prevent regressions.
+
+testing_philosophy:
+  - Test behavior, not implementation
+  - Write tests before fixing bugs (regression tests)
+  - Aim for high coverage, but prioritize critical paths
+  - Fast tests are more likely to be run
+  - Tests should be deterministic (no flaky tests)
+
+test_types:
+  - name: Unit Tests
+    description: Test individual functions or components in isolation
+    when_to_write: For all business logic, utilities, and complex functions
+    frameworks:
+      - Jest
+      - React Testing Library (for components)
+    coverage_target: 80% for services and utilities
+    example_files:
+      - src/services/__tests__/user-service.test.ts
+      - src/utils/__tests__/validation.test.ts
+
+  - name: Integration Tests
+    description: Test interactions between multiple components
+    when_to_write: For API endpoints, database operations, service interactions
+    frameworks:
+      - Jest
+      - Supertest (for API testing)
+    coverage_target: Critical paths covered
+    example_files:
+      - src/app/api/__tests__/auth.test.ts
+      - src/repositories/__tests__/user-repository.test.ts
+
+  - name: End-to-End Tests
+    description: Test complete user flows through the application
+    when_to_write: For critical user journeys
+    frameworks:
+      - Playwright
+      - Cypress
+    coverage_target: Major user flows (login, signup, checkout, etc.)
+    example_files:
+      - tests/e2e/auth-flow.spec.ts
+      - tests/e2e/user-journey.spec.ts
+
+naming_conventions:
+  test_files:
+    - Co-locate with source: src/services/user-service.test.ts
+    - Or in __tests__ directory: src/services/__tests__/user-service.test.ts
+    - Use .test.ts or .spec.ts extension
+
+  test_descriptions:
+    - Use "should" or "it" for test names
+    - Be descriptive and specific
+    - Include the expected behavior
+
+    example: |
+      describe("UserService", () => {
+        describe("getUser", () => {
+          it("should return user when ID exists", async () => {
+            // ...
+          });
+
+          it("should return null when ID does not exist", async () => {
+            // ...
+          });
+
+          it("should throw error when ID is invalid", async () => {
+            // ...
+          });
+        });
+      });
+
+test_structure:
+  pattern: Arrange-Act-Assert (AAA)
+  description: |
+    - Arrange: Set up test data and mocks
+    - Act: Execute the function under test
+    - Assert: Verify the outcome
+
+  example: |
+    it("should create user with hashed password", async () => {
+      // Arrange
+      const userData = {
+        email: "test@example.com",
+        password: "password123",
+      };
+      const mockHash = "hashed_password";
+      jest.spyOn(bcrypt, "hash").mockResolvedValue(mockHash);
+
+      // Act
+      const user = await userService.createUser(userData);
+
+      // Assert
+      expect(user.password).toBe(mockHash);
+      expect(bcrypt.hash).toHaveBeenCalledWith(userData.password, 10);
+    });
+
+mocking:
+  when_to_mock:
+    - External APIs and services
+    - Database calls (for unit tests)
+    - Time-dependent functions (Date.now, setTimeout)
+    - File system operations
+    - Random number generators
+
+  when_not_to_mock:
+    - Simple utilities and pure functions
+    - The code under test itself
+    - Too much (leads to testing the mocks, not the code)
+
+  example: |
+    // Mock external service
+    jest.mock("@/lib/email-service", () => ({
+      sendEmail: jest.fn().mockResolvedValue({ success: true }),
+    }));
+
+    // Mock database
+    const mockUserRepository = {
+      findById: jest.fn(),
+      save: jest.fn(),
+    };
+
+    // Use mock in test
+    it("should send welcome email on user creation", async () => {
+      mockUserRepository.save.mockResolvedValue(newUser);
+
+      await userService.createUser(userData);
+
+      expect(emailService.sendEmail).toHaveBeenCalledWith({
+        to: userData.email,
+        template: "welcome",
+      });
+    });
+
+assertions:
+  common_patterns:
+    - Use specific matchers (toBe, toEqual, toContain, etc.)
+    - Test both success and failure cases
+    - Test edge cases and boundaries
+    - Verify error messages and types
+
+  examples: |
+    // Value assertions
+    expect(user.id).toBe("123");
+    expect(user.name).toEqual("John Doe");
+    expect(users).toHaveLength(3);
+
+    // Object assertions
+    expect(user).toMatchObject({
+      email: "test@example.com",
+      verified: false,
+    });
+
+    // Error assertions
+    await expect(userService.getUser("invalid")).rejects.toThrow(
+      ValidationError
+    );
+
+    // Mock assertions
+    expect(mockFn).toHaveBeenCalledTimes(1);
+    expect(mockFn).toHaveBeenCalledWith("expected", "args");
+
+test_data:
+  approach: Use factories or fixtures for consistent test data
+
+  example: |
+    // Test factory
+    function createTestUser(overrides?: Partial<User>): User {
+      return {
+        id: "test-user-123",
+        email: "test@example.com",
+        name: "Test User",
+        createdAt: new Date("2025-01-01"),
+        ...overrides,
+      };
+    }
+
+    // Usage
+    it("should format user name", () => {
+      const user = createTestUser({ name: "john doe" });
+      const formatted = formatUserName(user);
+      expect(formatted).toBe("John Doe");
+    });
+
+async_testing:
+  guidelines:
+    - Use async/await, not callbacks or .then()
+    - Wait for all async operations to complete
+    - Test loading and error states
+    - Use waitFor for asynchronous updates
+
+  example: |
+    // API testing
+    it("should return 200 for valid request", async () => {
+      const response = await request(app)
+        .post("/api/users")
+        .send({ email: "test@example.com" })
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        success: true,
+        userId: expect.any(String),
+      });
+    });
+
+    // Component testing with async updates
+    it("should display user data after loading", async () => {
+      render(<UserProfile userId="123" />);
+
+      expect(screen.getByText("Loading...")).toBeInTheDocument();
+
+      await waitFor(() => {
+        expect(screen.getByText("John Doe")).toBeInTheDocument();
+      });
+    });
+
+react_testing:
+  library: React Testing Library
+  approach: Test from the user's perspective
+
+  guidelines:
+    - Query by role, label, text (not by implementation details)
+    - Avoid querying by class names or data-testid (unless necessary)
+    - Test user interactions (click, type, submit)
+    - Test accessibility (ARIA roles, labels)
+
+  example: |
+    import { render, screen, waitFor } from "@testing-library/react";
+    import userEvent from "@testing-library/user-event";
+    import { LoginForm } from "./LoginForm";
+
+    describe("LoginForm", () => {
+      it("should submit form with valid credentials", async () => {
+        const onSubmit = jest.fn();
+        render(<LoginForm onSubmit={onSubmit} />);
+
+        // Find inputs by label (accessibility)
+        const emailInput = screen.getByLabelText("Email");
+        const passwordInput = screen.getByLabelText("Password");
+        const submitButton = screen.getByRole("button", { name: "Sign In" });
+
+        // User interactions
+        await userEvent.type(emailInput, "test@example.com");
+        await userEvent.type(passwordInput, "password123");
+        await userEvent.click(submitButton);
+
+        // Verify submission
+        await waitFor(() => {
+          expect(onSubmit).toHaveBeenCalledWith({
+            email: "test@example.com",
+            password: "password123",
+          });
+        });
+      });
+
+      it("should display error for invalid email", async () => {
+        render(<LoginForm onSubmit={jest.fn()} />);
+
+        const emailInput = screen.getByLabelText("Email");
+        await userEvent.type(emailInput, "invalid-email");
+        await userEvent.tab(); // Trigger blur event
+
+        expect(
+          await screen.findByText("Please enter a valid email")
+        ).toBeInTheDocument();
+      });
+    });
+
+api_testing:
+  approach: Use Supertest for HTTP testing
+
+  example: |
+    import request from "supertest";
+    import { app } from "@/app";
+
+    describe("POST /api/users", () => {
+      it("should create user with valid data", async () => {
+        const response = await request(app)
+          .post("/api/users")
+          .send({
+            email: "test@example.com",
+            password: "password123",
+          })
+          .expect(201);
+
+        expect(response.body).toMatchObject({
+          id: expect.any(String),
+          email: "test@example.com",
+        });
+        expect(response.body.password).toBeUndefined(); // Don't return password
+      });
+
+      it("should return 400 for duplicate email", async () => {
+        // First request succeeds
+        await request(app)
+          .post("/api/users")
+          .send({ email: "test@example.com", password: "pass123" })
+          .expect(201);
+
+        // Second request fails
+        const response = await request(app)
+          .post("/api/users")
+          .send({ email: "test@example.com", password: "pass456" })
+          .expect(400);
+
+        expect(response.body.error.code).toBe("DUPLICATE_EMAIL");
+      });
+    });
+
+test_coverage:
+  requirements:
+    - Minimum 80% coverage for services and utilities
+    - 100% coverage for critical paths (auth, payments, data loss scenarios)
+    - Coverage reports generated on each test run
+    - CI fails if coverage drops below threshold
+
+  commands: |
+    # Run tests with coverage
+    npm test -- --coverage
+
+    # View coverage report
+    open coverage/lcov-report/index.html
+
+  what_to_cover:
+    - All public functions in services
+    - All API endpoints
+    - All validation logic
+    - Error handling paths
+    - Edge cases and boundary conditions
+
+  what_not_to_prioritize:
+    - Trivial getters/setters
+    - Framework boilerplate
+    - Type definitions
+    - Configuration files
+
+ci_integration:
+  requirements:
+    - All tests must pass before merge
+    - No flaky tests (fix or skip)
+    - Tests run on every PR
+    - Coverage report commented on PR
+
+  configuration: |
+    # In .github/workflows/test.yml
+    - name: Run tests
+      run: npm test -- --coverage
+
+    - name: Upload coverage
+      uses: codecov/codecov-action@v3
+
+debugging_tests:
+  tips:
+    - Use .only to run a single test
+    - Use console.log or debug statements
+    - Check test output and error messages carefully
+    - Use --verbose flag for detailed output
+    - Use debugger statement with node --inspect
+
+  example: |
+    // Run only this test
+    it.only("should return user", async () => {
+      const user = await userService.getUser("123");
+      console.log("User:", user); // Debug output
+      expect(user).toBeDefined();
+    });

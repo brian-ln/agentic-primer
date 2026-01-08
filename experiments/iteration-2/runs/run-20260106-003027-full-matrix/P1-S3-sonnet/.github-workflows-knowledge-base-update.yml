@@ -1,0 +1,321 @@
+name: Knowledge Base Update
+
+on:
+  pull_request:
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to extract learnings from'
+        required: true
+        type: number
+
+permissions:
+  contents: write
+  pull-requests: read
+  issues: read
+
+jobs:
+  extract-learnings:
+    name: Extract and Store Learnings
+    if: github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Get PR details
+        id: pr-details
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request?.number || ${{ github.event.inputs.pr_number }};
+
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber
+            });
+
+            const files = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber
+            });
+
+            const reviews = await github.rest.pulls.listReviews({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber
+            });
+
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber
+            });
+
+            core.setOutput('pr-number', prNumber);
+            core.setOutput('pr-title', pr.data.title);
+            core.setOutput('pr-body', pr.data.body || '');
+            core.setOutput('files-changed', JSON.stringify(files.data));
+            core.setOutput('review-count', reviews.data.length);
+            core.setOutput('comment-count', comments.data.length);
+            core.setOutput('labels', JSON.stringify(pr.data.labels.map(l => l.name)));
+
+            return {
+              prNumber,
+              title: pr.data.title,
+              filesChanged: files.data.length,
+              reviewCount: reviews.data.length
+            };
+
+      - name: Analyze PR for patterns
+        id: analyze
+        run: |
+          echo "🔍 Analyzing PR for reusable patterns..."
+
+          PR_NUMBER="${{ steps.pr-details.outputs.pr-number }}"
+          PR_TITLE="${{ steps.pr-details.outputs.pr-title }}"
+          LABELS='${{ steps.pr-details.outputs.labels }}'
+
+          # Determine category based on labels and title
+          CATEGORY="general"
+          if echo "$LABELS" | grep -q "bug"; then
+            CATEGORY="bug-fixes"
+          elif echo "$LABELS" | grep -q "feature"; then
+            CATEGORY="features"
+          elif echo "$LABELS" | grep -q "refactor"; then
+            CATEGORY="refactoring"
+          elif echo "$LABELS" | grep -q "docs"; then
+            CATEGORY="documentation"
+          elif echo "$LABELS" | grep -q "ai-generated"; then
+            CATEGORY="ai-generated"
+          fi
+
+          echo "category=$CATEGORY" >> $GITHUB_OUTPUT
+          echo "📂 Category: $CATEGORY"
+
+          # Extract key learnings based on file changes
+          FILES_CHANGED='${{ steps.pr-details.outputs.files-changed }}'
+
+          # Simple pattern detection (in real implementation, use NLP/AI)
+          PATTERNS_FOUND=""
+
+          # Check for common patterns
+          if echo "$FILES_CHANGED" | grep -q ".github/workflows"; then
+            PATTERNS_FOUND="${PATTERNS_FOUND}\n- GitHub Actions workflow modification"
+          fi
+
+          if echo "$FILES_CHANGED" | grep -q "test"; then
+            PATTERNS_FOUND="${PATTERNS_FOUND}\n- Test coverage addition"
+          fi
+
+          if echo "$FILES_CHANGED" | grep -q "README"; then
+            PATTERNS_FOUND="${PATTERNS_FOUND}\n- Documentation update"
+          fi
+
+          echo "patterns<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$PATTERNS_FOUND" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Run learning extraction script
+        id: extract
+        run: |
+          mkdir -p docs/knowledge/insights
+          mkdir -p docs/knowledge/patterns
+          mkdir -p docs/knowledge/decisions
+
+          # Create insight document
+          INSIGHT_FILE="docs/knowledge/insights/pr-${{ steps.pr-details.outputs.pr-number }}-$(date +%Y%m%d).md"
+
+          cat > "$INSIGHT_FILE" << 'EOF'
+          # Learning from PR #${{ steps.pr-details.outputs.pr-number }}
+
+          **Date**: $(date +%Y-%m-%d)
+          **Title**: ${{ steps.pr-details.outputs.pr-title }}
+          **Category**: ${{ steps.analyze.outputs.category }}
+
+          ## Summary
+
+          This PR was merged and contained the following learnings:
+
+          ## Changes Made
+
+          - **Files Changed**: ${{ steps.pr-details.outputs.files-changed }}
+          - **Reviews**: ${{ steps.pr-details.outputs.review-count }}
+          - **Comments**: ${{ steps.pr-details.outputs.comment-count }}
+
+          ## Patterns Identified
+
+          ${{ steps.analyze.outputs.patterns }}
+
+          ## Key Takeaways
+
+          <!-- Extracted from PR description and review comments -->
+          ${{ steps.pr-details.outputs.pr-body }}
+
+          ## Reusability
+
+          This learning can be applied to:
+          - Similar issues in category: ${{ steps.analyze.outputs.category }}
+          - Future AI agent tasks
+          - Code review guidelines
+
+          ## Related
+
+          - Original PR: #${{ steps.pr-details.outputs.pr-number }}
+          - Labels: ${{ steps.pr-details.outputs.labels }}
+
+          ---
+          *Auto-generated by knowledge-base-update workflow*
+          EOF
+
+          echo "insight-file=$INSIGHT_FILE" >> $GITHUB_OUTPUT
+
+      - name: Update knowledge base index
+        run: |
+          echo "📚 Updating knowledge base index..."
+
+          INDEX_FILE="docs/knowledge/README.md"
+
+          # If index doesn't exist, create it
+          if [ ! -f "$INDEX_FILE" ]; then
+            cat > "$INDEX_FILE" << 'EOF'
+          # Knowledge Base
+
+          This directory contains accumulated learnings from AI agent executions and code reviews.
+
+          ## Structure
+
+          - **patterns/** - Reusable code patterns and solutions
+          - **decisions/** - Architecture decisions and rationale
+          - **insights/** - Learnings from merged PRs and agent logs
+
+          ## Recent Updates
+
+          EOF
+          fi
+
+          # Add reference to new insight (prepend to recent updates section)
+          sed -i.bak '/## Recent Updates/a\
+          - [PR #${{ steps.pr-details.outputs.pr-number }}](${{ steps.extract.outputs.insight-file }}) - ${{ steps.pr-details.outputs.pr-title }} ($(date +%Y-%m-%d))
+          ' "$INDEX_FILE"
+
+          rm -f "${INDEX_FILE}.bak"
+
+      - name: Commit knowledge base updates
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add docs/knowledge/
+
+          if git diff --staged --quiet; then
+            echo "ℹ️ No changes to commit"
+          else
+            git commit -m "docs: update knowledge base from PR #${{ steps.pr-details.outputs.pr-number }}
+
+Extracted learnings and patterns from merged PR.
+
+Category: ${{ steps.analyze.outputs.category }}
+Files changed: ${{ steps.pr-details.outputs.files-changed }}
+
+Auto-generated by knowledge-base-update workflow"
+
+            git push origin main
+            echo "✅ Knowledge base updated successfully"
+          fi
+
+      - name: Comment on original PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = ${{ steps.pr-details.outputs.pr-number }};
+            const insightFile = '${{ steps.extract.outputs.insight-file }}';
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: `📚 **Knowledge Base Updated**
+
+This PR's learnings have been extracted and added to the knowledge base!
+
+🔗 **Insight Document**: [\`${insightFile}\`](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/${insightFile})
+
+These learnings will be available to future AI agents working on similar tasks.
+
+---
+🤖 Automated by knowledge-base-update workflow`
+            });
+
+  update-metrics:
+    name: Update Knowledge Base Metrics
+    needs: extract-learnings
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Calculate metrics
+        id: metrics
+        run: |
+          echo "📊 Calculating knowledge base metrics..."
+
+          TOTAL_INSIGHTS=$(find docs/knowledge/insights -name "*.md" 2>/dev/null | wc -l)
+          TOTAL_PATTERNS=$(find docs/knowledge/patterns -name "*.md" 2>/dev/null | wc -l)
+          TOTAL_DECISIONS=$(find docs/knowledge/decisions -name "*.md" 2>/dev/null | wc -l)
+
+          TOTAL_ENTRIES=$((TOTAL_INSIGHTS + TOTAL_PATTERNS + TOTAL_DECISIONS))
+
+          echo "total-insights=$TOTAL_INSIGHTS" >> $GITHUB_OUTPUT
+          echo "total-patterns=$TOTAL_PATTERNS" >> $GITHUB_OUTPUT
+          echo "total-decisions=$TOTAL_DECISIONS" >> $GITHUB_OUTPUT
+          echo "total-entries=$TOTAL_ENTRIES" >> $GITHUB_OUTPUT
+
+          echo "📈 Metrics:"
+          echo "  Insights: $TOTAL_INSIGHTS"
+          echo "  Patterns: $TOTAL_PATTERNS"
+          echo "  Decisions: $TOTAL_DECISIONS"
+          echo "  Total: $TOTAL_ENTRIES"
+
+      - name: Update metrics badge
+        run: |
+          # Create or update metrics file
+          mkdir -p .github
+
+          cat > .github/knowledge-base-metrics.json << EOF
+          {
+            "insights": ${{ steps.metrics.outputs.total-insights }},
+            "patterns": ${{ steps.metrics.outputs.total-patterns }},
+            "decisions": ${{ steps.metrics.outputs.total-decisions }},
+            "total": ${{ steps.metrics.outputs.total-entries }},
+            "last_updated": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add .github/knowledge-base-metrics.json
+
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: update knowledge base metrics
+
+Total entries: ${{ steps.metrics.outputs.total-entries }}
+
+Auto-generated by knowledge-base-update workflow"
+
+            git push origin main
+          fi

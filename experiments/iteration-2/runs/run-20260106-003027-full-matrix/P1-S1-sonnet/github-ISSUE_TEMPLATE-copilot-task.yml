@@ -1,0 +1,139 @@
+name: Copilot Task
+description: Create a task for GitHub Copilot to complete autonomously
+title: "[Copilot]: "
+labels: ["copilot-task"]
+assignees:
+  - copilot
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## @copilot Task Assignment
+
+        Use this template to create tasks that GitHub Copilot will process autonomously.
+
+        **How it works:**
+        1. Fill out this form completely
+        2. Submit the issue
+        3. Assign to @copilot
+        4. Copilot will create a PR automatically
+        5. Review the PR when ready
+
+  - type: input
+    id: title
+    attributes:
+      label: Task Title
+      description: Brief description of what needs to be done
+      placeholder: "Example: Add user authentication to API endpoints"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Detailed Description
+      description: Provide comprehensive context for @copilot
+      placeholder: |
+        - What problem are we solving?
+        - What should the solution look like?
+        - Any constraints or requirements?
+        - Related issues or PRs?
+      value: ""
+    validations:
+      required: true
+
+  - type: dropdown
+    id: task-type
+    attributes:
+      label: Task Type
+      description: Select the type of work
+      options:
+        - Feature
+        - Bug Fix
+        - Refactoring
+        - Documentation
+        - Testing
+        - Performance
+        - Security
+      default: 0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How urgent is this task?
+      options:
+        - Low
+        - Medium
+        - High
+        - Critical
+      default: 1
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: How will we know this is complete?
+      placeholder: |
+        - [ ] Criteria 1
+        - [ ] Criteria 2
+        - [ ] Criteria 3
+      value: ""
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any other information that might help @copilot
+      placeholder: |
+        - Links to documentation
+        - Related code files
+        - Design decisions
+        - Performance targets
+      value: ""
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: knowledge-base
+    attributes:
+      label: Knowledge Base References
+      description: Check relevant knowledge areas (see docs/knowledge/)
+      options:
+        - label: Patterns (design patterns, code templates)
+        - label: Decisions (architecture decision records)
+        - label: Insights (best practices, lessons learned)
+
+  - type: textarea
+    id: implementation-notes
+    attributes:
+      label: Implementation Notes
+      description: Specific guidance for @copilot
+      placeholder: |
+        - Preferred approach or technology
+        - Files to modify
+        - Code style preferences
+        - Testing requirements
+      value: ""
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+
+        **After submitting this issue:**
+        1. Assign to @copilot to trigger automation
+        2. Copilot will create a branch and PR
+        3. Review the PR and provide feedback
+        4. Merge when ready
+
+        See [README.md](../README.md) for complete workflow documentation.

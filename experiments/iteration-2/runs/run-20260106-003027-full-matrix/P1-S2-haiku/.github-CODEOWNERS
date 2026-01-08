@@ -1,0 +1,16 @@
+# Automatic reviewer assignment for pull requests
+# This file assigns repository maintainers as reviewers for all pull requests
+
+# All files require review from repository maintainer
+* @github-repository-owner
+
+# Copilot-generated solutions require review
+/copilot/ @github-repository-owner
+/.copilot-logs/ @github-repository-owner
+
+# Documentation files
+/docs/ @github-repository-owner
+/README.md @github-repository-owner
+
+# CI/CD configuration
+/.github/ @github-repository-owner
