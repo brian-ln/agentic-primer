@@ -1,0 +1,20 @@
+{
+  "daemon": {
+    "port": 3000,
+    "host": "127.0.0.1",
+    "logFile": "daemon.log"
+  },
+  "eventLog": {
+    "file": "events.jsonl",
+    "checkpointInterval": 1000
+  },
+  "loopPrevention": {
+    "maxDepth": 50,
+    "fingerprintCacheSize": 1000,
+    "circuitBreakerThreshold": 100
+  },
+  "functions": {
+    "directory": "functions",
+    "autoDiscover": true
+  }
+}

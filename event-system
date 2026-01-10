@@ -1,0 +1,9 @@
+#!/usr/bin/env bun
+/**
+ * Event System CLI wrapper
+ *
+ * This is the main entry point for the CLI.
+ * It simply forwards all arguments to src/cli.js
+ */
+
+import './src/cli.js';

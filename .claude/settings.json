@@ -1,0 +1,8 @@
+{
+  "hooks": [
+    {
+      "event": "SubagentStop",
+      "command": "/Users/bln/play/agentic-primer/.wt/event-system/.claude/hooks/subagent-stop.sh"
+    }
+  ]
+}

@@ -1,0 +1,131 @@
+[
+  {
+    "name": "Simple Test Event",
+    "event": {
+      "type": "test.simple",
+      "data": {
+        "message": "Hello World",
+        "timestamp": "2026-01-10T00:00:00Z"
+      }
+    }
+  },
+  {
+    "name": "Error Event",
+    "event": {
+      "type": "error.occurred",
+      "data": {
+        "error": "NullPointerException",
+        "message": "Cannot read property 'name' of null",
+        "stack": "at processUser (user.js:42)\nat handleRequest (server.js:105)",
+        "severity": "high"
+      }
+    }
+  },
+  {
+    "name": "User Action",
+    "event": {
+      "type": "user.action",
+      "data": {
+        "userId": "user-123",
+        "action": "login",
+        "timestamp": "2026-01-10T12:00:00Z",
+        "metadata": {
+          "ip": "192.168.1.1",
+          "userAgent": "Mozilla/5.0"
+        }
+      }
+    }
+  },
+  {
+    "name": "Data Transform",
+    "event": {
+      "type": "data.received",
+      "data": {
+        "source": "api",
+        "payload": {
+          "temperature": 72,
+          "humidity": 45,
+          "location": "office"
+        }
+      }
+    }
+  },
+  {
+    "name": "Notification Request",
+    "event": {
+      "type": "notification.request",
+      "data": {
+        "channel": "slack",
+        "message": "Deployment completed successfully",
+        "severity": "info",
+        "recipients": ["#deployments"]
+      }
+    }
+  },
+  {
+    "name": "High Priority Alert",
+    "event": {
+      "type": "alert.critical",
+      "data": {
+        "service": "payment-processor",
+        "issue": "High error rate detected",
+        "errorRate": 0.15,
+        "threshold": 0.05,
+        "affectedUsers": 152
+      }
+    }
+  },
+  {
+    "name": "Scheduled Task",
+    "event": {
+      "type": "task.scheduled",
+      "data": {
+        "taskId": "task-456",
+        "schedule": "0 * * * *",
+        "nextRun": "2026-01-10T13:00:00Z",
+        "action": "cleanup-temp-files"
+      }
+    }
+  },
+  {
+    "name": "Metric Event",
+    "event": {
+      "type": "metric.recorded",
+      "data": {
+        "metric": "api.response_time",
+        "value": 145,
+        "unit": "ms",
+        "tags": {
+          "endpoint": "/api/users",
+          "method": "GET"
+        }
+      }
+    }
+  },
+  {
+    "name": "Conditional Event",
+    "event": {
+      "type": "sensor.reading",
+      "data": {
+        "sensor": "temperature-01",
+        "value": 85,
+        "unit": "F",
+        "threshold": 80,
+        "location": "server-room"
+      }
+    }
+  },
+  {
+    "name": "Batch Event",
+    "event": {
+      "type": "batch.processed",
+      "data": {
+        "batchId": "batch-789",
+        "itemsProcessed": 1500,
+        "itemsFailed": 3,
+        "duration": 45.2,
+        "status": "completed"
+      }
+    }
+  }
+]

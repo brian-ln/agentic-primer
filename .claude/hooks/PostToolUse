@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# PostToolUse hook for event-system implementation harness
+# Triggers after every tool use to check for newly-ready tasks
+
+set -euo pipefail
+
+# Only activate in event-system directory
+if [[ "$PWD" != *".wt/event-system"* ]]; then
+  exit 0
+fi
+
+# Parse the tool use from stdin (Claude passes tool info via stdin)
+TOOL_NAME="${1:-}"
+TOOL_OUTPUT="${2:-}"
+
+# Only react to beads update/close commands
+if [[ "$TOOL_NAME" != "Bash" ]]; then
+  exit 0
+fi
+
+# Check if this was a bd update or bd close command
+if ! echo "$TOOL_OUTPUT" | grep -q "bd \(update\|close\)"; then
+  exit 0
+fi
+
+# Give user brief feedback
+echo ""
+echo "🔄 Checking for newly-ready tasks..."
+
+# Check what's ready now
+READY_OUTPUT=$(bd ready --format json 2>/dev/null || echo "[]")
+READY_COUNT=$(echo "$READY_OUTPUT" | jq 'length')
+
+if [[ "$READY_COUNT" -eq 0 ]]; then
+  echo "✅ No new tasks ready (waiting on dependencies)"
+  exit 0
+fi
+
+# Show ready tasks
+echo ""
+echo "📋 Ready tasks ($READY_COUNT):"
+bd ready | head -20
+
+# Suggest parallelization opportunities
+echo ""
+echo "💡 Parallelization check:"
+
+# Count event-system tasks that are ready
+EVENT_SYSTEM_READY=$(echo "$READY_OUTPUT" | jq '[.[] | select(.labels | contains(["event-system"]))] | length')
+
+if [[ "$EVENT_SYSTEM_READY" -gt 1 ]]; then
+  echo "   → $EVENT_SYSTEM_READY event-system tasks ready - consider parallel agents"
+  echo "   → Use: /bg for background task agents"
+fi
+
+# Check for phase-1a completion
+PHASE_1A_OPEN=$(bd list --label phase-1a --status open --format json 2>/dev/null | jq 'length')
+if [[ "$PHASE_1A_OPEN" -eq 0 ]]; then
+  PHASE_1A_CLOSED=$(bd list --label phase-1a --status closed --format json 2>/dev/null | jq 'length')
+  if [[ "$PHASE_1A_CLOSED" -gt 0 ]]; then
+    echo "   🎉 Phase 1a complete! Phase 1b tasks should be ready."
+  fi
+fi
+
+echo ""
+exit 0

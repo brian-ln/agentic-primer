@@ -1,0 +1,26 @@
+{
+  "name": "event-system",
+  "version": "0.1.0",
+  "description": "Dead simple event capture system with daemon, CLI, and HTTP interface",
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/daemon.js",
+    "dev": "bun --watch src/daemon.js",
+    "cli": "bun run src/cli.js",
+    "test": "bun test"
+  },
+  "keywords": [
+    "event-sourcing",
+    "actor-model",
+    "event-capture",
+    "daemon"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "bun-types": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
