@@ -48,6 +48,68 @@ export class FunctionExecutorActor {
   constructor(config = {}) {
     this.config = config;
     this.emitCallback = null; // Will be set via setEmitCallback()
+    this.isRunning = false;
+  }
+
+  /**
+   * Start the actor - initialize function executor
+   */
+  async start() {
+    if (this.isRunning) {
+      return {
+        success: false,
+        error: 'FunctionExecutorActor is already running'
+      };
+    }
+
+    try {
+      this.isRunning = true;
+      return {
+        success: true,
+        message: 'FunctionExecutorActor started successfully'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: `Failed to start FunctionExecutorActor: ${error.message}`
+      };
+    }
+  }
+
+  /**
+   * Stop the actor - cleanup resources
+   */
+  async stop() {
+    if (!this.isRunning) {
+      return {
+        success: true,
+        message: 'FunctionExecutorActor was not running'
+      };
+    }
+
+    try {
+      // No cleanup needed for now, but could add resource cleanup here
+      this.isRunning = false;
+      return {
+        success: true,
+        message: 'FunctionExecutorActor stopped successfully'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: `Failed to stop FunctionExecutorActor: ${error.message}`
+      };
+    }
+  }
+
+  /**
+   * Get actor status
+   */
+  getStatus() {
+    return {
+      isRunning: this.isRunning,
+      hasEmitCallback: this.emitCallback !== null
+    };
   }
 
   /**

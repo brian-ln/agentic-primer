@@ -42,9 +42,9 @@ export class HTTPServerActor {
   }
 
   /**
-   * Initialize and start the HTTP server
+   * Start the HTTP server
    */
-  async initialize() {
+  async start() {
     if (this.isRunning) {
       return {
         success: false,
@@ -68,12 +68,15 @@ export class HTTPServerActor {
       this.isRunning = true;
       this.startTime = new Date().toISOString();
 
-      console.log(`[HTTPServerActor] Server listening on http://${this.host}:${this.port}`);
+      // Get actual assigned port (important when port 0 is used)
+      const actualPort = this.server.port;
+
+      console.log(`[HTTPServerActor] Server listening on http://${this.host}:${actualPort}`);
 
       return {
         success: true,
-        url: `http://${this.host}:${this.port}`,
-        port: this.port
+        url: `http://${this.host}:${actualPort}`,
+        port: actualPort
       };
     } catch (error) {
       return {
@@ -391,7 +394,7 @@ export class HTTPServerActor {
   /**
    * Stop the HTTP server gracefully
    */
-  async close() {
+  async stop() {
     if (!this.isRunning || !this.server) {
       return { success: true };
     }

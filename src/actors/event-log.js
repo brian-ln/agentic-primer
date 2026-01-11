@@ -57,9 +57,9 @@ export class EventLogActor {
   }
 
   /**
-   * Initialize the actor - create log file if needed
+   * Start the actor - create log file if needed
    */
-  async initialize() {
+  async start() {
     try {
       // Ensure directory exists
       const logDir = dirname(this.logPath);
@@ -408,9 +408,9 @@ export class EventLogActor {
   }
 
   /**
-   * Close write stream gracefully
+   * Stop the actor and close write stream gracefully
    */
-  async close() {
+  async stop() {
     return new Promise((resolve) => {
       if (this.writeStream) {
         this.writeStream.end(() => {
@@ -421,6 +421,17 @@ export class EventLogActor {
         resolve({ success: true });
       }
     });
+  }
+
+  /**
+   * Get actor status
+   */
+  getStatus() {
+    return {
+      isRunning: this.isInitialized,
+      eventCount: this.eventCount,
+      logPath: this.logPath
+    };
   }
 }
 

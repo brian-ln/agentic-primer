@@ -18,8 +18,69 @@
  */
 export function createPatternMatcher() {
   const patterns = new Map();
+  let isRunning = false;
 
   return {
+    /**
+     * Start the actor - initialize pattern matcher
+     */
+    async start() {
+      if (isRunning) {
+        return {
+          success: false,
+          error: 'PatternMatcherActor is already running'
+        };
+      }
+
+      try {
+        isRunning = true;
+        return {
+          success: true,
+          message: 'PatternMatcherActor started successfully'
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: `Failed to start PatternMatcherActor: ${error.message}`
+        };
+      }
+    },
+
+    /**
+     * Stop the actor - cleanup resources
+     */
+    async stop() {
+      if (!isRunning) {
+        return {
+          success: true,
+          message: 'PatternMatcherActor was not running'
+        };
+      }
+
+      try {
+        // No cleanup needed for now, but could add resource cleanup here
+        isRunning = false;
+        return {
+          success: true,
+          message: 'PatternMatcherActor stopped successfully'
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: `Failed to stop PatternMatcherActor: ${error.message}`
+        };
+      }
+    },
+
+    /**
+     * Get actor status
+     */
+    getStatus() {
+      return {
+        isRunning,
+        patternCount: patterns.size
+      };
+    },
     /**
      * Register a new pattern
      *

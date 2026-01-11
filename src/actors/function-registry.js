@@ -19,6 +19,69 @@ class FunctionRegistryActor {
   constructor() {
     // Map<functionId, functionMetadata>
     this.functions = new Map();
+    this.isRunning = false;
+  }
+
+  /**
+   * Start the actor - initialize function registry
+   */
+  async start() {
+    if (this.isRunning) {
+      return {
+        success: false,
+        error: 'FunctionRegistryActor is already running'
+      };
+    }
+
+    try {
+      this.isRunning = true;
+      return {
+        success: true,
+        message: 'FunctionRegistryActor started successfully'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: `Failed to start FunctionRegistryActor: ${error.message}`
+      };
+    }
+  }
+
+  /**
+   * Stop the actor - cleanup resources
+   */
+  async stop() {
+    if (!this.isRunning) {
+      return {
+        success: true,
+        message: 'FunctionRegistryActor was not running'
+      };
+    }
+
+    try {
+      // No cleanup needed for now, but could add resource cleanup here
+      this.isRunning = false;
+      return {
+        success: true,
+        message: 'FunctionRegistryActor stopped successfully'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: `Failed to stop FunctionRegistryActor: ${error.message}`
+      };
+    }
+  }
+
+  /**
+   * Get actor status
+   */
+  getStatus() {
+    return {
+      isRunning: this.isRunning,
+      functionCount: this.functions.size,
+      functions: Array.from(this.functions.keys())
+    };
   }
 
   /**
