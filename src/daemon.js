@@ -120,8 +120,8 @@ export class DaemonActor {
       // Check if EventLogActor module exists
       try {
         const { EventLogActor } = await import('./actors/event-log.js');
-        this.actors.eventLog = new EventLogActor(this.config.eventLog);
-        await this.actors.eventLog.start();
+        this.actors.eventLog = new EventLogActor(this.config);
+        await this.actors.eventLog.initialize();
         console.log('[DaemonActor] EventLogActor spawned successfully');
       } catch (error) {
         // EventLogActor not yet implemented - continue without it
