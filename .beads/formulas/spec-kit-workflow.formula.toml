@@ -1,0 +1,731 @@
+# Spec-Kit Complete Workflow Formula v1.0
+#
+# Specification-Driven Development (SDD) using GitHub spec-kit methodology
+# Transforms natural language feature descriptions into working code through
+# a structured six-stage pipeline with constitutional governance.
+#
+# Based on: GitHub spec-kit (https://github.com/github/spec-kit)
+# Pattern: Template-constrained generation with validation gates
+# Agents: 6 stages with optional clarification and parallel execution opportunities
+#
+# Usage:
+# ```bash
+# bd mol wisp spec-kit-workflow \
+#   --var feature_description="Build a real-time chat application" \
+#   --var project_values="Simplicity, test-first, integration-first" \
+#   --var tech_stack="Node.js, WebSockets, SQLite" \
+#   --var spec_dir=".specify" \
+#   --var tdd_approach="true"
+# ```
+
+formula = "spec-kit-workflow"
+description = """
+Complete Specification-Driven Development workflow using GitHub spec-kit.
+
+Six-stage pipeline:
+1. Constitution - Establish architectural principles and constraints
+2. Specification - Create tech-agnostic feature specification
+3. Clarification (optional) - Resolve ambiguities through structured Q&A
+4. Planning - Generate technical implementation plan with design docs
+5. Tasking - Break down into executable task list
+6. Implementation - Execute tasks and generate working code
+
+Constitutional governance: 9 articles enforced through validation gates
+Template constraints: Separate WHAT from HOW, prevent premature optimization
+Parallel execution: Research phase and tasks marked [P] can run concurrently
+
+Result: Working code with comprehensive specifications, tests, and validation.
+"""
+type = "workflow"
+version = 1
+
+# =============================================================================
+# Variables: Formula Parameterization
+# =============================================================================
+
+[vars.feature_description]
+description = "Natural language description of feature to build"
+required = true
+
+[vars.project_values]
+description = "Project architectural principles and constraints for constitution"
+default = "Simplicity, test-first, integration-first, library-first"
+
+[vars.tech_stack]
+description = "Preferred technologies (language, frameworks, storage, testing)"
+required = true
+
+[vars.spec_dir]
+description = "Directory for specification artifacts (.specify or specs/)"
+default = ".specify"
+
+[vars.tdd_approach]
+description = "Use test-driven development (tests before implementation)"
+default = "true"
+options = ["true", "false"]
+
+[vars.max_projects]
+description = "Constitutional constraint: maximum initial projects (Simplicity Gate)"
+default = "3"
+
+[vars.validation_level]
+description = "Validation thoroughness for quality gates"
+default = "standard"
+options = ["standard", "strict"]
+
+# =============================================================================
+# Quality Gates: Constitutional Compliance Thresholds
+# =============================================================================
+
+[quality_gates.standard]
+specification_quality_min = 90
+constitutional_compliance_min = 100
+task_completeness_min = 95
+test_pass_rate_min = 95
+require_user_approval = true
+
+[quality_gates.strict]
+specification_quality_min = 100
+constitutional_compliance_min = 100
+task_completeness_min = 100
+test_pass_rate_min = 100
+checklist_completion_required = true
+require_user_approval = true
+
+# =============================================================================
+# Epic: Complete SDD Workflow
+# =============================================================================
+
+[[steps]]
+id = "epic"
+title = "Specification-Driven Development: {{feature_description}}"
+description = """
+Complete SDD workflow from feature description to working code.
+
+Feature: {{feature_description}}
+Tech Stack: {{tech_stack}}
+TDD: {{tdd_approach}}
+Validation: {{validation_level}}
+
+Goal: Transform natural language description into production-ready code through
+structured specification, planning, and implementation phases with constitutional
+governance ensuring architectural quality.
+
+Workflow stages:
+1. Constitution → 2. Specification → 3. Clarification → 4. Planning → 5. Tasking → 6. Implementation
+"""
+
+# =============================================================================
+# Stage 1: Constitution (Establish Architectural Principles)
+# Template: constitution.md
+# Output: .specify/memory/constitution.md
+# =============================================================================
+
+[[steps]]
+id = "constitution"
+title = "Establish project constitution with architectural principles"
+needs = ["epic"]
+description = """
+Create project constitution establishing architectural principles and governance.
+
+Input:
+- Project values: {{project_values}}
+- Maximum projects constraint: {{max_projects}}
+
+Process:
+1. Parse project values and constraints
+2. Generate Articles I-IX defining architectural rules
+3. Establish validation gates for later phases
+4. Create governance section
+5. Document constitutional compliance requirements
+
+Constitutional Articles:
+- Article I: Library-First Principle
+- Article II: CLI Interface Requirement
+- Article III: Test-First Imperative (NON-NEGOTIABLE)
+- Article IV-VI: [Project-specific principles]
+- Article VII: Simplicity (≤{{max_projects}} projects initially)
+- Article VIII: Anti-Abstraction (use frameworks directly)
+- Article IX: Integration-First Testing (real databases over mocks)
+
+Agent workflow:
+1. Analyze project values and generate constitution
+2. Write constitution to {{spec_dir}}/memory/constitution.md
+3. Present constitution for user review
+4. Wait for user approval
+5. Proceed to specification phase
+"""
+
+# Constitution artifact
+[[steps.outputs]]
+artifact = "constitution.md"
+path = "{{spec_dir}}/memory/constitution.md"
+type = "governance"
+required = true
+description = "Project constitutional document with 9 articles and validation gates"
+validation = [
+  "File exists",
+  "Contains Articles I-IX",
+  "Test-First Imperative is NON-NEGOTIABLE",
+  "Simplicity Gate defined (≤{{max_projects}} projects)",
+  "Anti-Abstraction Gate defined",
+  "Integration-First Gate defined",
+  "Governance section explains enforcement"
+]
+
+[[steps.quality_gates]]
+gate = "user_approval"
+description = "User must approve constitutional principles"
+blocking = true
+
+# =============================================================================
+# Stage 2: Specification (Create Feature Specification)
+# Template: spec-template.md
+# Output: specs/###-feature-name/spec.md
+# Script: create-new-feature.sh
+# =============================================================================
+
+[[steps]]
+id = "specification"
+title = "Create technology-agnostic feature specification"
+needs = ["constitution"]
+description = """
+Transform natural language feature description into structured specification.
+
+Input:
+- Feature description: {{feature_description}}
+- Constitution: {{spec_dir}}/memory/constitution.md
+- Spec template: templates/spec-template.md
+
+Process:
+1. Generate short name from description (2-4 words)
+2. Determine next sequential feature number
+3. Create feature branch (###-feature-name)
+4. Fill spec template with:
+   - User stories (prioritized P1, P2, P3)
+   - Functional requirements (FR-001, FR-002, ...)
+   - Success criteria (measurable, tech-agnostic)
+   - Key entities (if data involved)
+   - Edge cases
+5. Mark ambiguities with [NEEDS CLARIFICATION] (max 3)
+6. Generate quality checklist
+7. Validate spec against checklist
+
+CONSTRAINTS (CRITICAL):
+- NO implementation details (no tech stack, APIs, frameworks)
+- Focus on WHAT and WHY, not HOW
+- Requirements must be testable
+- Success criteria must be measurable and technology-agnostic
+- Maximum 3 [NEEDS CLARIFICATION] markers
+
+Agent workflow:
+1. Run create-new-feature.sh to set up branch and directories
+2. Analyze feature description
+3. Generate specification from template
+4. Self-validate against quality checklist
+5. Write spec to specs/###-feature-name/spec.md
+6. Create checklists/requirements.md
+7. Present spec for user review
+8. Wait for approval or move to clarification
+"""
+
+# Specification artifacts
+[[steps.outputs]]
+artifact = "spec.md"
+path = "{{spec_dir}}/specs/###-feature-name/spec.md"
+type = "specification"
+required = true
+description = "Technology-agnostic feature specification with user stories, requirements, success criteria"
+validation = [
+  "File exists",
+  "No implementation details (tech stack, frameworks, APIs)",
+  "User stories prioritized (P1, P2, P3)",
+  "Each user story independently testable",
+  "Functional requirements testable (FR-001, FR-002, ...)",
+  "Success criteria measurable and tech-agnostic",
+  "Edge cases documented",
+  "Clarifications limited (≤3)",
+  "Quality checklist passed"
+]
+
+[[steps.outputs]]
+artifact = "requirements-checklist.md"
+path = "{{spec_dir}}/specs/###-feature-name/checklists/requirements.md"
+type = "validation-checklist"
+required = true
+description = "Quality checklist for specification validation"
+validation = [
+  "File exists",
+  "All checklist items from template included",
+  "Validation results documented"
+]
+
+[[steps.quality_gates]]
+gate = "specification_quality"
+description = "Specification must pass quality validation"
+blocking = true
+thresholds = "quality_gates.{{validation_level}}"
+checks = [
+  "No implementation details",
+  "Requirements testable",
+  "Success criteria measurable",
+  "Acceptance scenarios complete",
+  "Clarifications limited (≤3)"
+]
+
+# =============================================================================
+# Stage 3: Clarification (Optional - Resolve Ambiguities)
+# Template: N/A (interactive)
+# Output: Updated spec.md
+# =============================================================================
+
+[[steps]]
+id = "clarification"
+title = "Resolve specification ambiguities through structured Q&A"
+needs = ["specification"]
+condition = "has_clarifications == true"
+description = """
+Structured questioning to resolve [NEEDS CLARIFICATION] markers in specification.
+
+Input:
+- spec.md with [NEEDS CLARIFICATION] markers
+- Maximum 3 clarifications
+
+Process:
+1. Extract all [NEEDS CLARIFICATION] markers
+2. For each marker, present options to user
+3. Wait for user selections (one by one)
+4. Replace markers with chosen answers
+5. Document clarifications in spec
+6. Update spec.md
+
+CONSTRAINTS:
+- Sequential questioning (one by one per user instructions)
+- Maximum 3 questions total
+- Must provide suggested answers with implications
+- Cannot proceed without user input
+
+Agent workflow:
+1. Read spec.md
+2. Extract clarification markers
+3. Present questions to user (one at a time)
+4. Wait for answers
+5. Update spec.md with answers
+6. Document clarifications
+7. Re-validate specification
+"""
+
+# Clarification updates spec.md in-place
+[[steps.outputs]]
+artifact = "spec.md (clarified)"
+path = "{{spec_dir}}/specs/###-feature-name/spec.md"
+type = "specification"
+required = true
+description = "Updated specification with all clarifications resolved"
+validation = [
+  "File exists",
+  "All [NEEDS CLARIFICATION] markers resolved",
+  "Clarifications documented in spec",
+  "User has provided answers for all questions"
+]
+
+[[steps.quality_gates]]
+gate = "clarification_completeness"
+description = "All clarifications must be resolved"
+blocking = true
+checks = [
+  "No remaining [NEEDS CLARIFICATION] markers",
+  "User provided answers",
+  "Spec updated with answers"
+]
+
+# =============================================================================
+# Stage 4: Planning (Generate Technical Implementation Plan)
+# Template: plan-template.md
+# Output: plan.md + research.md + data-model.md + contracts/
+# Script: setup-plan.sh, update-agent-context.sh
+# =============================================================================
+
+[[steps]]
+id = "planning"
+title = "Generate technical implementation plan with design documents"
+needs = ["specification", "clarification"]
+needs_any = true  # Either spec or clarified spec
+description = """
+Convert specification into technical implementation plan with design documents.
+
+Input:
+- spec.md (clarified)
+- constitution.md
+- plan-template.md
+- Tech stack preferences: {{tech_stack}}
+- TDD approach: {{tdd_approach}}
+
+Process:
+Phase 0 - Constitutional Check & Research:
+1. Fill Technical Context (language, dependencies, storage, testing)
+2. Check Constitution gates (Simplicity, Anti-Abstraction, Integration-First)
+3. Research unknowns and resolve NEEDS CLARIFICATION
+4. Document technology decisions in research.md
+
+Phase 1 - Design (can run in parallel):
+5. Design data models → data-model.md
+6. Generate API contracts → contracts/ (OpenAPI, GraphQL, etc.)
+7. Create validation scenarios → quickstart.md
+
+Phase 2 - Finalization:
+8. Update agent context (.claude/CLAUDE.md, etc.)
+9. Re-evaluate constitutional compliance
+10. Document complexity tracking (if gates violated)
+
+VALIDATION GATES (Constitutional):
+- Simplicity Gate: ≤{{max_projects}} projects (or justified)
+- Anti-Abstraction Gate: Use frameworks directly, single model representation
+- Integration-First Gate: Contracts defined, contract tests specified
+
+Agent workflow:
+1. Run setup-plan.sh to create plan directory
+2. Fill plan-template.md with technical context
+3. Check constitutional gates
+4. Research unknowns (parallel if multiple)
+5. Generate design documents (parallel: data-model.md, contracts/, quickstart.md)
+6. Update agent context
+7. Document complexity tracking
+8. Commit all files
+"""
+
+# Planning artifacts (multiple outputs)
+[[steps.outputs]]
+artifact = "plan.md"
+path = "{{spec_dir}}/specs/###-feature-name/plan.md"
+type = "technical-plan"
+required = true
+description = "Technical implementation plan with context, gates, structure, complexity tracking"
+validation = [
+  "File exists",
+  "Technical context complete (language, dependencies, storage, testing)",
+  "Constitutional gates checked (Simplicity, Anti-Abstraction, Integration-First)",
+  "Project structure defined",
+  "Complexity tracking documented (if gates violated)"
+]
+
+[[steps.outputs]]
+artifact = "research.md"
+path = "{{spec_dir}}/specs/###-feature-name/research.md"
+type = "research-documentation"
+required = true
+description = "Technology research and decision rationale"
+validation = [
+  "File exists",
+  "All NEEDS CLARIFICATION resolved",
+  "Technology choices documented",
+  "Rationale provided for each decision",
+  "Alternatives considered"
+]
+
+[[steps.outputs]]
+artifact = "data-model.md"
+path = "{{spec_dir}}/specs/###-feature-name/data-model.md"
+type = "data-model"
+required = false
+description = "Entity definitions, relationships, validation rules, state transitions"
+validation = [
+  "File exists (if feature involves data)",
+  "All entities from spec.md defined",
+  "Relationships documented",
+  "Validation rules specified",
+  "State transitions defined (if applicable)"
+]
+
+[[steps.outputs]]
+artifact = "contracts"
+path = "{{spec_dir}}/specs/###-feature-name/contracts/"
+type = "api-contracts"
+required = false
+description = "API specifications in standard formats (OpenAPI, GraphQL, WebSocket, Event schemas)"
+validation = [
+  "Directory exists (if feature has APIs)",
+  "All requirements from spec.md have contracts",
+  "Standard formats used (OpenAPI, GraphQL, etc.)",
+  "Contract tests specified"
+]
+
+[[steps.outputs]]
+artifact = "quickstart.md"
+path = "{{spec_dir}}/specs/###-feature-name/quickstart.md"
+type = "validation-scenarios"
+required = true
+description = "Key validation scenarios, integration test cases, manual testing steps"
+validation = [
+  "File exists",
+  "Validation scenarios defined",
+  "Integration test cases documented",
+  "Manual testing steps provided"
+]
+
+[[steps.quality_gates]]
+gate = "constitutional_compliance"
+description = "Plan must comply with constitutional gates or justify violations"
+blocking = true
+thresholds = "quality_gates.{{validation_level}}"
+checks = [
+  "Simplicity Gate: ≤{{max_projects}} projects OR justified",
+  "Anti-Abstraction Gate: Framework used directly, single model representation",
+  "Integration-First Gate: Contracts defined, contract tests specified"
+]
+
+[[steps.quality_gates]]
+gate = "research_completeness"
+description = "All research unknowns must be resolved"
+blocking = true
+checks = [
+  "All NEEDS CLARIFICATION resolved",
+  "Technology choices documented",
+  "Rationale provided for decisions"
+]
+
+# =============================================================================
+# Stage 5: Tasking (Break Down into Executable Tasks)
+# Template: tasks-template.md
+# Output: tasks.md
+# Script: check-prerequisites.sh
+# =============================================================================
+
+[[steps]]
+id = "tasking"
+title = "Generate actionable task breakdown organized by user story"
+needs = ["planning"]
+description = """
+Generate comprehensive task breakdown from design documents.
+
+Input:
+- plan.md (required)
+- spec.md (required - for user stories)
+- data-model.md (optional)
+- contracts/ (optional)
+- research.md (optional)
+- tasks-template.md
+
+Process:
+1. Extract user stories with priorities from spec.md
+2. Extract tech stack and structure from plan.md
+3. Map entities from data-model.md to user stories
+4. Map contracts to user stories
+5. Generate task phases:
+   - Phase 1: Setup (project initialization)
+   - Phase 2: Foundational (blocking prerequisites)
+   - Phase 3+: One phase per user story (P1, P2, P3)
+   - Final Phase: Polish & cross-cutting concerns
+6. Mark parallel tasks with [P]
+7. Assign task IDs (T001, T002, T003)
+8. Assign user story labels ([US1], [US2], [US3])
+9. Create dependency graph
+10. Generate parallel execution examples
+
+TASK FORMAT (STRICT):
+- [ ] [TaskID] [P?] [Story?] Description with exact file path
+
+Example:
+- [ ] T001 Create project structure per implementation plan
+- [ ] T005 [P] Implement authentication middleware in src/middleware/auth.py
+- [ ] T012 [P] [US1] Create User model in src/models/user.py
+
+CONSTRAINTS:
+- ALL tasks must follow checklist format
+- Tests (if TDD) must come before implementation
+- Each user story must be independently testable
+- Tasks within same file must be sequential
+- Maximum clarity on file paths
+
+Agent workflow:
+1. Run check-prerequisites.sh to validate required docs
+2. Extract user stories and technical details
+3. Generate task phases
+4. Assign IDs and labels
+5. Mark parallel opportunities
+6. Create dependency documentation
+7. Write tasks.md
+8. Validate task completeness
+"""
+
+# Tasking artifacts
+[[steps.outputs]]
+artifact = "tasks.md"
+path = "{{spec_dir}}/specs/###-feature-name/tasks.md"
+type = "task-breakdown"
+required = true
+description = "Complete task breakdown organized by phases with IDs, labels, dependencies"
+validation = [
+  "File exists",
+  "All tasks follow checklist format: - [ ] [ID] [P?] [Story?] Description with path",
+  "Each user story has complete task set",
+  "Dependencies are correct",
+  "Parallel opportunities marked [P]",
+  "File paths are absolute and correct",
+  "Tests before implementation (if TDD)",
+  "Dependency graph documented",
+  "Parallel execution examples included"
+]
+
+[[steps.quality_gates]]
+gate = "task_completeness"
+description = "Task breakdown must be complete and valid"
+blocking = true
+thresholds = "quality_gates.{{validation_level}}"
+checks = [
+  "All tasks follow checklist format",
+  "Each user story has complete task set",
+  "Dependencies correct",
+  "File paths specified"
+]
+
+# =============================================================================
+# Stage 6: Implementation (Execute Tasks and Generate Code)
+# Template: N/A (execution)
+# Output: Working code + tests
+# Script: check-prerequisites.sh --require-tasks --include-tasks
+# =============================================================================
+
+[[steps]]
+id = "implementation"
+title = "Execute implementation plan by running all tasks"
+needs = ["tasking"]
+description = """
+Execute implementation plan phase by phase, respecting dependencies and parallel opportunities.
+
+Input:
+- tasks.md (required)
+- plan.md (required)
+- All design documents
+- Checklist validation results (if exist)
+
+Process:
+1. Validate checklists (if exist) - halt if incomplete (unless user confirms)
+2. Load all design documents
+3. Verify/create ignore files (.gitignore, .dockerignore, etc.)
+4. Parse tasks.md for phases and dependencies
+5. Execute phases in order:
+   - Setup → Foundational → User Story phases → Polish
+6. Respect [P] markers for parallel execution
+7. Follow TDD: tests before implementation (if {{tdd_approach}} == true)
+8. Mark completed tasks with [X]
+9. Report progress after each task
+10. Halt on failures, suggest fixes
+
+VALIDATION GATES:
+- Pre-flight: All checklists complete (or user confirms proceed)
+- Per-phase: Checkpoint validation before next phase
+- Post-implementation: All tests pass, features match spec
+
+CONSTRAINTS:
+- Phase-by-phase execution (no skipping)
+- Sequential tasks run in order
+- Parallel tasks [P] can run together
+- File-based coordination (same file = sequential)
+- Test-first if TDD approach specified
+
+Agent workflow:
+1. Run check-prerequisites.sh --require-tasks --include-tasks
+2. Validate checklists or get user confirmation
+3. Parse tasks.md
+4. Execute Setup phase
+5. Execute Foundational phase
+6. Execute User Story phases (P1, P2, P3)
+7. Execute Polish phase
+8. Run tests
+9. Validate against spec.md
+10. Mark complete
+"""
+
+# Implementation artifacts
+[[steps.outputs]]
+artifact = "implementation-code"
+path = "{{spec_dir}}/specs/###-feature-name/src/"
+type = "source-code"
+required = true
+description = "Working implementation code satisfying all specification requirements"
+validation = [
+  "Source files exist per tasks.md",
+  "All user stories implemented",
+  "Tests exist (if TDD)",
+  "All tasks marked complete [X]"
+]
+
+[[steps.outputs]]
+artifact = "tests"
+path = "{{spec_dir}}/specs/###-feature-name/tests/"
+type = "test-suite"
+required = "{{tdd_approach}}"
+description = "Comprehensive test suite validating all requirements"
+validation = [
+  "Test files exist (if TDD)",
+  "All requirements from spec.md have tests",
+  "Tests pass",
+  "Coverage meets quality gate thresholds"
+]
+
+[[steps.outputs]]
+artifact = "tasks.md (updated)"
+path = "{{spec_dir}}/specs/###-feature-name/tasks.md"
+type = "task-tracking"
+required = true
+description = "Updated tasks.md with completed tasks marked"
+validation = [
+  "File exists",
+  "All tasks marked [X] (complete)",
+  "Progress tracked"
+]
+
+[[steps.quality_gates]]
+gate = "checklist_validation"
+description = "Checklists must be complete or user must confirm proceed"
+blocking = false  # Can proceed with user confirmation
+checks = [
+  "All checklists have 0 incomplete items OR user confirms proceed"
+]
+
+[[steps.quality_gates]]
+gate = "implementation_success"
+description = "Implementation must satisfy all requirements and pass tests"
+blocking = true
+thresholds = "quality_gates.{{validation_level}}"
+checks = [
+  "All tasks marked complete",
+  "Tests pass (if TDD)",
+  "Features match spec.md",
+  "Test pass rate ≥ threshold"
+]
+
+[[steps.quality_gates]]
+gate = "user_approval"
+description = "User must approve final implementation"
+blocking = true
+
+# =============================================================================
+# Workflow Metrics: Observable Outcomes
+# =============================================================================
+
+[metrics]
+constitution_duration = "Time to create and approve constitution"
+specification_duration = "Time to create and approve specification"
+clarification_duration = "Time to resolve all clarifications (if any)"
+planning_duration = "Time to create plan and design documents"
+tasking_duration = "Time to generate task breakdown"
+implementation_duration = "Time to execute all tasks"
+total_duration = "Time from epic creation to implementation approval"
+clarification_count = "Number of clarifications required"
+iteration_count = "Number of validation cycles"
+
+[metrics.quality]
+specification_quality_score = "Specification quality score (0-100)"
+constitutional_compliance_score = "Constitutional compliance score (0-100)"
+task_completeness_score = "Task completeness score (0-100)"
+test_pass_rate = "Percentage of tests passing"
+first_pass_implementation_rate = "Percentage of features working on first implementation"
+
+[metrics.artifacts]
+user_story_count = "Number of user stories defined"
+requirement_count = "Number of functional requirements"
+task_count = "Total number of tasks generated"
+parallel_task_count = "Number of tasks marked [P] for parallel execution"
+test_count = "Number of tests created (if TDD)"
