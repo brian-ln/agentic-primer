@@ -63,7 +63,9 @@ Depending on which AI agent you use, configure one or more of these secrets:
 The `docs/knowledge/` directory stores:
 - **patterns/** - Reusable patterns and best practices
 - **decisions/** - Architecture decision records (ADRs)
+  - [ADR-001: Functions vs Actors Architecture](docs/knowledge/decisions/001-functions-vs-actors.md)
 - **insights/** - Learnings and observations
+  - [Functions vs Actors Detailed Analysis](docs/knowledge/insights/functions-vs-actors-detailed-analysis.md)
 
 See `docs/knowledge/README.md` for contribution guidelines.
 

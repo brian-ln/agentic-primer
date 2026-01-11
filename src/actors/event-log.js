@@ -424,6 +424,20 @@ export class EventLogActor {
   }
 
   /**
+   * Alias for start() - for consistency with test expectations
+   */
+  async initialize() {
+    return await this.start();
+  }
+
+  /**
+   * Alias for stop() - for consistency with test expectations
+   */
+  async close() {
+    return await this.stop();
+  }
+
+  /**
    * Get actor status
    */
   getStatus() {

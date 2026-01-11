@@ -15,8 +15,15 @@ Complete guide to all Event System documentation.
 ### For Developers
 
 1. **ARCHITECTURE_COMPLETE.md** - Complete system architecture
-2. **MESSAGE_FLOWS.md** - Detailed message sequences
-3. **Source code in `/src/`** - Implementation
+2. **SPECIFICATION_QUICK_START.md** - How to read specifications (5 min)
+3. **MESSAGE_FLOWS.md** - Detailed message sequences
+4. **Source code in `/src/`** - Implementation
+
+### For QA/Testing
+
+1. **SPECIFICATION_QUICK_START.md** - 5-minute intro to specs
+2. **SPECIFICATION_GUIDE.md** - Complete guide to reading specs
+3. **specs/** directory - Gherkin features, state machines, FIT tables
 
 ---
 
@@ -31,13 +38,55 @@ Complete guide to all Event System documentation.
 | **MESSAGE_FLOWS.md** | 40+ pages | Detailed message sequences | Developers, Debuggers |
 | **DELIVERABLES_SUMMARY.md** | 20+ pages | Project summary and verification | Stakeholders, PMs |
 | **EVENT_SYSTEM_QUICK_REF.md** | 10+ pages | Quick reference guide | All users |
+| **ACTOR_LIFECYCLE_SPEC.md** | 30+ pages | Actor lifecycle specification | Developers |
+| **PROJECT_STRUCTURE_SPEC.md** | 40+ pages | Project structure specification | Developers, Architects |
+| **SPECIFICATION_GUIDE.md** | 30+ pages | How to read specifications (Gherkin, State Machines, FIT) | Developers, QA |
+| **SPECIFICATION_QUICK_START.md** | 15+ pages | 5-minute guide to specifications | All developers |
 | **DOCUMENTATION_INDEX.md** | This file | Documentation navigation | All users |
 
-**Total**: ~230 pages of comprehensive documentation
+**Total**: ~345 pages of comprehensive documentation
 
 ---
 
 ## Document Summaries
+
+### SPECIFICATION_GUIDE.md
+
+**What**: Complete guide to reading and understanding specifications
+
+**Contents**:
+- Overview of three specification types (Gherkin, State Machines, FIT Tables)
+- How to read BDD feature specifications (Gherkin)
+- How to read state machine specifications
+- How to read FIT decision tables
+- How specifications connect to each other
+- Step-by-step verification process
+- Concrete examples from EventLogActor and FunctionExecutorActor
+- Common patterns and anti-patterns
+- Glossary and quick reference cards
+
+**When to read**: Understanding specifications, verifying code against specs, writing tests, debugging specification mismatches
+
+---
+
+### SPECIFICATION_QUICK_START.md
+
+**What**: 5-minute quick start guide to specifications
+
+**Contents**:
+- Visual guide to three specification types
+- Quick reference: which spec to use when
+- Example workflow: "How do I append an event?"
+- Reading patterns cheat sheet
+- Visual state machine diagrams
+- Concrete code examples
+- Common questions and answers
+- Speed reading tips
+- Self-test quizzes
+
+**When to read**: First introduction to specs, quick lookups, teaching others, refreshing memory
+
+---
 
 ### ARCHITECTURE_COMPLETE.md
 
@@ -56,6 +105,45 @@ Complete guide to all Event System documentation.
 - File structure reference
 
 **When to read**: Understanding system design, implementing features, debugging
+
+---
+
+### ACTOR_LIFECYCLE_SPEC.md
+
+**What**: Complete specification for actor lifecycle management
+
+**Contents**:
+- Standard actor interface (start, stop, getStatus)
+- Lifecycle states and transitions
+- Return value formats
+- Implementation patterns (class-based, factory-based)
+- Actor examples for each type
+- Best practices for lifecycle management
+- Testing lifecycle patterns
+
+**When to read**: Implementing new actors, debugging lifecycle issues, understanding actor contracts
+
+---
+
+### PROJECT_STRUCTURE_SPEC.md
+
+**What**: Complete specification for project organization
+
+**Contents**:
+- Root directory structure
+- Source code organization patterns
+- Documentation structure
+- Configuration file locations
+- Testing structure
+- Naming conventions (files, directories, variables)
+- File type standards (JS, MD, JSON, JSONL)
+- Module organization patterns
+- Directory purpose matrix
+- Expansion guidelines (adding actors, functions, docs)
+- Anti-patterns to avoid
+- Version control strategy
+
+**When to read**: Contributing code, organizing new features, understanding codebase layout, creating new modules
 
 ---
 
@@ -148,9 +236,12 @@ Complete guide to all Event System documentation.
 ### Path 2: Developer (3-4 hours)
 
 1. Read **ARCHITECTURE_COMPLETE.md** (90 min) - Deep understanding
-2. Study **MESSAGE_FLOWS.md** (60 min) - Learn message passing
-3. Read source code in `/src/` (60 min) - Implementation details
-4. Try **DEMONSTRATION.md** examples (30 min) - Verify understanding
+2. Read **SPECIFICATION_QUICK_START.md** (10 min) - Intro to specs
+3. Read **ACTOR_LIFECYCLE_SPEC.md** (30 min) - Actor contracts
+4. Read **PROJECT_STRUCTURE_SPEC.md** (30 min) - Code organization
+5. Study **MESSAGE_FLOWS.md** (60 min) - Learn message passing
+6. Read source code in `/src/` (30 min) - Implementation details
+7. Try **DEMONSTRATION.md** examples (20 min) - Verify understanding
 
 ### Path 3: Operator (30 min)
 
@@ -162,9 +253,26 @@ Complete guide to all Event System documentation.
 ### Path 4: Architect (2-3 hours)
 
 1. Read **DELIVERABLES_SUMMARY.md** (15 min) - Context
-2. Read **ARCHITECTURE_COMPLETE.md** (90 min) - Design patterns
-3. Study **MESSAGE_FLOWS.md** (45 min) - Actor interactions
-4. Review source code structure (30 min) - Implementation
+2. Read **PROJECT_STRUCTURE_SPEC.md** (30 min) - Organization patterns
+3. Read **ARCHITECTURE_COMPLETE.md** (90 min) - Design patterns
+4. Read **ACTOR_LIFECYCLE_SPEC.md** (20 min) - Actor contracts
+5. Study **MESSAGE_FLOWS.md** (30 min) - Actor interactions
+6. Review source code structure (15 min) - Implementation
+
+### Path 5: New Contributor (1 hour)
+
+1. Read **PROJECT_STRUCTURE_SPEC.md** (30 min) - Where things go
+2. Read **ACTOR_LIFECYCLE_SPEC.md** (15 min) - Actor patterns
+3. Read **SPECIFICATION_QUICK_START.md** (10 min) - Spec basics
+4. Read **EVENT_SYSTEM_QUICK_REF.md** (10 min) - Quick reference
+5. Review expansion guidelines in **PROJECT_STRUCTURE_SPEC.md** (5 min)
+
+### Path 6: QA/Testing (2 hours)
+
+1. Read **SPECIFICATION_QUICK_START.md** (10 min) - Overview
+2. Read **SPECIFICATION_GUIDE.md** (60 min) - Deep dive into specs
+3. Review specs in `/specs/` (30 min) - Gherkin, State Machines, FIT
+4. Try verifying code examples (20 min) - Practice verification
 
 ---
 
@@ -186,6 +294,20 @@ Complete guide to all Event System documentation.
 - Actor communication
 - Event enrichment
 - Loop detection flow
+
+**ACTOR_LIFECYCLE_SPEC.md**:
+- Lifecycle interface
+- State management
+- Idempotency
+- Resource cleanup
+- Error handling
+
+**PROJECT_STRUCTURE_SPEC.md**:
+- Directory organization
+- Naming conventions
+- File type standards
+- Module patterns
+- Expansion guidelines
 
 ### Practical Operations
 
@@ -341,10 +463,26 @@ src/loop-prevention/      → ARCHITECTURE_COMPLETE.md "Loop Prevention System"
 
 ## Changelog
 
+### 2026-01-11 - Specification Documentation
+
+**Created**:
+- SPECIFICATION_GUIDE.md (30+ pages) - Complete guide to reading specifications
+- SPECIFICATION_QUICK_START.md (15+ pages) - 5-minute quick start to specs
+- PROJECT_STRUCTURE_SPEC.md (40+ pages) - Complete project structure specification
+- Enhanced DOCUMENTATION_INDEX.md with specification guides
+
+**Specifications Available**:
+- specs/features/ - Gherkin BDD scenarios (6 actors)
+- specs/state-machines/ - State transition specifications (6 actors)
+- specs/fit-fixtures/ - FIT decision tables for testing (6 actors)
+
+**Status**: Specification-level documentation complete, all actors specified
+
 ### 2026-01-10 - Initial Documentation Release
 
 **Created**:
 - ARCHITECTURE_COMPLETE.md (100+ pages)
+- ACTOR_LIFECYCLE_SPEC.md (30+ pages)
 - DEMONSTRATION.md (50+ pages)
 - MESSAGE_FLOWS.md (40+ pages)
 - DELIVERABLES_SUMMARY.md (20+ pages)
@@ -377,6 +515,24 @@ src/loop-prevention/      → ARCHITECTURE_COMPLETE.md "Loop Prevention System"
 
 → **DELIVERABLES_SUMMARY.md**
 
+### Actor Implementation Questions
+
+→ **ACTOR_LIFECYCLE_SPEC.md**
+
+### Project Structure Questions
+
+→ **PROJECT_STRUCTURE_SPEC.md**
+
+### Specification Questions
+
+→ **SPECIFICATION_QUICK_START.md** (quick answers)
+→ **SPECIFICATION_GUIDE.md** (comprehensive guide)
+
+### Testing Questions
+
+→ **SPECIFICATION_GUIDE.md** (verification process)
+→ **specs/** directory (actual specs)
+
 ---
 
 ## Documentation Statistics
@@ -385,18 +541,23 @@ src/loop-prevention/      → ARCHITECTURE_COMPLETE.md "Loop Prevention System"
 
 - ARCHITECTURE_COMPLETE.md: ~100 pages
 - DEMONSTRATION.md: ~50 pages
+- PROJECT_STRUCTURE_SPEC.md: ~40 pages
 - MESSAGE_FLOWS.md: ~40 pages
+- ACTOR_LIFECYCLE_SPEC.md: ~30 pages
+- SPECIFICATION_GUIDE.md: ~30 pages
 - DELIVERABLES_SUMMARY.md: ~20 pages
+- SPECIFICATION_QUICK_START.md: ~15 pages
 - EVENT_SYSTEM_QUICK_REF.md: ~10 pages
-- DOCUMENTATION_INDEX.md: ~10 pages
+- DOCUMENTATION_INDEX.md: ~15 pages
 
-**Total**: ~230 pages
+**Total**: ~345 pages
 
 ### Word Count
 
-- Total: ~30,000 words
-- Average document: ~5,000 words
+- Total: ~48,000 words
+- Average document: ~5,300 words
 - Largest: ARCHITECTURE_COMPLETE.md (~15,000 words)
+- New: SPECIFICATION_GUIDE.md (~8,000 words)
 
 ### Diagrams
 

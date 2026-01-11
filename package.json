@@ -7,7 +7,13 @@
     "start": "bun run src/daemon.js",
     "dev": "bun --watch src/daemon.js",
     "cli": "bun run src/cli.js",
-    "test": "bun test"
+    "test": "bun test",
+    "specs": "npm run specs:bdd && npm run specs:fit && npm run specs:states",
+    "specs:all": "npm run specs",
+    "specs:bdd": "node specs/runners/bdd-runner.js",
+    "specs:fit": "node specs/runners/fit-runner.js",
+    "specs:states": "node specs/runners/state-validator.js",
+    "specs:report": "node specs/runners/report-generator.js"
   },
   "keywords": [
     "event-sourcing",
