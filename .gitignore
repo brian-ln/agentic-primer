@@ -27,3 +27,5 @@ coverage/
 # Build output
 dist/
 build/
+daemon.log
+daemon-test.log
