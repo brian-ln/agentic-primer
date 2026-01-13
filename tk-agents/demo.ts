@@ -85,16 +85,10 @@ const mainTask = createTask({
   subjectiveSuccessCriteria: [
     { criterion: "Code quality", evaluationGuidance: "Clean, readable, follows conventions" },
   ],
-  knownInformation: [projectKnowledge.properties.id, techKnowledge.properties.id],
+  knowledge: [projectKnowledge, techKnowledge],
   informationGaps: ["Database schema design"],
   toolsAvailable: ["code_editor", "test_runner", "http_client"],
 }, graph);
-
-// Link task to required knowledge
-graph.send(mainTask.properties.id, "link", {
-  toId: projectKnowledge.properties.id,
-  edgeType: "requires_knowledge",
-});
 
 console.log(`Created main task: ${mainTask.properties.id}`);
 console.log(`Goal: "${mainTask.properties.goal}"`);

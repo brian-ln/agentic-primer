@@ -1,6 +1,7 @@
 // TaskNode - Task actor with lifecycle state machine
 
 import type { Graph, NodeActor } from "./graph";
+import type { KnowledgeNode } from "./knowledge";
 import type {
   Edge,
   EvalResponse,
@@ -20,7 +21,7 @@ export interface CreateTaskOptions {
   desiredDeliverables: string[];
   objectiveSuccessCriteria: ObjectiveCriterion[];
   subjectiveSuccessCriteria?: TaskProperties["subjectiveSuccessCriteria"];
-  knownInformation?: string[];
+  knowledge?: KnowledgeNode[];
   informationGaps?: string[];
   toolsAvailable?: string[];
   parentTaskId?: string;
@@ -39,7 +40,7 @@ export class TaskNode implements NodeActor {
       desiredDeliverables: options.desiredDeliverables,
       objectiveSuccessCriteria: options.objectiveSuccessCriteria,
       subjectiveSuccessCriteria: options.subjectiveSuccessCriteria,
-      knownInformation: options.knownInformation ?? [],
+      knownInformation: options.knowledge?.map(k => k.properties.id) ?? [],
       informationGaps: options.informationGaps ?? [],
       toolsAvailable: options.toolsAvailable ?? [],
       parentTaskId: options.parentTaskId,
@@ -338,5 +339,16 @@ export class TaskNode implements NodeActor {
 export function createTask(options: CreateTaskOptions, graph: Graph): TaskNode {
   const task = new TaskNode(options);
   graph.registerNode(task);
+  
+  // Auto-link knowledge nodes
+  if (options.knowledge) {
+    for (const knowledgeNode of options.knowledge) {
+      graph.send(task.properties.id, "link", {
+        toId: knowledgeNode.properties.id,
+        edgeType: "requires_knowledge",
+      });
+    }
+  }
+  
   return task;
 }
