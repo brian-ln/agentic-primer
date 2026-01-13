@@ -98,7 +98,8 @@ describe("BashActor", () => {
     const response = await actor.send(createMessage("exec", "pwd"));
 
     expect(response.success).toBe(true);
-    expect(response.data).toBe("/tmp\n");
+    // macOS: /tmp -> /private/tmp
+    expect(["/tmp\n", "/private/tmp\n"]).toContain(response.data);
   });
 
   test("uses custom env", async () => {
