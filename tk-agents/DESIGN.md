@@ -89,31 +89,109 @@ BashActor ──── RecipeActor ──── TaskNode ──── KnowledgeN
 
 ## State Machines
 
-### Task Lifecycle
+### Task States
+
+```typescript
+type TaskState =
+  // Lifecycle
+  | "created"     // Exists, minimal definition
+  | "planning"    // Being decomposed/researched by agent
+  | "ready"       // Fully defined, in backlog, waiting for capacity
+  | "scheduled"   // Will run at specific time or when condition met
+  | "assigned"    // Claimed by an actor, not yet started
+  | "active"      // Being worked on
+  | "paused"      // Intentionally stopped, can resume with checkpoint
+  | "blocked"     // Waiting on dependency/info/human
+
+  // Retry loop
+  | "retrying"    // Failed, attempting again (with backoff)
+
+  // Terminal states
+  | "completed"   // Finished successfully
+  | "failed"      // Errored (after max retries)
+  | "cancelled"   // Explicitly aborted by user/system
+  | "skipped"     // Intentionally not executed (conditional)
+  | "timed_out";  // Deadline exceeded
+```
+
+### Task Lifecycle (Complete)
 
 ```mermaid
 stateDiagram-v2
-    [*] --> created: createTask()
+    [*] --> created
 
-    created --> active: start
-    active --> blocked: block
-    blocked --> active: unblock
-    active --> completed: complete (if eval passes)
+    created --> planning: plan
+    created --> ready: define
+    created --> cancelled: cancel
+
+    planning --> ready: planned
+    planning --> failed: cannot_plan
+    planning --> cancelled: cancel
+
+    ready --> scheduled: schedule(time)
+    ready --> assigned: assign(actor)
+    ready --> skipped: skip(reason)
+    ready --> cancelled: cancel
+
+    scheduled --> ready: unschedule
+    scheduled --> assigned: trigger
+    scheduled --> cancelled: cancel
+
+    assigned --> ready: release
+    assigned --> active: start
+    assigned --> cancelled: cancel
+
+    active --> paused: pause(checkpoint)
+    active --> blocked: block(dependency)
+    active --> completed: complete
     active --> failed: fail
+    active --> timed_out: deadline_exceeded
+    active --> cancelled: cancel
+
+    paused --> active: resume
+    paused --> cancelled: cancel
+
+    blocked --> active: unblock
+    blocked --> cancelled: cancel
+    blocked --> timed_out: deadline_exceeded
+
+    failed --> retrying: retry
+    retrying --> active: attempt
+    retrying --> failed: max_attempts
 
     completed --> [*]
     failed --> [*]
+    cancelled --> [*]
+    skipped --> [*]
+    timed_out --> [*]
+```
 
-    note right of active
-        Can spawn child tasks
-        Can update criteria
-        Can link to knowledge
-    end note
+### Task State Descriptions
 
-    note right of blocked
-        reason: string
-        requiredKnowledge: string[]
-    end note
+| State | Entry Condition | Can Transition To | Notes |
+|-------|-----------------|-------------------|-------|
+| `created` | Task instantiated | planning, ready, cancelled | Minimal definition |
+| `planning` | Agent decomposing task | ready, failed, cancelled | WBS, research, criteria |
+| `ready` | Fully defined | scheduled, assigned, skipped, cancelled | In backlog |
+| `scheduled` | Time/condition set | ready, assigned, cancelled | Triggers automatically |
+| `assigned` | Actor claimed it | ready, active, cancelled | Reserved, prevents double-assign |
+| `active` | Work started | paused, blocked, completed, failed, timed_out, cancelled | Can spawn children |
+| `paused` | Intentionally stopped | active, cancelled | Checkpoint saved |
+| `blocked` | Waiting on dependency | active, cancelled, timed_out | Has blockers list |
+| `retrying` | Failed, will retry | active, failed | Attempt count tracked |
+| `completed` | Success | - | Terminal |
+| `failed` | Error/max retries | - | Terminal |
+| `cancelled` | Explicit abort | - | Terminal, propagates to children |
+| `skipped` | Conditional skip | - | Terminal |
+| `timed_out` | Deadline exceeded | - | Terminal |
+
+### Propagation Rules
+
+```
+cancel(parent)  → cancel(all children recursively)
+timeout(parent) → timeout(active children)
+fail(child)     → may block or fail parent (configurable: failFast vs collect)
+complete(all children) → unblock parent for eval
 ```
 
 ### Claude Session Lifecycle
@@ -157,14 +235,92 @@ stateDiagram-v2
 
 ### Task Messages
 
-| Message | Payload | Response | Description |
-|---------|---------|----------|-------------|
-| `start` | `{context?}` | `{success, state}` | Begin execution |
-| `spawn` | `{goal, criteria, ...}` | `{childTaskId, success}` | Create child task |
-| `eval` | `{}` | `{score, passed, criteria, observations}` | Evaluate criteria |
-| `complete` | `{result, artifacts?}` | `{success, finalState}` | Mark complete |
-| `block` | `{reason, requiredKnowledge?}` | `{success, state}` | Mark blocked |
-| `query_status` | `{}` | `{state, progress, blockers, children}` | Get full status |
+#### Lifecycle Messages
+
+| Message | From States | Payload | Response | Description |
+|---------|-------------|---------|----------|-------------|
+| `plan` | created | `{agent?}` | `{success, state}` | Start planning phase |
+| `define` | created, planning | `{criteria, deliverables}` | `{success, state}` | Mark as fully defined |
+| `schedule` | ready | `{time?, condition?}` | `{success, state}` | Schedule for later |
+| `unschedule` | scheduled | `{}` | `{success, state}` | Remove schedule |
+| `assign` | ready, scheduled | `{actorId}` | `{success, state}` | Claim for actor |
+| `release` | assigned | `{}` | `{success, state}` | Return to ready |
+| `start` | assigned | `{context?}` | `{success, state}` | Begin execution |
+| `pause` | active | `{reason?, checkpoint?}` | `{success, state}` | Pause with checkpoint |
+| `resume` | paused | `{context?}` | `{success, state}` | Resume from checkpoint |
+| `block` | active | `{reason, dependencies?}` | `{success, state}` | Mark blocked |
+| `unblock` | blocked | `{resolution?}` | `{success, state}` | Clear blocker |
+| `complete` | active | `{result, artifacts?}` | `{success, state}` | Mark success |
+| `fail` | active, blocked | `{error, details?}` | `{success, state}` | Mark failed |
+| `cancel` | any non-terminal | `{reason?, cancelChildren?}` | `{success, state}` | Abort task |
+| `skip` | ready | `{reason}` | `{success, state}` | Skip execution |
+| `retry` | failed | `{}` | `{success, state, attempt}` | Retry (if attempts left) |
+
+#### Work Messages
+
+| Message | From States | Payload | Response | Description |
+|---------|-------------|---------|----------|-------------|
+| `spawn` | active | `{goal, criteria, ...}` | `{childTaskId, success}` | Create child task |
+| `eval` | active | `{}` | `{score, passed, criteria}` | Evaluate criteria |
+| `checkpoint` | active | `{data}` | `{success, version}` | Save progress |
+| `query_status` | any | `{}` | `{state, progress, ...}` | Get full status |
+
+### Task Properties (Extended)
+
+```typescript
+interface TaskProperties {
+  // Identity
+  id: string;
+  type: "task";
+  state: TaskState;
+
+  // Definition
+  goal: string;
+  desiredDeliverables: string[];
+  objectiveSuccessCriteria: ObjectiveCriterion[];
+  subjectiveSuccessCriteria?: SubjectiveCriterion[];
+
+  // Knowledge & Tools
+  knownInformation: string[];  // node IDs
+  informationGaps: string[];
+  toolsAvailable: string[];
+
+  // Hierarchy
+  parentTaskId?: string;
+
+  // Scheduling
+  scheduledFor?: Date;
+  deadline?: Date;
+  priority?: number;           // 0-100, higher = more urgent
+
+  // Assignment
+  assignedTo?: string;         // actor ID
+  assignedAt?: Date;
+
+  // Retry
+  attemptCount: number;        // starts at 0
+  maxAttempts: number;         // default 1 (no retry)
+  retryDelayMs?: number;       // backoff delay
+
+  // Timing
+  createdAt: Date;
+  startedAt?: Date;
+  pausedAt?: Date;
+  completedAt?: Date;
+  durationMs?: number;         // total active time
+
+  // Checkpointing
+  checkpoint?: unknown;        // saved progress for resume
+
+  // Cancellation
+  cancelledBy?: string;
+  cancelReason?: string;
+
+  // Result
+  result?: unknown;
+  error?: string;
+}
+```
 
 ### Knowledge Messages
 
@@ -237,6 +393,76 @@ Feature: Stream-chaining between Claude actors
     And I receive the final executor response
 ```
 
+### Scenario: Task Lifecycle States
+
+```gherkin
+Feature: Complete task lifecycle with all states
+
+  Scenario: Task goes through planning to completion
+    Given a new task with goal "Implement feature X"
+    Then the task state is "created"
+
+    When I send "plan" to the task
+    Then the task state is "planning"
+
+    When I send "define" with criteria and deliverables
+    Then the task state is "ready"
+
+    When I send "assign" with actorId "agent-1"
+    Then the task state is "assigned"
+    And the task assignedTo is "agent-1"
+
+    When I send "start"
+    Then the task state is "active"
+    And the task startedAt is set
+
+    When I send "complete" with result
+    Then the task state is "completed"
+    And the task completedAt is set
+
+  Scenario: Task with pause and resume
+    Given an active task with checkpoint support
+
+    When I send "pause" with checkpoint data {progress: 50}
+    Then the task state is "paused"
+    And the task checkpoint contains {progress: 50}
+
+    When I send "resume"
+    Then the task state is "active"
+    And the checkpoint data is available in context
+
+  Scenario: Task retry on failure
+    Given a task with maxAttempts = 3
+
+    When the task fails
+    Then the task state is "failed"
+    And attemptCount is 0
+
+    When I send "retry"
+    Then the task state is "retrying"
+
+    When the retry begins
+    Then the task state is "active"
+    And attemptCount is 1
+
+  Scenario: Task cancellation propagates to children
+    Given a parent task in state "active"
+    And child task A in state "active"
+    And child task B in state "completed"
+
+    When I send "cancel" to the parent with cancelChildren=true
+    Then the parent state is "cancelled"
+    And child A state is "cancelled"
+    And child B state is "completed" (unchanged)
+
+  Scenario: Task times out
+    Given a task with deadline = now + 1 second
+    And the task is in state "active"
+
+    When the deadline passes
+    Then the task state is "timed_out"
+```
+
 ---
 
 ## Test Fixtures
@@ -287,17 +513,57 @@ export const messages = {
 
 ### Scenario Table (FIT-style)
 
+#### Actor Tests
+
 | Scenario | Actor Type | Input | Expected Output | Expected State |
 |----------|------------|-------|-----------------|----------------|
 | Echo | MockActor | `{x: 1}` | `{x: 1}` | - |
 | Bash pwd | BashActor(cwd=/tmp) | `pwd` | `/tmp\n` | - |
 | Bash fail | BashActor | `exit 1` | error | - |
 | Bash timeout | BashActor(timeout=100) | `sleep 5` | timeout error | - |
-| Task start | TaskNode(state=created) | `start` | success | active |
-| Task spawn | TaskNode(state=active) | `spawn{goal}` | childId | - |
-| Task eval pass | TaskNode(criteria met) | `eval` | passed=true | - |
-| Task eval fail | TaskNode(criteria not met) | `eval` | passed=false | - |
 | Knowledge query | KnowledgeNode | `query{q}` | answer, confidence | - |
+
+#### Task State Transitions
+
+| Initial State | Message | Payload | Expected State | Notes |
+|---------------|---------|---------|----------------|-------|
+| created | plan | {} | planning | Agent starts decomposition |
+| created | define | {criteria} | ready | Skip planning |
+| planning | define | {criteria} | ready | Planning complete |
+| ready | schedule | {time} | scheduled | Future execution |
+| ready | assign | {actorId} | assigned | Claim task |
+| ready | skip | {reason} | skipped | Terminal |
+| scheduled | trigger | {} | assigned | Time reached |
+| assigned | start | {} | active | Work begins |
+| assigned | release | {} | ready | Return to pool |
+| active | pause | {checkpoint} | paused | Save progress |
+| active | block | {reason} | blocked | Waiting |
+| active | complete | {result} | completed | Terminal (if eval passes) |
+| active | fail | {error} | failed | Terminal |
+| active | cancel | {reason} | cancelled | Terminal |
+| paused | resume | {} | active | Continue work |
+| blocked | unblock | {} | active | Dependency resolved |
+| failed | retry | {} | retrying | If attempts < max |
+| retrying | attempt | {} | active | New attempt |
+| retrying | fail | {} | failed | Max attempts reached |
+
+#### Task Retry Behavior
+
+| attemptCount | maxAttempts | Action | Result |
+|--------------|-------------|--------|--------|
+| 0 | 1 | fail | failed (no retry) |
+| 0 | 3 | fail → retry | retrying, attemptCount=1 |
+| 1 | 3 | fail → retry | retrying, attemptCount=2 |
+| 2 | 3 | fail → retry | failed (max reached) |
+
+#### Task Cancellation Propagation
+
+| Scenario | Parent State | Child States | Cancel Parent | Result |
+|----------|--------------|--------------|---------------|--------|
+| No children | active | - | cancel | parent=cancelled |
+| Active child | active | [active] | cancel | parent=cancelled, child=cancelled |
+| Mixed children | active | [active, completed] | cancel | active→cancelled, completed unchanged |
+| Nested | active | [active→[active]] | cancel | All cancelled recursively |
 
 ---
 
@@ -426,3 +692,7 @@ bun run demo.ts
 - [ ] RecipeActor for multi-step deterministic workflows
 - [ ] Uncertainty/escalation protocol
 - [ ] Human-in-the-loop approval flow
+- [ ] Deadline monitoring (background timer for timed_out transitions)
+- [ ] Scheduled task trigger (cron-like or condition-based)
+- [ ] Task queue with priority ordering
+- [ ] Distributed actor registry (multi-node)

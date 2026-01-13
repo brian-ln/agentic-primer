@@ -2,20 +2,16 @@
 /**
  * Demo: Task/Knowledge Graph Actor Protocol
  *
- * This demonstrates the full lifecycle:
- * 1. Create knowledge context
- * 2. Create a parent task with goals and criteria
- * 3. Start the task
- * 4. Spawn child tasks
- * 5. Complete children with evals
- * 6. Complete parent
- * 7. Observe graph growth
+ * Demonstrates the complete task lifecycle:
+ * created → planning → ready → assigned → active → paused → active → completed
+ *
+ * Also shows: spawn, checkpoint, cancel propagation
  */
 
 import { Graph } from "./src/graph";
 import { createKnowledge } from "./src/knowledge";
 import { createTask } from "./src/task";
-import type { EvalResponse, StatusResponse, TaskProperties } from "./src/types";
+import type { EvalResponse, StatusResponse, TaskProperties, TaskState } from "./src/types";
 
 // Helper for pretty printing
 function log(label: string, data?: unknown) {
@@ -27,6 +23,10 @@ function log(label: string, data?: unknown) {
   }
 }
 
+function stateChange(taskId: string, result: { success: boolean; state: TaskState }) {
+  console.log(`  ${taskId}: ${result.success ? "✓" : "✗"} → ${result.state}`);
+}
+
 function separator() {
   console.log("\n" + "-".repeat(60) + "\n");
 }
@@ -34,7 +34,7 @@ function separator() {
 // Create a fresh graph
 const graph = new Graph();
 
-log("DEMO: Task/Knowledge Graph Actor Protocol");
+log("DEMO: Complete Task Lifecycle State Machine");
 
 // ============================================================
 // Phase 1: Create Knowledge Context
@@ -42,143 +42,157 @@ log("DEMO: Task/Knowledge Graph Actor Protocol");
 
 log("Phase 1: Creating Knowledge Context");
 
-const projectKnowledge = createKnowledge({
-  title: "Project Requirements",
-  content: "Build a REST API for user management. Must support CRUD operations. Use TypeScript and follow REST conventions.",
-  sources: ["requirements.md"],
-}, graph);
-
+const projectKnowledge = createKnowledge(
+  {
+    title: "Project Requirements",
+    content: "Build a REST API for user management. Must support CRUD operations.",
+    sources: ["requirements.md"],
+  },
+  graph
+);
 console.log(`Created: ${projectKnowledge.properties.id} - "${projectKnowledge.properties.title}"`);
 
-const techKnowledge = createKnowledge({
-  title: "Tech Stack",
-  content: "Using Bun runtime, Hono framework for HTTP, and SQLite for persistence.",
-  sources: ["tech-decisions.md"],
-}, graph);
-
-console.log(`Created: ${techKnowledge.properties.id} - "${techKnowledge.properties.title}"`);
-
-// Query knowledge
-const queryResult = graph.send(projectKnowledge.properties.id, "query", {
-  question: "What operations are needed?",
-});
-console.log("\nQuery 'What operations are needed?':");
-console.log(queryResult);
-
 // ============================================================
-// Phase 2: Create Parent Task
+// Phase 2: Create & Plan Task
 // ============================================================
 
-log("Phase 2: Creating Parent Task");
+log("Phase 2: Create & Plan Task");
 
-const mainTask = createTask({
-  goal: "Implement User Management API",
-  desiredDeliverables: [
-    "User CRUD endpoints",
-    "Input validation",
-    "API documentation",
-  ],
-  objectiveSuccessCriteria: [
+const mainTask = createTask(
+  {
+    goal: "Implement User Management API",
+    knowledge: [projectKnowledge],
+    maxAttempts: 2, // Allow 1 retry
+  },
+  graph
+);
+
+console.log(`Created: ${mainTask.properties.id}`);
+console.log(`State: ${mainTask.properties.state}`);
+
+// Planning phase
+const planResult = graph.send(mainTask.properties.id, "plan", { agent: "planner-agent" }) as {
+  success: boolean;
+  state: TaskState;
+};
+stateChange(mainTask.properties.id, planResult);
+
+// Define criteria (complete planning)
+const defineResult = graph.send(mainTask.properties.id, "define", {
+  criteria: [
     { criterion: "All endpoints implemented", measure: "endpoint_count", threshold: 4 },
     { criterion: "Tests passing", measure: "test_pass_rate", threshold: 1.0 },
   ],
-  subjectiveSuccessCriteria: [
-    { criterion: "Code quality", evaluationGuidance: "Clean, readable, follows conventions" },
-  ],
-  knowledge: [projectKnowledge, techKnowledge],
-  informationGaps: ["Database schema design"],
-  toolsAvailable: ["code_editor", "test_runner", "http_client"],
-}, graph);
-
-console.log(`Created main task: ${mainTask.properties.id}`);
-console.log(`Goal: "${mainTask.properties.goal}"`);
-console.log(`State: ${mainTask.properties.state}`);
+  deliverables: ["User CRUD endpoints", "Tests"],
+}) as { success: boolean; state: TaskState };
+stateChange(mainTask.properties.id, defineResult);
 
 // ============================================================
-// Phase 3: Start Task
+// Phase 3: Assign & Start
 // ============================================================
 
-log("Phase 3: Starting Task");
+log("Phase 3: Assign & Start");
 
-const startResult = graph.send(mainTask.properties.id, "start", {
-  context: { developer: "human", priority: "high" },
-});
-console.log("Start result:", startResult);
+const assignResult = graph.send(mainTask.properties.id, "assign", { actorId: "executor-agent" }) as {
+  success: boolean;
+  state: TaskState;
+};
+stateChange(mainTask.properties.id, assignResult);
+console.log(`  Assigned to: ${mainTask.properties.assignedTo}`);
 
-const observeResult = graph.send(mainTask.properties.id, "observe", {});
-console.log("Observation:", observeResult);
+const startResult = graph.send(mainTask.properties.id, "start", {}) as {
+  success: boolean;
+  state: TaskState;
+};
+stateChange(mainTask.properties.id, startResult);
+console.log(`  Started at: ${mainTask.properties.startedAt}`);
 
 // ============================================================
-// Phase 4: Spawn Child Tasks
+// Phase 4: Spawn Children & Use Checkpoints
 // ============================================================
 
-log("Phase 4: Spawning Child Tasks");
+log("Phase 4: Spawn Children with Checkpointing");
 
-// Spawn subtasks for each endpoint
-const endpoints = ["GET /users", "POST /users", "PUT /users/:id", "DELETE /users/:id"];
-
-const childTaskIds: string[] = [];
+const endpoints = ["GET /users", "POST /users"];
+const childIds: string[] = [];
 
 for (const endpoint of endpoints) {
   const spawnResult = graph.send(mainTask.properties.id, "spawn", {
     goal: `Implement ${endpoint}`,
-    deliverables: [`${endpoint} endpoint handler`, "Input validation", "Tests"],
-    criteria: [
-      { criterion: "Handler implemented", measure: "implemented", threshold: true },
-      { criterion: "Tests written", measure: "has_tests", threshold: true },
-    ],
-  }) as { childTaskId: string; success: boolean };
+    deliverables: [`${endpoint} handler`],
+    criteria: [{ criterion: "Handler implemented", measure: "done", threshold: true }],
+  }) as { childTaskId: string };
 
-  childTaskIds.push(spawnResult.childTaskId);
-  console.log(`Spawned: ${spawnResult.childTaskId} - "Implement ${endpoint}"`);
+  childIds.push(spawnResult.childTaskId);
+  console.log(`  Spawned: ${spawnResult.childTaskId} - "${endpoint}"`);
 }
 
-// Check parent status
+// Save checkpoint with progress
+graph.send(mainTask.properties.id, "checkpoint", {
+  data: { phase: "spawning", childrenSpawned: childIds.length },
+});
+console.log(`  Checkpoint saved: phase=spawning, children=${childIds.length}`);
+
+// ============================================================
+// Phase 5: Pause & Resume (with checkpoint)
+// ============================================================
+
+log("Phase 5: Pause & Resume");
+
+const pauseResult = graph.send(mainTask.properties.id, "pause", {
+  reason: "Awaiting review",
+  checkpoint: { phase: "paused_for_review", progress: 50 },
+}) as { success: boolean; state: TaskState };
+stateChange(mainTask.properties.id, pauseResult);
+console.log(`  Paused at: ${mainTask.properties.pausedAt}`);
+console.log(`  Checkpoint: ${JSON.stringify(mainTask.properties.checkpoint)}`);
+
 separator();
-const statusAfterSpawn = graph.send(mainTask.properties.id, "query_status", {}) as StatusResponse;
-console.log("Parent task status after spawning:");
-console.log(statusAfterSpawn);
+console.log("... (simulating pause for review) ...");
+separator();
+
+const resumeResult = graph.send(mainTask.properties.id, "resume", {}) as {
+  success: boolean;
+  state: TaskState;
+  checkpoint: unknown;
+};
+stateChange(mainTask.properties.id, resumeResult);
+console.log(`  Resumed with checkpoint: ${JSON.stringify(resumeResult.checkpoint)}`);
 
 // ============================================================
-// Phase 5: Execute Child Tasks
+// Phase 6: Complete Children
 // ============================================================
 
-log("Phase 5: Executing Child Tasks");
+log("Phase 6: Complete Children");
 
-for (const childId of childTaskIds) {
-  // Start child
+for (const childId of childIds) {
+  // Move through lifecycle
+  graph.send(childId, "define", {});
+  graph.send(childId, "assign", { actorId: "worker-agent" });
   graph.send(childId, "start", {});
 
-  // Simulate work - set criteria as met
+  // Mark criteria as met
   graph.send(childId, "update", {
     properties: {
-      objectiveSuccessCriteria: [
-        { criterion: "Handler implemented", measure: "implemented", threshold: true, actual: true },
-        { criterion: "Tests written", measure: "has_tests", threshold: true, actual: true },
-      ],
+      objectiveSuccessCriteria: [{ criterion: "Handler implemented", measure: "done", threshold: true, actual: true }],
     },
   });
 
-  // Eval child
-  const evalResult = graph.send(childId, "eval", {}) as EvalResponse;
-  console.log(`${childId} eval: score=${evalResult.score}, passed=${evalResult.passed}`);
-
-  // Complete if passed
-  if (evalResult.passed) {
-    const completeResult = graph.send(childId, "complete", {
-      result: { status: "implemented" },
-    });
-    console.log(`${childId} completed:`, completeResult);
-  }
+  // Complete
+  const result = graph.send(childId, "complete", { result: { status: "done" } }) as {
+    success: boolean;
+    state: TaskState;
+  };
+  stateChange(childId, result);
 }
 
 // ============================================================
-// Phase 6: Complete Parent Task
+// Phase 7: Complete Parent
 // ============================================================
 
-log("Phase 6: Evaluating & Completing Parent Task");
+log("Phase 7: Complete Parent");
 
-// Update parent criteria with actual values
+// Update criteria
 graph.send(mainTask.properties.id, "update", {
   properties: {
     objectiveSuccessCriteria: [
@@ -188,51 +202,75 @@ graph.send(mainTask.properties.id, "update", {
   },
 });
 
-// Eval parent
-const parentEval = graph.send(mainTask.properties.id, "eval", {}) as EvalResponse;
-console.log("Parent eval result:");
-console.log(parentEval);
+const evalResult = graph.send(mainTask.properties.id, "eval", {}) as EvalResponse;
+console.log(`  Eval: score=${evalResult.score}, passed=${evalResult.passed}`);
 
-// Complete parent
-if (parentEval.passed) {
-  const completeResult = graph.send(mainTask.properties.id, "complete", {
-    result: {
-      summary: "User Management API implemented with 4 endpoints",
-      artifacts: ["src/routes/users.ts", "tests/users.test.ts"],
-    },
-  });
-  console.log("\nParent completion:", completeResult);
-}
+const completeResult = graph.send(mainTask.properties.id, "complete", {
+  result: { summary: "API implemented" },
+}) as { success: boolean; state: TaskState };
+stateChange(mainTask.properties.id, completeResult);
 
 // ============================================================
-// Phase 7: Observe Final Graph State
+// Phase 8: Demonstrate Cancel Propagation
 // ============================================================
 
-log("Phase 7: Final Graph State");
+log("Phase 8: Cancel Propagation (New Task)");
+
+const cancelDemo = createTask({ goal: "Task to cancel" }, graph);
+graph.send(cancelDemo.properties.id, "define", {});
+graph.send(cancelDemo.properties.id, "assign", { actorId: "agent" });
+graph.send(cancelDemo.properties.id, "start", {});
+
+// Spawn a child
+const { childTaskId } = graph.send(cancelDemo.properties.id, "spawn", {
+  goal: "Child to cancel",
+  deliverables: [],
+  criteria: [],
+}) as { childTaskId: string };
+
+graph.send(childTaskId, "define", {});
+graph.send(childTaskId, "assign", { actorId: "agent" });
+graph.send(childTaskId, "start", {});
+
+console.log(`  Parent: ${cancelDemo.properties.id} (${cancelDemo.properties.state})`);
+console.log(`  Child:  ${childTaskId} (active)`);
+
+// Cancel parent - should propagate to child
+const cancelResult = graph.send(cancelDemo.properties.id, "cancel", {
+  reason: "User cancelled",
+  cancelChildren: true,
+}) as { success: boolean; state: TaskState; cancelledChildren: string[] };
+
+console.log(`  Cancel result: ${cancelResult.state}`);
+console.log(`  Cancelled children: ${cancelResult.cancelledChildren.join(", ")}`);
+
+const childState = (graph.getNode(childTaskId)?.properties as TaskProperties).state;
+console.log(`  Child state after: ${childState}`);
+
+// ============================================================
+// Phase 9: Final Summary
+// ============================================================
+
+log("Phase 9: Final Summary");
 
 const graphDump = graph.dump();
-console.log(`\nTotal nodes: ${graphDump.nodes.length}`);
+console.log(`Total nodes: ${graphDump.nodes.length}`);
 console.log(`Total edges: ${graphDump.edges.length}`);
 
 separator();
-console.log("Nodes:");
+console.log("Task States:");
 for (const node of graphDump.nodes) {
-  const state = (node as TaskProperties).state || "n/a";
-  const type = node.type;
-  const name = (node as TaskProperties).goal || (node as { title?: string }).title || "unnamed";
-  console.log(`  - ${node.id} [${type}] "${name}" (${state})`);
+  if (node.type === "task") {
+    const t = node as TaskProperties;
+    console.log(`  ${t.id}: ${t.state.padEnd(10)} "${t.goal}"`);
+  }
 }
 
-separator();
-console.log("Edges:");
-for (const edge of graphDump.edges) {
-  console.log(`  - ${edge.fromId} --${edge.type}--> ${edge.toId}`);
-}
-
-// Final status
 separator();
 const finalStatus = graph.send(mainTask.properties.id, "query_status", {}) as StatusResponse;
-console.log("Final parent task status:");
-console.log(finalStatus);
+console.log("Main task final status:");
+console.log(`  State: ${finalStatus.state}`);
+console.log(`  Progress: ${finalStatus.progress * 100}%`);
+console.log(`  Attempts: ${finalStatus.attemptCount}/${finalStatus.maxAttempts}`);
 
-log("Demo Complete!", "All tasks completed through the full lifecycle.");
+log("Demo Complete!", "Full lifecycle demonstrated including pause, resume, checkpoint, and cancel.");
