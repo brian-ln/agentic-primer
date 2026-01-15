@@ -87,7 +87,7 @@ export type StandardMessage =
 
 export type TaskMessage =
   | { type: "start"; payload: { context?: Record<string, unknown> } }
-  | { type: "spawn"; payload: { goal: string; deliverables: string[]; criteria: ObjectiveCriterion[]; context?: Record<string, unknown> } }
+  | { type: "create_task"; payload: { goal: string; deliverables: string[]; criteria: ObjectiveCriterion[]; context?: Record<string, unknown> } }
   | { type: "eval"; payload: Record<string, never> }
   | { type: "complete"; payload: { result: unknown; artifacts?: string[] } }
   | { type: "block"; payload: { reason: string; requiredKnowledge?: string[] } }

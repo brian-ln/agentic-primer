@@ -109,18 +109,18 @@ const observeResult = graph.send(mainTask.properties.id, "observe", {});
 console.log("Observation:", observeResult);
 
 // ============================================================
-// Phase 4: Spawn Child Tasks
+// Phase 4: Create Child Tasks
 // ============================================================
 
-log("Phase 4: Spawning Child Tasks");
+log("Phase 4: Creating Child Tasks");
 
-// Spawn subtasks for each endpoint
+// Create subtasks for each endpoint
 const endpoints = ["GET /users", "POST /users", "PUT /users/:id", "DELETE /users/:id"];
 
 const childTaskIds: string[] = [];
 
 for (const endpoint of endpoints) {
-  const spawnResult = graph.send(mainTask.properties.id, "spawn", {
+  const createResult = graph.send(mainTask.properties.id, "create_task", {
     goal: `Implement ${endpoint}`,
     deliverables: [`${endpoint} endpoint handler`, "Input validation", "Tests"],
     criteria: [
@@ -129,14 +129,14 @@ for (const endpoint of endpoints) {
     ],
   }) as { childTaskId: string; success: boolean };
 
-  childTaskIds.push(spawnResult.childTaskId);
-  console.log(`Spawned: ${spawnResult.childTaskId} - "Implement ${endpoint}"`);
+  childTaskIds.push(createResult.childTaskId);
+  console.log(`Created: ${createResult.childTaskId} - "Implement ${endpoint}"`);
 }
 
 // Check parent status
 separator();
 const statusAfterSpawn = graph.send(mainTask.properties.id, "query_status", {}) as StatusResponse;
-console.log("Parent task status after spawning:");
+console.log("Parent task status after creating child tasks:");
 console.log(statusAfterSpawn);
 
 // ============================================================

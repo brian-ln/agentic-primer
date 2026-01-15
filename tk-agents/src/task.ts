@@ -66,8 +66,8 @@ export class TaskNode implements NodeActor {
       // Task-specific messages
       case "start":
         return this.handleStart(message.payload as { context?: Record<string, unknown> });
-      case "spawn":
-        return this.handleSpawn(message.payload as { goal: string; deliverables: string[]; criteria: ObjectiveCriterion[]; context?: Record<string, unknown> }, graph);
+      case "create_task":
+        return this.handleCreateTask(message.payload as { goal: string; deliverables: string[]; criteria: ObjectiveCriterion[]; context?: Record<string, unknown> }, graph);
       case "eval":
         return this.handleEval(graph);
       case "complete":
@@ -163,7 +163,7 @@ export class TaskNode implements NodeActor {
     return { success: true, state: this.properties.state };
   }
 
-  private handleSpawn(
+  private handleCreateTask(
     payload: { goal: string; deliverables: string[]; criteria: ObjectiveCriterion[]; context?: Record<string, unknown> },
     graph: Graph
   ): { childTaskId: string; success: boolean } {
