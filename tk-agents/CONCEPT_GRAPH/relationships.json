@@ -1,0 +1,370 @@
+{
+  "relationships": [
+    {
+      "from": "actor-model",
+      "to": "message-passing",
+      "type": "uses",
+      "description": "Actors communicate exclusively via message passing"
+    },
+    {
+      "from": "actor-model",
+      "to": "process-isolation",
+      "type": "requires",
+      "description": "Actors maintain private state with isolated memory"
+    },
+    {
+      "from": "erlang-otp",
+      "to": "actor-model",
+      "type": "implements",
+      "description": "OTP is a production implementation of actor model"
+    },
+    {
+      "from": "erlang-otp",
+      "to": "supervision-tree",
+      "type": "provides",
+      "description": "OTP includes supervision tree mechanism"
+    },
+    {
+      "from": "erlang-otp",
+      "to": "beam-vm",
+      "type": "runs-on",
+      "description": "Erlang/OTP runs on the BEAM virtual machine"
+    },
+    {
+      "from": "supervision-tree",
+      "to": "let-it-crash",
+      "type": "embodies",
+      "description": "Supervision enables 'let it crash' philosophy"
+    },
+    {
+      "from": "supervision-tree",
+      "to": "fault-tolerance",
+      "type": "achieves",
+      "description": "Provides automatic recovery and fault isolation"
+    },
+    {
+      "from": "gen-server",
+      "to": "behavior-pattern",
+      "type": "is-a",
+      "description": "gen_server is an OTP behavior"
+    },
+    {
+      "from": "gen-statem",
+      "to": "behavior-pattern",
+      "type": "is-a",
+      "description": "gen_statem is an OTP behavior"
+    },
+    {
+      "from": "gen-statem",
+      "to": "state-machine",
+      "type": "implements",
+      "description": "Provides explicit state machine behavior"
+    },
+    {
+      "from": "mailbox",
+      "to": "message-passing",
+      "type": "implements",
+      "description": "Mailbox queues messages for asynchronous delivery"
+    },
+    {
+      "from": "mailbox",
+      "to": "pattern-matching",
+      "type": "uses",
+      "description": "Selective receive uses pattern matching"
+    },
+    {
+      "from": "mailbox",
+      "to": "backpressure",
+      "type": "requires",
+      "description": "Needs backpressure to prevent overflow"
+    },
+    {
+      "from": "smalltalk",
+      "to": "message-passing",
+      "type": "pioneered",
+      "description": "Smalltalk pioneered message-based computation"
+    },
+    {
+      "from": "smalltalk",
+      "to": "alan-kay",
+      "type": "created-by",
+      "description": "Alan Kay designed Smalltalk"
+    },
+    {
+      "from": "graph-protocol",
+      "to": "actor-model",
+      "type": "combines-with",
+      "description": "Applies actor model to graph structures"
+    },
+    {
+      "from": "graph-protocol",
+      "to": "graph-theory",
+      "type": "based-on",
+      "description": "Uses graph structure for organization"
+    },
+    {
+      "from": "task-graph",
+      "to": "graph-protocol",
+      "type": "implements",
+      "description": "Task graph uses graph protocol for interactions"
+    },
+    {
+      "from": "task-graph",
+      "to": "state-machine",
+      "type": "uses",
+      "description": "Tasks have lifecycle state machines"
+    },
+    {
+      "from": "task-graph",
+      "to": "dag",
+      "type": "often-is",
+      "description": "Task dependencies often form DAGs"
+    },
+    {
+      "from": "knowledge-graph",
+      "to": "graph-theory",
+      "type": "based-on",
+      "description": "Built on graph data structure"
+    },
+    {
+      "from": "knowledge-graph",
+      "to": "semantic-web",
+      "type": "relates-to",
+      "description": "Shares semantic representation goals"
+    },
+    {
+      "from": "memory-reconsolidation",
+      "to": "synaptic-plasticity",
+      "type": "mechanism",
+      "description": "Reconsolidation involves synaptic changes"
+    },
+    {
+      "from": "memory-reconsolidation",
+      "to": "working-memory",
+      "type": "interacts-with",
+      "description": "Memories become labile when retrieved to working memory"
+    },
+    {
+      "from": "access-pattern",
+      "to": "memory-reconsolidation",
+      "type": "influences",
+      "description": "Access patterns determine which memories get reconsolidated"
+    },
+    {
+      "from": "event-sourcing",
+      "to": "immutability",
+      "type": "requires",
+      "description": "Events are immutable records of changes"
+    },
+    {
+      "from": "event-sourcing",
+      "to": "time-travel-debugging",
+      "type": "enables",
+      "description": "Event log allows replay and time travel"
+    },
+    {
+      "from": "event-sourcing",
+      "to": "cqrs",
+      "type": "often-used-with",
+      "description": "Event sourcing commonly paired with CQRS"
+    },
+    {
+      "from": "category-theory",
+      "to": "composition",
+      "type": "formalizes",
+      "description": "Category theory studies composition laws"
+    },
+    {
+      "from": "category-theory",
+      "to": "functional-programming",
+      "type": "influences",
+      "description": "Provides theoretical foundation for FP"
+    },
+    {
+      "from": "lambda-calculus",
+      "to": "functional-programming",
+      "type": "foundation-of",
+      "description": "Lambda calculus is basis of functional programming"
+    },
+    {
+      "from": "functional-programming",
+      "to": "pure-functions",
+      "type": "emphasizes",
+      "description": "FP favors pure functions without side effects"
+    },
+    {
+      "from": "functional-programming",
+      "to": "immutability",
+      "type": "emphasizes",
+      "description": "FP uses immutable data structures"
+    },
+    {
+      "from": "functional-programming",
+      "to": "composition",
+      "type": "emphasizes",
+      "description": "FP builds programs through function composition"
+    },
+    {
+      "from": "pure-functions",
+      "to": "determinism",
+      "type": "enables",
+      "description": "Pure functions are deterministic"
+    },
+    {
+      "from": "pure-functions",
+      "to": "referential-transparency",
+      "type": "provides",
+      "description": "Pure functions can be replaced with their values"
+    },
+    {
+      "from": "pattern-matching",
+      "to": "functional-programming",
+      "type": "feature-of",
+      "description": "Pattern matching is common in functional languages"
+    },
+    {
+      "from": "fault-tolerance",
+      "to": "circuit-breaker",
+      "type": "uses",
+      "description": "Circuit breaker pattern improves fault tolerance"
+    },
+    {
+      "from": "fault-tolerance",
+      "to": "replication",
+      "type": "uses",
+      "description": "Replication provides redundancy for fault tolerance"
+    },
+    {
+      "from": "beam-vm",
+      "to": "green-threads",
+      "type": "implements",
+      "description": "BEAM uses lightweight processes (green threads)"
+    },
+    {
+      "from": "beam-vm",
+      "to": "process-isolation",
+      "type": "provides",
+      "description": "BEAM isolates process memory"
+    },
+    {
+      "from": "homoiconicity",
+      "to": "lisp",
+      "type": "property-of",
+      "description": "Lisp is homoiconic (code is data)"
+    },
+    {
+      "from": "lisp",
+      "to": "lambda-calculus",
+      "type": "inspired-by",
+      "description": "Lisp influenced by lambda calculus"
+    },
+    {
+      "from": "workflow-engine",
+      "to": "task-graph",
+      "type": "uses",
+      "description": "Workflow engines manage task graphs"
+    },
+    {
+      "from": "workflow-engine",
+      "to": "state-machine",
+      "type": "uses",
+      "description": "Workflow steps have state machines"
+    },
+    {
+      "from": "semantic-web",
+      "to": "ontology",
+      "type": "uses",
+      "description": "Semantic web uses ontologies to define meaning"
+    },
+    {
+      "from": "semantic-web",
+      "to": "knowledge-graph",
+      "type": "enables",
+      "description": "Semantic web technologies enable knowledge graphs"
+    },
+    {
+      "from": "cognitive-architecture",
+      "to": "working-memory",
+      "type": "models",
+      "description": "Cognitive architectures model working memory"
+    },
+    {
+      "from": "cognitive-architecture",
+      "to": "memory-reconsolidation",
+      "type": "may-model",
+      "description": "Some cognitive architectures model reconsolidation"
+    },
+    {
+      "from": "distributed-systems",
+      "to": "message-passing",
+      "type": "uses",
+      "description": "Distributed systems communicate via messages"
+    },
+    {
+      "from": "distributed-systems",
+      "to": "consensus",
+      "type": "requires",
+      "description": "Distributed systems need consensus algorithms"
+    },
+    {
+      "from": "distributed-systems",
+      "to": "fault-tolerance",
+      "type": "requires",
+      "description": "Must handle network and node failures"
+    },
+    {
+      "from": "reactive-systems",
+      "to": "message-passing",
+      "type": "built-on",
+      "description": "Reactive systems are message-driven"
+    },
+    {
+      "from": "reactive-systems",
+      "to": "backpressure",
+      "type": "uses",
+      "description": "Reactive systems handle backpressure"
+    },
+    {
+      "from": "reactive-systems",
+      "to": "fault-tolerance",
+      "type": "requires",
+      "description": "Reactive systems must be resilient"
+    },
+    {
+      "from": "type-system",
+      "to": "polymorphism",
+      "type": "enables",
+      "description": "Type systems support polymorphism"
+    },
+    {
+      "from": "dag",
+      "to": "graph-theory",
+      "type": "is-a",
+      "description": "DAG is a specialized graph structure"
+    },
+    {
+      "from": "task-graph",
+      "to": "access-pattern",
+      "type": "creates",
+      "description": "Task execution creates access patterns over knowledge"
+    },
+    {
+      "from": "knowledge-graph",
+      "to": "access-pattern",
+      "type": "exhibits",
+      "description": "Knowledge retrieval shows access patterns"
+    },
+    {
+      "from": "event-sourcing",
+      "to": "access-pattern",
+      "type": "records",
+      "description": "Event logs capture access patterns over time"
+    },
+    {
+      "from": "graph-protocol",
+      "to": "knowledge-graph",
+      "type": "can-represent",
+      "description": "Graph protocol can model knowledge graphs"
+    }
+  ]
+}
