@@ -4,6 +4,7 @@ import { describe, test, expect, beforeEach } from "bun:test";
 import { Registry } from "./registry";
 import { BashActor, createBashActor } from "./bash";
 import { MockActor, createEchoMock, createClaudeMock, createFailingMock } from "./mock";
+import { HumanActor, createHumanActor } from "./human";
 import { createMessage } from "./base";
 
 describe("Registry", () => {
@@ -571,5 +572,110 @@ describe("Structured Errors", () => {
     const fatal = fatalError("Out of memory");
     expect(fatal.category).toBe("fatal");
     expect(fatal.retryable).toBe(false);
+  });
+});
+
+describe("HumanActor", () => {
+  test("creates human actor with basic config", () => {
+    const human = createHumanActor({ id: "human-1" });
+
+    expect(human.id).toBe("human-1");
+    expect(human.type).toBe("agent");
+  });
+
+  test("responds with awaiting_human_response by default", async () => {
+    const human = createHumanActor({ id: "human-1" });
+
+    const response = await human.send(createMessage("question", { text: "What should I do?" }));
+
+    expect(response.success).toBe(true);
+    expect(response.data).toBeDefined();
+    const data = response.data as { status: string; message: string };
+    expect(data.status).toBe("awaiting_human_response");
+    expect(data.message).toBe("Human input required");
+  });
+
+  test("handles ping message", async () => {
+    const human = createHumanActor({ id: "human-1" });
+
+    const response = await human.send(createMessage("ping", {}));
+
+    expect(response.success).toBe(true);
+    const data = response.data as { alive: boolean };
+    expect(data.alive).toBe(true);
+  });
+
+  test("uses callback when provided", async () => {
+    const human = createHumanActor({
+      id: "human-1",
+      onInputNeeded: async (msg) => {
+        // Simulate human providing input
+        return "Yes, proceed with the plan";
+      },
+    });
+
+    const response = await human.send(createMessage("approval", { action: "deploy" }));
+
+    expect(response.success).toBe(true);
+    const data = response.data as { humanResponse: string };
+    expect(data.humanResponse).toBe("Yes, proceed with the plan");
+  });
+
+  test("tracks pending messages", async () => {
+    const human = createHumanActor({ id: "human-1" });
+
+    expect(human.getPendingMessages().length).toBe(0);
+
+    await human.send(createMessage("question", { text: "Question 1" }));
+    await human.send(createMessage("question", { text: "Question 2" }));
+
+    expect(human.getPendingMessages().length).toBe(2);
+
+    human.clearPendingMessages();
+    expect(human.getPendingMessages().length).toBe(0);
+  });
+
+  test("can be registered in registry", async () => {
+    const registry = new Registry();
+    const human = createHumanActor({ id: "human-approver" });
+
+    registry.register(human);
+
+    expect(registry.has("human-approver")).toBe(true);
+
+    const response = await registry.sendTo("human-approver", "decision", { action: "merge PR" });
+    expect(response.success).toBe(true);
+  });
+
+  test("works in multi-actor workflow", async () => {
+    const registry = new Registry();
+
+    // AI agent makes a plan
+    const planner = createClaudeMock("planner", ["Here's my plan: deploy to production"]);
+
+    // Human reviews and approves
+    const human = createHumanActor({
+      id: "human-reviewer",
+      onInputNeeded: async (msg) => "Approved",
+    });
+
+    // Execution actor carries out approved plan
+    const executor = createEchoMock("executor");
+
+    registry.register(planner);
+    registry.register(human);
+    registry.register(executor);
+
+    // Workflow: planner → human → executor
+    const plan = await registry.sendTo("planner", "create_plan", {});
+    expect(plan.success).toBe(true);
+
+    const approval = await registry.sendTo("human-reviewer", "review", { plan: plan.data });
+    expect(approval.success).toBe(true);
+    const approvalData = approval.data as { humanResponse: string };
+    expect(approvalData.humanResponse).toBe("Approved");
+
+    const execution = await registry.sendTo("executor", "execute", { plan: plan.data });
+    expect(execution.success).toBe(true);
   });
 });
