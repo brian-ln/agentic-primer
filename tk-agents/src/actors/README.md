@@ -1,13 +1,20 @@
-# Actor System - New Implementation
+# Actor System
 
-A clean, spec-compliant implementation of the actor model following `ACTOR_SPEC.md`.
+A clean, spec-compliant implementation of the actor model.
+
+## Specifications
+
+- **[ACTOR_SYSTEM.spec.md](./ACTOR_SYSTEM.spec.md)** - Complete specification
+- **[ACTOR_SYSTEM.spec.datalog](./ACTOR_SYSTEM.spec.datalog)** - Formal verification model
+- **[SPEC.md](./SPEC.md)** - Quick reference and verification guide
+- **[IMPLEMENTATION_NOTES.md](./IMPLEMENTATION_NOTES.md)** - How implementation satisfies spec
 
 ## Overview
 
 This implementation provides a minimal, type-safe actor system with three core principles:
 
 1. **Actors are pure functions** - All dependencies explicit, no hidden state
-2. **Send is the only primitive** - `send(targetId, message)` for all communication
+2. **Send is the only primitive** - `send(targetAddress, message)` for all communication
 3. **Two APIs for bridging** - External uses `actor.send()`, internal uses `send()`
 
 ## Quick Start
@@ -75,7 +82,7 @@ interface Actor {
 #### `SendFunction`
 ```typescript
 type SendFunction = (
-  targetId: string,
+  targetAddress: string,
   message: Message
 ) => Promise<Response>;
 ```
@@ -120,12 +127,12 @@ register(id: string, actor: Actor): void;
 system.register("my-actor", actor);
 ```
 
-#### `System.send(targetId, message)`
+#### `System.send(targetAddress, message)`
 
 Sends a message to a registered actor.
 
 ```typescript
-send(targetId: string, message: Message): Promise<Response>;
+send(targetAddress: string, message: Message): Promise<Response>;
 ```
 
 **Example:**
@@ -155,11 +162,11 @@ const EchoActor: ActorFactory<{ prefix: string }> = (data, send) => ({
 ### Pattern 2: Actor-to-Actor Communication
 
 ```typescript
-const NotifierActor: ActorFactory<{ targetId: string }> = (data, send) => ({
+const NotifierActor: ActorFactory<{ targetAddress: string }> = (data, send) => ({
   send: async (message: Message) => {
     if (message.type === "notify") {
       // Use send from scope (internal API)
-      await send(data.targetId, {
+      await send(data.targetAddress, {
         id: crypto.randomUUID(),
         type: "notification",
         payload: message.payload,
@@ -261,7 +268,7 @@ const MyActor: ActorFactory<Data> = (data, send) => {
 
 ### Two APIs
 - **External (bridge):** `actor.send(message)` - 1 argument
-- **Internal:** `send(targetId, message)` - 2 arguments
+- **Internal:** `send(targetAddress, message)` - 2 arguments
 
 ### Uniform Composition
 Systems ARE actors - they can be nested:
