@@ -1,26 +1,25 @@
 /**
  * System implementation - provides send and maintains actor registry
- * Following ACTOR_SPEC.md
+ * Following ACTOR_SYSTEM.spec.md
  */
 
 import type { Actor, Address, Message, Response, SendFunction } from "./base";
 
 /**
- * System interface - extends Actor with registration capability
- * Systems ARE actors (uniform composition)
+ * System interface
+ * Provides messaging infrastructure and actor registration
  */
-export interface System extends Actor {
+export interface System {
   /**
-   * Send function that can be used both as:
-   * 1. SendFunction - send(targetId, message) for actor-to-actor
-   * 2. Actor.send - send(message) for external -> actor
+   * Send function - routes messages to actors by address
    */
-  send: SendFunction & ((message: Message) => Promise<Response>);
+  send: SendFunction;
 
   /**
-   * Register an actor with an address
+   * Register an actor and return its Address proxy
+   * The returned Address has both identity (__id) and behavior (.send())
    */
-  register: (address: Address, actor: Actor) => void;
+  register: (actor: Actor) => Address;
 }
 
 /**
@@ -28,84 +27,41 @@ export interface System extends Actor {
  *
  * The system:
  * - Provides the send implementation
- * - Maintains the actor registry
+ * - Maintains the actor registry (symbol -> actor mapping)
+ * - Creates Address proxies with .send() methods
  * - Routes messages to actors
- * - IS an actor itself (uniform composition)
  */
-export function createSystem(): System {
-  const actors = new Map<Address, Actor>();
+export function System(): System {
+  const actors = new Map<symbol, Actor>();
 
   // The send primitive implementation
-  const send: SendFunction = async (targetAddress: Address, message: Message) => {
-    const actor = actors.get(targetAddress);
+  const send: SendFunction = async (addr: Address, message: Message) => {
+    const actor = actors.get(addr.__id);
     if (!actor) {
       return {
         success: false,
-        error: `Actor not found: ${targetAddress}`,
+        error: "Actor not found",
       };
     }
     return actor.send(message);
   };
 
-  // Register an actor
-  const register = (address: Address, actor: Actor) => {
-    actors.set(address, actor);
-  };
+  // Register an actor and return Address proxy
+  const register = (actor: Actor): Address => {
+    const id = Symbol();
+    actors.set(id, actor);
 
-  // System as actor - when messages sent to system itself
-  // This enables uniform composition (systems in systems)
-  const systemAsSend = async (message: Message) => {
-    // System can handle meta-messages like "list", "stats", etc.
-    if (message.type === "list") {
-      return {
-        success: true,
-        data: Array.from(actors.keys()),
-      };
-    }
-
-    if (message.type === "stats") {
-      return {
-        success: true,
-        data: { actorCount: actors.size },
-      };
-    }
-
-    // Route to specific actor if targetAddress in payload
-    if (
-      message.type === "route" &&
-      typeof message.payload === "object" &&
-      message.payload !== null &&
-      "targetAddress" in message.payload &&
-      "message" in message.payload
-    ) {
-      const { targetAddress, message: innerMessage } = message.payload as {
-        targetAddress: Address;
-        message: Message;
-      };
-      return send(targetAddress, innerMessage);
-    }
-
-    return {
-      success: false,
-      error: `Unknown system message type: ${message.type}`,
+    // Create Address proxy with .send() method
+    const address: Address = {
+      __id: id,
+      send: (message: Message) => send(address, message),
     };
-  };
 
-  // Create the dual-purpose send function
-  // It can be called with 1 arg (as Actor) or 2 args (as SendFunction)
-  const dualSend = ((...args: unknown[]) => {
-    if (args.length === 1) {
-      // Called as actor.send(message)
-      return systemAsSend(args[0] as Message);
-    } else if (args.length === 2) {
-      // Called as send(targetId, message)
-      return send(args[0] as string, args[1] as Message);
-    }
-    throw new Error("Invalid send call - expected 1 or 2 arguments");
-  }) as SendFunction & ((message: Message) => Promise<Response>);
+    return address;
+  };
 
   return {
-    send: dualSend,
+    send,
     register,
   };
 }

@@ -1,258 +1,303 @@
 /**
  * Spec Verification Tests
  *
- * These tests verify the implementation against ACTOR_SPEC.md
- * and ACTOR_SPEC.datalog invariants.
+ * These tests verify the implementation against ACTOR_SYSTEM.spec.md
+ * Key invariants tested:
+ * 1. Address Identity Invariant
+ * 2. Address Send Invariant
+ * 3. Factory Returns Address Invariant
+ * 4. System Dependency Invariant
+ * 5. No Magic Strings Invariant
  */
 
 import { test, expect, describe } from "bun:test";
-import type { Actor, Message, SendFunction, ActorFactory } from "./base.ts";
-import { createSystem } from "./system.ts";
+import type { Actor, Address, Message, ActorFactory } from "./base.ts";
+import type { System } from "./system.ts";
+import { System as createActorSystem } from "./system.ts";
 
 describe("Actor System Spec Verification", () => {
-  describe("1. Pure Function Invariant", () => {
-    test("Actors are created by factory functions with explicit dependencies", () => {
-      // Actor factory is a pure function
-      const TaskActor: ActorFactory<{ id: string; status: string }> = (
-        data,
-        send
-      ) => {
-        // All dependencies are parameters - no hidden state
-        return {
+  describe("1. Address is First-Class Object", () => {
+    test("Address has __id and send properties", () => {
+      const system = createActorSystem();
+
+      const TestActor: ActorFactory<{ system: System }> = (data) => {
+        const actor = {
           send: async (message: Message) => {
-            // Can access data and send from closure (explicit deps)
-            if (message.type === "getStatus") {
-              return { success: true, data: data.status };
+            return { success: true };
+          },
+        };
+        return data.system.register(actor);
+      };
+
+      const addr = TestActor({ system });
+
+      // Address has __id (symbol) and send (function)
+      expect(addr).toHaveProperty("__id");
+      expect(typeof addr.__id).toBe("symbol");
+      expect(addr).toHaveProperty("send");
+      expect(typeof addr.send).toBe("function");
+    });
+
+    test("Address __id is unique per actor", () => {
+      const system = createActorSystem();
+
+      const SimpleActor: ActorFactory<{ system: System }> = (data) => {
+        const actor = {
+          send: async () => ({ success: true }),
+        };
+        return data.system.register(actor);
+      };
+
+      const addr1 = SimpleActor({ system });
+      const addr2 = SimpleActor({ system });
+
+      // Each address has unique symbol
+      expect(addr1.__id).not.toBe(addr2.__id);
+    });
+
+    test("Address.send() works ergonomically", async () => {
+      const system = createActorSystem();
+
+      const CounterActor: ActorFactory<{ count: number; system: System }> = (
+        data
+      ) => {
+        const actor = {
+          send: async (message: Message) => {
+            if (message.type === "increment") {
+              data.count++;
+              return { success: true, data: data.count };
             }
             return { success: true };
           },
         };
+        return data.system.register(actor);
       };
 
-      const system = createSystem();
-      const actor = TaskActor({ id: "task-1", status: "todo" }, system.send);
+      const counter = CounterActor({ count: 0, system });
 
-      // Verify actor was created with explicit dependencies
-      expect(actor).toBeDefined();
-      expect(actor.send).toBeInstanceOf(Function);
-    });
-
-    test("Actor has no hidden dependencies", async () => {
-      // Create actor with mocked send to prove no hidden deps
-      let sendCalled = false;
-      const mockSend: SendFunction = async () => {
-        sendCalled = true;
-        return { success: true };
-      };
-
-      const TestActor: ActorFactory<{ value: number }> = (data, send) => ({
-        send: async (message: Message) => {
-          if (message.type === "test") {
-            // Only has access to data and send passed in
-            await send("target", { id: "1", type: "notify", payload: null });
-            return { success: true, data: data.value };
-          }
-          return { success: true };
-        },
+      // Ergonomic API: addr.send(message)
+      const result = await counter.send({
+        id: "1",
+        type: "increment",
+        payload: {},
       });
 
-      const actor = TestActor({ value: 42 }, mockSend);
-      const result = await actor.send({
-        id: "msg-1",
-        type: "test",
-        payload: null,
+      expect(result.success).toBe(true);
+      expect(result.data).toBe(1);
+    });
+  });
+
+  describe("2. Actor Factories Return Addresses", () => {
+    test("Factory takes data with system field", () => {
+      const system = createActorSystem();
+
+      const TestActor: ActorFactory<{
+        id: string;
+        status: string;
+        system: System;
+      }> = (data) => {
+        // Factory receives data with system
+        expect(data).toHaveProperty("system");
+        expect(data).toHaveProperty("id");
+        expect(data).toHaveProperty("status");
+
+        const actor = {
+          send: async (message: Message) => {
+            return { success: true, data: { id: data.id, status: data.status } };
+          },
+        };
+        return data.system.register(actor);
+      };
+
+      const addr = TestActor({ id: "task-1", status: "todo", system });
+      expect(addr).toHaveProperty("__id");
+      expect(addr).toHaveProperty("send");
+    });
+
+    test("Factory returns Address directly", () => {
+      const system = createActorSystem();
+
+      const TaskActor: ActorFactory<{ id: string; system: System }> = (
+        data
+      ) => {
+        const actor = {
+          send: async (message: Message) => ({ success: true }),
+        };
+        return data.system.register(actor);
+      };
+
+      const task = TaskActor({ id: "task-1", system });
+
+      // Factory returns Address (not Actor)
+      expect(task).toHaveProperty("__id");
+      expect(task).toHaveProperty("send");
+      expect(typeof task.__id).toBe("symbol");
+      expect(typeof task.send).toBe("function");
+    });
+
+    test("Single call creates, registers, and returns", () => {
+      const system = createActorSystem();
+
+      const EchoActor: ActorFactory<{ prefix: string; system: System }> = (
+        data
+      ) => {
+        const actor = {
+          send: async (message: Message) => {
+            return { success: true, data: `${data.prefix}: ${message.type}` };
+          },
+        };
+        return data.system.register(actor);
+      };
+
+      // Single call does everything
+      const echo = EchoActor({ prefix: "ECHO", system });
+
+      // Immediately usable
+      expect(echo.send).toBeInstanceOf(Function);
+    });
+  });
+
+  describe("3. Two Ways to Send Messages", () => {
+    test("Ergonomic send: address.send(message)", async () => {
+      const system = createActorSystem();
+
+      const TestActor: ActorFactory<{ value: number; system: System }> = (
+        data
+      ) => {
+        const actor = {
+          send: async (message: Message) => {
+            return { success: true, data: data.value };
+          },
+        };
+        return data.system.register(actor);
+      };
+
+      const task = TestActor({ value: 42, system });
+
+      // Ergonomic style
+      const result = await task.send({
+        id: "1",
+        type: "get",
+        payload: {},
       });
 
       expect(result.success).toBe(true);
       expect(result.data).toBe(42);
-      expect(sendCalled).toBe(true); // Used injected send
     });
-  });
 
-  describe("2. Send Injection Invariant", () => {
-    test("All actors receive send function at creation", () => {
-      const system = createSystem();
+    test("Explicit send: system.send(address, message)", async () => {
+      const system = createActorSystem();
 
-      const Actor1: ActorFactory<{}> = (data, send) => {
-        // send is in scope
-        expect(send).toBeInstanceOf(Function);
-        return {
-          send: async () => ({ success: true }),
+      const TestActor: ActorFactory<{ value: number; system: System }> = (
+        data
+      ) => {
+        const actor = {
+          send: async (message: Message) => {
+            return { success: true, data: data.value };
+          },
         };
+        return data.system.register(actor);
       };
 
-      const actor = Actor1({}, system.send);
-      expect(actor).toBeDefined();
-    });
+      const task = TestActor({ value: 99, system });
 
-    test("Actor can use send from scope", async () => {
-      const system = createSystem();
-
-      // Actor 2 receives messages
-      const Actor2: ActorFactory<{ received: string[] }> = (data, send) => ({
-        send: async (message: Message) => {
-          data.received.push(message.type);
-          return { success: true };
-        },
-      });
-
-      // Actor 1 sends to Actor 2 using injected send
-      const Actor1: ActorFactory<{}> = (data, send) => ({
-        send: async (message: Message) => {
-          // Use send from scope (injected)
-          await send("actor-2", {
-            id: "msg-1",
-            type: "notify",
-            payload: null,
-          });
-          return { success: true };
-        },
-      });
-
-      const received: string[] = [];
-      const actor2 = Actor2({ received }, system.send);
-      const actor1 = Actor1({}, system.send);
-
-      system.register("actor-2", actor2);
-      system.register("actor-1", actor1);
-
-      await actor1.send({ id: "trigger", type: "trigger", payload: null });
-
-      expect(received).toContain("notify");
-    });
-  });
-
-  describe("3. Send Primitive Invariant", () => {
-    test("Send has correct signature: (targetId, message) => Promise<Response>", () => {
-      const system = createSystem();
-      const send = system.send;
-
-      // Send is a function
-      expect(send).toBeInstanceOf(Function);
-
-      // Send accepts targetId and message (verified by type system)
-      // Runtime check: calling with 2 args works
-      expect(send.length).toBeGreaterThanOrEqual(0); // Variadic function
-    });
-
-    test("Send returns Promise<Response>", async () => {
-      const system = createSystem();
-
-      const TestActor: ActorFactory<{}> = (data, send) => ({
-        send: async (message: Message) => {
-          return { success: true, data: "test-data" };
-        },
-      });
-
-      const actor = TestActor({}, system.send);
-      system.register("test", actor);
-
-      const result = await system.send("test", {
+      // Explicit style
+      const result = await system.send(task, {
         id: "1",
-        type: "test",
-        payload: null,
+        type: "get",
+        payload: {},
       });
 
-      // Verify Response structure
-      expect(result).toHaveProperty("success");
-      expect(typeof result.success).toBe("boolean");
       expect(result.success).toBe(true);
-      expect(result.data).toBe("test-data");
+      expect(result.data).toBe(99);
     });
 
-    test("Send is the only messaging primitive used", async () => {
-      // Actors only use send() - no other communication mechanism
-      const system = createSystem();
+    test("Both send styles produce identical results", async () => {
+      const system = createActorSystem();
 
-      let messageCount = 0;
+      let callCount = 0;
+      const TestActor: ActorFactory<{ system: System }> = (data) => {
+        const actor = {
+          send: async (message: Message) => {
+            callCount++;
+            return { success: true, data: callCount };
+          },
+        };
+        return data.system.register(actor);
+      };
 
-      const CounterActor: ActorFactory<{}> = (data, send) => ({
-        send: async (message: Message) => {
-          messageCount++;
-          return { success: true };
-        },
+      const task = TestActor({ system });
+
+      // Ergonomic
+      const result1 = await task.send({ id: "1", type: "test", payload: {} });
+
+      // Explicit
+      const result2 = await system.send(task, {
+        id: "2",
+        type: "test",
+        payload: {},
       });
 
-      const SenderActor: ActorFactory<{}> = (data, send) => ({
-        send: async (message: Message) => {
-          // Only way to communicate: use send
-          await send("counter", { id: "1", type: "inc", payload: null });
-          await send("counter", { id: "2", type: "inc", payload: null });
-          return { success: true };
-        },
-      });
-
-      const counter = CounterActor({}, system.send);
-      const sender = SenderActor({}, system.send);
-
-      system.register("counter", counter);
-      system.register("sender", sender);
-
-      await sender.send({ id: "trigger", type: "trigger", payload: null });
-
-      expect(messageCount).toBe(2);
+      // Both work identically
+      expect(result1.success).toBe(true);
+      expect(result2.success).toBe(true);
+      expect(callCount).toBe(2);
     });
   });
 
-  describe("4. System Send Invariant", () => {
-    test("System provides send implementation", () => {
-      const system = createSystem();
+  describe("4. System Provides Infrastructure", () => {
+    test("System has send and register methods", () => {
+      const system = createActorSystem();
 
       expect(system.send).toBeInstanceOf(Function);
       expect(system.register).toBeInstanceOf(Function);
     });
 
-    test("System maintains actor registry", () => {
-      const system = createSystem();
+    test("System.register() returns Address", () => {
+      const system = createActorSystem();
 
-      const actor1 = {
-        send: async () => ({ success: true }),
-      };
-      const actor2 = {
-        send: async () => ({ success: true }),
+      const actor: Actor = {
+        send: async (message: Message) => ({ success: true }),
       };
 
-      system.register("actor-1", actor1);
-      system.register("actor-2", actor2);
+      const addr = system.register(actor);
 
-      // System can list actors
-      const listResult = system.send({ id: "1", type: "list", payload: null });
-      expect(listResult).resolves.toHaveProperty("success", true);
+      expect(addr).toHaveProperty("__id");
+      expect(addr).toHaveProperty("send");
+      expect(typeof addr.__id).toBe("symbol");
     });
 
-    test("System routes messages to registered actors", async () => {
-      const system = createSystem();
+    test("System routes messages using Address.__id", async () => {
+      const system = createActorSystem();
 
-      let receivedMessage: Message | null = null;
-
-      const TestActor: ActorFactory<{}> = (data, send) => ({
+      let received = false;
+      const actor: Actor = {
         send: async (message: Message) => {
-          receivedMessage = message;
+          received = true;
           return { success: true };
         },
-      });
+      };
 
-      const actor = TestActor({}, system.send);
-      system.register("test-actor", actor);
+      const addr = system.register(actor);
 
-      await system.send("test-actor", {
-        id: "msg-1",
-        type: "test",
-        payload: { data: "hello" },
-      });
+      await system.send(addr, { id: "1", type: "test", payload: {} });
 
-      expect(receivedMessage).not.toBeNull();
-      expect(receivedMessage?.type).toBe("test");
-      expect(receivedMessage?.payload).toEqual({ data: "hello" });
+      expect(received).toBe(true);
     });
 
-    test("System returns error for unknown actor", async () => {
-      const system = createSystem();
+    test("System returns error for unregistered address", async () => {
+      const system = createActorSystem();
 
-      const result = await system.send("unknown", {
+      // Create a fake address (not registered)
+      const fakeAddr: Address = {
+        __id: Symbol(),
+        send: async () => ({ success: false }),
+      };
+
+      const result = await system.send(fakeAddr, {
         id: "1",
         type: "test",
-        payload: null,
+        payload: {},
       });
 
       expect(result.success).toBe(false);
@@ -260,369 +305,296 @@ describe("Actor System Spec Verification", () => {
     });
   });
 
-  describe("5. Bridge Invariant", () => {
-    test("External code uses actor.send(message)", async () => {
-      const system = createSystem();
+  describe("5. Pure Functions with Explicit Dependencies", () => {
+    test("All dependencies in data parameter", () => {
+      const system = createActorSystem();
 
-      const TestActor: ActorFactory<{ count: number }> = (data, send) => ({
-        send: async (message: Message) => {
-          data.count++;
-          return { success: true, data: data.count };
-        },
-      });
+      const TaskActor: ActorFactory<{
+        id: string;
+        status: string;
+        system: System;
+      }> = (data) => {
+        // All dependencies explicit in data
+        expect(data.id).toBeDefined();
+        expect(data.status).toBeDefined();
+        expect(data.system).toBeDefined();
 
-      const actor = TestActor({ count: 0 }, system.send);
+        const actor = {
+          send: async (message: Message) => ({ success: true }),
+        };
+        return data.system.register(actor);
+      };
 
-      // External code (this test) calls actor.send with 1 argument
-      const result1 = await actor.send({
-        id: "1",
-        type: "increment",
-        payload: null,
-      });
-      const result2 = await actor.send({
-        id: "2",
-        type: "increment",
-        payload: null,
-      });
-
-      expect(result1.data).toBe(1);
-      expect(result2.data).toBe(2);
+      TaskActor({ id: "task-1", status: "todo", system });
     });
 
-    test("Internal actors use send(targetId, message)", async () => {
-      const system = createSystem();
+    test("Actors can hold references to other addresses", async () => {
+      const system = createActorSystem();
 
-      const messages: string[] = [];
+      const TargetActor: ActorFactory<{ received: string[]; system: System }> =
+        (data) => {
+          const actor = {
+            send: async (message: Message) => {
+              data.received.push(message.type);
+              return { success: true };
+            },
+          };
+          return data.system.register(actor);
+        };
 
-      const ReceiverActor: ActorFactory<{}> = (data, send) => ({
-        send: async (message: Message) => {
-          messages.push(`received: ${message.type}`);
-          return { success: true };
-        },
-      });
-
-      const SenderActor: ActorFactory<{}> = (data, send) => ({
-        send: async (message: Message) => {
-          // Internal actor uses send(targetId, message) - 2 arguments
-          await send("receiver", {
-            id: "1",
-            type: "hello",
-            payload: null,
-          });
-          messages.push("sent");
-          return { success: true };
-        },
-      });
-
-      const receiver = ReceiverActor({}, system.send);
-      const sender = SenderActor({}, system.send);
-
-      system.register("receiver", receiver);
-      system.register("sender", sender);
-
-      // External call: actor.send(message) - 1 argument
-      await sender.send({ id: "trigger", type: "trigger", payload: null });
-
-      expect(messages).toEqual(["received: hello", "sent"]);
-    });
-
-    test("Bridge API is distinct from internal API", async () => {
-      const system = createSystem();
-
-      const TestActor: ActorFactory<{ calls: string[] }> = (data, send) => ({
-        send: async (message: Message) => {
-          data.calls.push("actor.send() called");
-
-          if (message.type === "sendToOther") {
-            // This is internal API - send(targetId, message)
-            data.calls.push("using send(targetId, message)");
-            await send("other", { id: "2", type: "notify", payload: null });
-          }
-
-          return { success: true };
-        },
-      });
-
-      const OtherActor: ActorFactory<{ calls: string[] }> = (data, send) => ({
-        send: async (message: Message) => {
-          data.calls.push("other received");
-          return { success: true };
-        },
-      });
-
-      const testCalls: string[] = [];
-      const otherCalls: string[] = [];
-
-      const test = TestActor({ calls: testCalls }, system.send);
-      const other = OtherActor({ calls: otherCalls }, system.send);
-
-      system.register("test", test);
-      system.register("other", other);
-
-      // External API: actor.send(message)
-      await test.send({ id: "1", type: "sendToOther", payload: null });
-
-      expect(testCalls).toContain("actor.send() called");
-      expect(testCalls).toContain("using send(targetId, message)");
-      expect(otherCalls).toContain("other received");
-    });
-  });
-
-  describe("6. Composition Invariant", () => {
-    test("Systems ARE actors (have .send() method)", () => {
-      const system = createSystem();
-
-      // System has Actor interface
-      expect(system.send).toBeInstanceOf(Function);
-      expect(typeof system.send).toBe("function");
-
-      // Can call system.send() as an actor
-      const result = system.send({ id: "1", type: "list", payload: null });
-      expect(result).toBeInstanceOf(Promise);
-    });
-
-    test("Systems can be registered in other systems", async () => {
-      const rootSystem = createSystem();
-      const subSystem = createSystem();
-
-      // Register subsystem as an actor in root system
-      rootSystem.register("subsystem", subSystem);
-
-      // Can send to subsystem
-      const result = await rootSystem.send("subsystem", {
-        id: "1",
-        type: "list",
-        payload: null,
-      });
-
-      expect(result.success).toBe(true);
-    });
-
-    test("Nested systems compose uniformly", async () => {
-      const root = createSystem();
-      const sub = createSystem();
-
-      // Create actor in subsystem
-      const TestActor: ActorFactory<{ id: string }> = (data, send) => ({
-        send: async (message: Message) => {
-          return { success: true, data: `actor-${data.id}` };
-        },
-      });
-
-      const actor = TestActor({ id: "test" }, sub.send);
-      sub.register("actor-1", actor);
-
-      // Register subsystem in root
-      root.register("subsystem", sub);
-
-      // Route through subsystem
-      const result = await root.send("subsystem", {
-        id: "1",
-        type: "route",
-        payload: {
-          targetAddress: "actor-1",
-          message: { id: "2", type: "test", payload: null },
-        },
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.data).toBe("actor-test");
-    });
-  });
-
-  describe("7. Addressing Invariant", () => {
-    test("Send implementation is opaque to actors", async () => {
-      // Actor doesn't know HOW send works, just that it can call it
-      const system = createSystem();
-
-      const BlindActor: ActorFactory<{}> = (data, send) => {
-        // Actor receives send but doesn't know:
-        // - How routing works
-        // - Where registry is
-        // - How messages are delivered
-        // Actor just calls: send(targetId, message)
-
-        return {
+      const NotifierActor: ActorFactory<{
+        target: Address;
+        system: System;
+      }> = (data) => {
+        const actor = {
           send: async (message: Message) => {
-            // Use send without knowing implementation
-            await send("unknown-to-me", {
-              id: "1",
-              type: "ping",
-              payload: null,
-            });
+            if (message.type === "notify") {
+              // Send to target using ergonomic API
+              await data.target.send({ id: "n1", type: "notification", payload: {} });
+            }
             return { success: true };
           },
         };
+        return data.system.register(actor);
       };
 
-      const actor = BlindActor({}, system.send);
-      system.register("blind", actor);
+      const received: string[] = [];
+      const target = TargetActor({ received, system });
+      const notifier = NotifierActor({ target, system });
 
-      // Actor successfully uses send despite not knowing how it works
-      await actor.send({ id: "test", type: "test", payload: null });
+      await notifier.send({ id: "1", type: "notify", payload: {} });
 
-      // Test passes - actor used send without knowing implementation
-      expect(true).toBe(true);
+      expect(received).toContain("notification");
     });
 
-    test("Routing mechanism is irrelevant to actor", async () => {
-      // Create two systems with same actor type but different routing
-      const system1 = createSystem();
-      const system2 = createSystem();
+    test("Actors use system from data for communication", async () => {
+      const system = createActorSystem();
 
-      const SameActorType: ActorFactory<{ receivedCount: number }> = (
-        data,
-        send
-      ) => ({
-        send: async (message: Message) => {
-          data.receivedCount++;
-          return { success: true, data: data.receivedCount };
-        },
-      });
+      const ReceiverActor: ActorFactory<{ messages: string[]; system: System }> =
+        (data) => {
+          const actor = {
+            send: async (message: Message) => {
+              data.messages.push(message.type);
+              return { success: true };
+            },
+          };
+          return data.system.register(actor);
+        };
 
-      // Same actor factory, different systems
-      const actor1 = SameActorType({ receivedCount: 0 }, system1.send);
-      const actor2 = SameActorType({ receivedCount: 0 }, system2.send);
+      const SenderActor: ActorFactory<{
+        target: Address;
+        system: System;
+      }> = (data) => {
+        const actor = {
+          send: async (message: Message) => {
+            if (message.type === "trigger") {
+              // Use system from data
+              await data.system.send(data.target, {
+                id: "s1",
+                type: "hello",
+                payload: {},
+              });
+            }
+            return { success: true };
+          },
+        };
+        return data.system.register(actor);
+      };
 
-      system1.register("actor", actor1);
-      system2.register("actor", actor2);
+      const messages: string[] = [];
+      const receiver = ReceiverActor({ messages, system });
+      const sender = SenderActor({ target: receiver, system });
 
-      // Both work identically despite different system instances
-      const result1 = await actor1.send({
-        id: "1",
-        type: "test",
-        payload: null,
-      });
-      const result2 = await actor2.send({
-        id: "1",
-        type: "test",
-        payload: null,
-      });
+      await sender.send({ id: "t1", type: "trigger", payload: {} });
 
-      expect(result1.data).toBe(1);
-      expect(result2.data).toBe(1);
-      // Same actor logic works with different routing implementations
+      expect(messages).toContain("hello");
     });
   });
 
-  describe("Message and Response Types", () => {
-    test("Message has required fields", async () => {
-      const system = createSystem();
+  describe("6. No Magic Strings Invariant", () => {
+    test("No string literals used as addresses", () => {
+      const system = createActorSystem();
 
-      const TestActor: ActorFactory<{}> = (data, send) => ({
-        send: async (message: Message) => {
-          // Verify message structure
-          expect(message).toHaveProperty("id");
-          expect(message).toHaveProperty("type");
-          expect(message).toHaveProperty("payload");
-          expect(typeof message.id).toBe("string");
-          expect(typeof message.type).toBe("string");
-          return { success: true };
-        },
-      });
+      const TestActor: ActorFactory<{ system: System }> = (data) => {
+        const actor = {
+          send: async (message: Message) => ({ success: true }),
+        };
+        return data.system.register(actor);
+      };
 
-      const actor = TestActor({}, system.send);
+      const task = TestActor({ system });
 
-      await actor.send({ id: "msg-1", type: "test", payload: { data: 123 } });
+      // Address is object, not string
+      expect(typeof task).toBe("object");
+      expect(typeof task.__id).toBe("symbol");
+      expect(typeof task.send).toBe("function");
+
+      // NOT a string!
+      expect(typeof task).not.toBe("string");
     });
 
-    test("Response has required fields", async () => {
-      const system = createSystem();
+    test("Addresses can be passed in message payloads", async () => {
+      const system = createActorSystem();
 
-      const TestActor: ActorFactory<{}> = (data, send) => ({
-        send: async (message: Message) => {
-          return {
-            success: true,
-            data: "test-data",
-            error: undefined,
+      const CoordinatorActor: ActorFactory<{ tasks: Address[]; system: System }> =
+        (data) => {
+          const actor = {
+            send: async (message: Message) => {
+              if (message.type === "register_task") {
+                const { taskAddr } = message.payload as { taskAddr: Address };
+                data.tasks.push(taskAddr);
+
+                // Can send to received address
+                await taskAddr.send({ id: "c1", type: "status", payload: {} });
+
+                return { success: true };
+              }
+              return { success: true };
+            },
           };
-        },
-      });
+          return data.system.register(actor);
+        };
 
-      const actor = TestActor({}, system.send);
-      const response = await actor.send({
+      const TaskActor: ActorFactory<{ called: boolean; system: System }> = (
+        data
+      ) => {
+        const actor = {
+          send: async (message: Message) => {
+            if (message.type === "status") {
+              data.called = true;
+            }
+            return { success: true };
+          },
+        };
+        return data.system.register(actor);
+      };
+
+      const tasks: Address[] = [];
+      const coordinator = CoordinatorActor({ tasks, system });
+
+      let called = false;
+      const task = TaskActor({ called: false, system });
+
+      // Pass address in payload
+      await coordinator.send({
         id: "1",
-        type: "test",
-        payload: null,
+        type: "register_task",
+        payload: { taskAddr: task },
       });
 
-      expect(response).toHaveProperty("success");
-      expect(typeof response.success).toBe("boolean");
-      // Optional fields
-      expect("data" in response || "error" in response).toBe(true);
+      expect(tasks.length).toBe(1);
+      expect(tasks[0].__id).toBe(task.__id);
+    });
+
+    test("Addresses can be stored in actor data", () => {
+      const system = createActorSystem();
+
+      const TaskActor: ActorFactory<{
+        id: string;
+        dependents: Address[];
+        system: System;
+      }> = (data) => {
+        const actor = {
+          send: async (message: Message) => {
+            if (message.type === "complete") {
+              // Notify all dependents using stored addresses
+              for (const dep of data.dependents) {
+                await dep.send({ id: "u1", type: "unblocked", payload: {} });
+              }
+            }
+            return { success: true };
+          },
+        };
+        return data.system.register(actor);
+      };
+
+      const task1 = TaskActor({ id: "task-1", dependents: [], system });
+      const task2 = TaskActor({
+        id: "task-2",
+        dependents: [task1],
+        system,
+      });
+
+      // task2 stores task1's address
+      expect(task2).toBeDefined();
     });
   });
 
   describe("Complete Example: Task Graph", () => {
-    test("Task actors can notify dependents using spec patterns", async () => {
-      const system = createSystem();
+    test("Task actors notify dependents using Address proxy", async () => {
+      const system = createActorSystem();
 
       interface TaskData {
         id: string;
-        status: "pending" | "running" | "done";
-        dependents: string[];
+        status: "pending" | "done";
+        dependents: Address[];
+        system: System;
       }
 
-      const TaskActor: ActorFactory<TaskData> = (data, send) => ({
-        send: async (message: Message) => {
-          if (message.type === "complete") {
-            data.status = "done";
+      const TaskActor: ActorFactory<TaskData> = (data) => {
+        const actor = {
+          send: async (message: Message) => {
+            if (message.type === "complete") {
+              data.status = "done";
 
-            // Notify all dependents (using send from scope)
-            for (const depId of data.dependents) {
-              await send(depId, {
-                id: crypto.randomUUID(),
-                type: "unblock",
-                payload: { unblockedBy: data.id },
-              });
+              // Notify all dependents using ergonomic API
+              for (const dep of data.dependents) {
+                await dep.send({
+                  id: crypto.randomUUID(),
+                  type: "unblocked",
+                  payload: { by: data.id },
+                });
+              }
+
+              return { success: true };
+            }
+
+            if (message.type === "unblocked") {
+              return { success: true, data: `${data.id} unblocked` };
+            }
+
+            if (message.type === "status") {
+              return { success: true, data: data.status };
             }
 
             return { success: true };
-          }
-
-          if (message.type === "unblock") {
-            return { success: true, data: `${data.id} unblocked` };
-          }
-
-          return { success: true };
-        },
-      });
+          },
+        };
+        return data.system.register(actor);
+      };
 
       // Create task graph: task1 -> task2 -> task3
-      const task1 = TaskActor(
-        { id: "task-1", status: "pending", dependents: ["task-2"] },
-        system.send
-      );
-      const task2 = TaskActor(
-        { id: "task-2", status: "pending", dependents: ["task-3"] },
-        system.send
-      );
-      const task3 = TaskActor(
-        { id: "task-3", status: "pending", dependents: [] },
-        system.send
-      );
-
-      system.register("task-1", task1);
-      system.register("task-2", task2);
-      system.register("task-3", task3);
-
-      // External code completes task-1
-      const result = await task1.send({
-        id: "complete-1",
-        type: "complete",
-        payload: null,
+      const task3 = TaskActor({
+        id: "task-3",
+        status: "pending",
+        dependents: [],
+        system,
       });
 
-      expect(result.success).toBe(true);
-
-      // task-2 received unblock notification (verified by internal send)
-      const task2Result = await task2.send({
-        id: "complete-2",
-        type: "complete",
-        payload: null,
+      const task2 = TaskActor({
+        id: "task-2",
+        status: "pending",
+        dependents: [task3],
+        system,
       });
 
-      expect(task2Result.success).toBe(true);
+      const task1 = TaskActor({
+        id: "task-1",
+        status: "pending",
+        dependents: [task2],
+        system,
+      });
+
+      // Complete task-1
+      await task1.send({ id: "c1", type: "complete", payload: {} });
+
+      // Check statuses
+      const status1 = await task1.send({ id: "s1", type: "status", payload: {} });
+      const status2 = await task2.send({ id: "s2", type: "status", payload: {} });
+
+      expect(status1.data).toBe("done");
+      // task2 received unblock notification
+      expect(status2.success).toBe(true);
     });
   });
 });

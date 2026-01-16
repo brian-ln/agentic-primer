@@ -1,128 +1,138 @@
-# Actor System Specification - Final
+# Actor System Specification
 
 ## Core Principles
 
-### 1. Pure Functional Actors
+### 1. Addresses Are First-Class Objects
 
-Actors are **pure functions** with no hidden dependencies or implicit context.
+Addresses are objects with both identity and behavior.
 
 ```typescript
-function Actor(
-  data: ActorData,          // Actor's data
-  send: SendFunction        // Messaging primitive (injected)
-): Actor {
-  return {
+type Address = {
+  readonly __id: symbol;  // Internal unique identifier
+  send: (message: Message) => Promise<Response>;
+};
+```
+
+**Properties:**
+- ✅ Unique identity (via internal symbol)
+- ✅ Built-in `.send()` method for ergonomic messaging
+- ✅ Can be passed as data between actors
+- ✅ Type-safe (no magic strings)
+
+### 2. Actor Factories Return Addresses
+
+Actor factories create actors, register them, and return addresses directly.
+
+```typescript
+function TaskActor(data: {
+  id: string;
+  status: string;
+  system: System;
+}): Address {
+  const actor = {
     send: async (message: Message) => {
-      // Actor logic - all dependencies explicit
+      // Actor logic - uses data.system.send() to communicate
     }
   };
+
+  return data.system.register(actor);  // Returns Address
 }
 ```
 
 **Properties:**
-- ✅ All dependencies passed as parameters
-- ✅ No hidden state or context
-- ✅ Testable (mock `send` function)
-- ✅ Composable (functions taking functions)
+- ✅ Single call creates and registers
+- ✅ System injected via data
+- ✅ Returns Address for immediate use
+- ✅ No magic strings anywhere
 
-### 2. The Send Primitive
+### 3. Two Ways to Send Messages
 
-The `send` function is the **only** messaging primitive in the system.
+Both ergonomic and explicit sending work:
 
 ```typescript
-type SendFunction = (targetId: string, message: Message) => Promise<Response>;
+// Ergonomic: Use address's .send() method
+await task.send({ type: "complete", payload: {} });
+
+// Explicit: Use system.send() with address
+await system.send(task, { type: "complete", payload: {} });
 ```
 
-**From actor's perspective:**
-```typescript
-await send(targetId, message);  // Send to any address
-```
+**Both are equivalent** - address.send() just calls system.send() internally.
 
-**Implementation is irrelevant to actors:**
-- Could be registry lookup
-- Could be direct reference
-- Could be network call
-- Could be anything
+### 4. System Provides Infrastructure
 
-Actors just call `send(address, message)`.
-
-### 3. System Provides Send Implementation
-
-The System is the messaging infrastructure that provides the `send` implementation.
+The System provides the messaging infrastructure.
 
 ```typescript
-function System() {
-  const actors = new Map<string, Actor>();
+interface System {
+  send: (targetAddress: Address, message: Message) => Promise<Response>;
+  register: (actor: Actor) => Address;
+}
 
-  // This IS the send primitive
-  const send: SendFunction = async (targetId, message) => {
-    const actor = actors.get(targetId);
-    if (!actor) throw new Error(`Actor not found: ${targetId}`);
+function System(): System {
+  const actors = new Map<symbol, Actor>();
+
+  const send = async (addr: Address, message: Message) => {
+    const actor = actors.get(addr.__id);
+    if (!actor) return { success: false, error: "Actor not found" };
     return actor.send(message);
   };
 
-  return {
-    send,
-    register: (id: string, actor: Actor) => {
-      actors.set(id, actor);
-    }
+  const register = (actor: Actor): Address => {
+    const id = Symbol();
+    actors.set(id, actor);
+
+    const address: Address = {
+      __id: id,
+      send: (message: Message) => send(address, message)
+    };
+
+    return address;
   };
+
+  return { send, register };
 }
 ```
 
 **System responsibilities:**
-- Provide `send` implementation
-- Maintain actor registry (address → actor mapping)
-- Route messages to target actors
+- Maintain actor registry (symbol → actor mapping)
+- Provide send implementation
+- Generate unique addresses with .send() methods
 
-### 4. Two APIs: Bridge and Internal
+### 5. Pure Functions with Explicit Dependencies
 
-**External API (Bridge into Actor World):**
-
-External code calls `.send()` on actor objects:
+Actors remain pure functions - all dependencies in data object.
 
 ```typescript
-const system = System();
-const actor = TaskActor(data, system.send);
-system.register("task-1", actor);
-
-// Bridge: Call .send() on actor object
-await actor.send({ type: "complete" });
-```
-
-**Internal API (Inside Actor World):**
-
-Actors use `send` function from scope:
-
-```typescript
-function TaskActor(data: TaskData, send: SendFunction) {
-  return {
+function TaskActor(data: {
+  id: string;
+  status: string;
+  system: System;        // Required dependency
+  dependents?: Address[];  // Optional: references to other actors
+}): Address {
+  const actor = {
     send: async (message: Message) => {
-      // Use send function in scope
-      await send("other-task", { type: "notify" });
+      if (message.type === "complete") {
+        // Use system from data
+        if (data.dependents) {
+          for (const dep of data.dependents) {
+            await dep.send({ type: "unblocked" });
+          }
+        }
+      }
+      return { success: true };
     }
   };
+
+  return data.system.register(actor);
 }
 ```
 
-**The distinction:**
-- `actor.send(message)` - External code → Actor (bridge in)
-- `send(targetId, message)` - Actor → Actor (inside actor world)
-
-### 5. Uniform Composition
-
-Systems ARE actors - they have the same interface.
-
-```typescript
-const subsystem = System();  // Creates actor-like object
-const rootSystem = System();
-
-// Register subsystem as an actor
-rootSystem.register("subsystem", subsystem);
-
-// Can send to subsystem like any actor
-await rootSystem.send("subsystem", message);
-```
+**Properties:**
+- ✅ All dependencies explicit in data parameter
+- ✅ No hidden state or context
+- ✅ Testable (mock system)
+- ✅ Can hold references to other addresses
 
 ## Complete Type Signatures
 
@@ -141,154 +151,178 @@ interface Response {
   error?: string;
 }
 
-// Actor
+// Address - first-class object with identity and behavior
+type Address = {
+  readonly __id: symbol;
+  send: (message: Message) => Promise<Response>;
+};
+
+// Actor interface
 interface Actor {
   send: (message: Message) => Promise<Response>;
 }
 
-// Send function (the primitive)
-type SendFunction = (targetId: string, message: Message) => Promise<Response>;
+// SendFunction
+type SendFunction = (
+  targetAddress: Address,
+  message: Message
+) => Promise<Response>;
 
-// Actor factory signature
-type ActorFactory<TData> = (
-  data: TData,
-  send: SendFunction
-) => Actor;
+// ActorFactory - returns Address, not Actor
+type ActorFactory<TData> = (data: TData) => Address;
 
 // System
-interface System extends Actor {
-  send: SendFunction & {
-    (message: Message): Promise<Response>;      // As actor
-    (targetId: string, message: Message): Promise<Response>; // As send primitive
-  };
-  register: (id: string, actor: Actor) => void;
+interface System {
+  send: SendFunction;
+  register: (actor: Actor) => Address;
 }
 ```
 
 ## Usage Patterns
 
-### Pattern 1: Create and Register Actor
+### Pattern 1: Create Actor
 
 ```typescript
 const system = System();
 
-// Create actor with send injected
-const actor = TaskActor(
-  { id: "task-1", status: "todo" },
-  system.send  // Inject send function
-);
-
-// Register with system
-system.register("task-1", actor);
-```
-
-### Pattern 2: External Code Sends to Actor
-
-```typescript
-// Bridge into actor world via .send()
-await actor.send({
-  id: "msg-1",
-  type: "updateStatus",
-  payload: { status: "done" }
+// Factory creates, registers, returns Address
+const task = TaskActor({
+  id: "task-1",
+  status: "todo",
+  system
 });
 
-// Or via system
-await system.send("task-1", {
+// task IS an Address with .send()
+```
+
+### Pattern 2: Send Messages (Ergonomic)
+
+```typescript
+// Use address's .send() method
+const result = await task.send({
   id: "msg-1",
-  type: "updateStatus",
-  payload: { status: "done" }
+  type: "complete",
+  payload: {}
 });
 ```
 
-### Pattern 3: Actor-to-Actor Communication
+### Pattern 3: Send Messages (Explicit)
 
 ```typescript
-function TaskActor(data: TaskData, send: SendFunction) {
-  return {
+// Use system.send() with address
+const result = await system.send(task, {
+  id: "msg-1",
+  type: "complete",
+  payload: {}
+});
+```
+
+### Pattern 4: Actor-to-Actor References
+
+```typescript
+// Create tasks
+const task1 = TaskActor({ id: "task-1", status: "todo", system });
+const task2 = TaskActor({
+  id: "task-2",
+  status: "blocked",
+  system,
+  dependents: [task1]  // Pass address directly!
+});
+
+// task2 can send to task1 directly
+function TaskActor(data: { dependents?: Address[]; system: System }): Address {
+  const actor = {
     send: async (message: Message) => {
-      if (message.type === "complete") {
-        // Use send function from scope
-        await send("dependent-task", {
-          id: crypto.randomUUID(),
-          type: "unblock",
-          payload: { unblockedBy: data.id }
-        });
+      if (message.type === "complete" && data.dependents) {
+        for (const dep of data.dependents) {
+          await dep.send({ type: "unblocked" });  // Ergonomic!
+        }
       }
+      return { success: true };
     }
   };
+  return data.system.register(actor);
 }
 ```
 
-### Pattern 4: Nested Systems
+### Pattern 5: Passing Addresses as Messages
 
 ```typescript
-const root = System();
-const sub = System();
-
-// Subsystem is an actor
-root.register("subsystem", sub);
-
-// Register actor in subsystem
-const actor = TaskActor(data, sub.send);
-sub.register("task-1", actor);
-
-// Send through hierarchy
-await root.send("subsystem", {
-  type: "send_to_actor",
-  payload: {
-    targetId: "task-1",
-    message: { type: "update" }
-  }
+// Send address in message payload
+await system.send(coordinator, {
+  id: "msg-1",
+  type: "register_task",
+  payload: { taskAddr: task1 }  // Address as data
 });
+
+// Coordinator can send to received address
+function CoordinatorActor(data: { system: System }): Address {
+  const tasks: Address[] = [];
+
+  const actor = {
+    send: async (message: Message) => {
+      if (message.type === "register_task") {
+        const { taskAddr } = message.payload as { taskAddr: Address };
+        tasks.push(taskAddr);
+
+        // Can send to it later
+        await taskAddr.send({ type: "status" });
+      }
+      return { success: true };
+    }
+  };
+  return data.system.register(actor);
+}
 ```
 
 ## Invariants
 
-### 1. Pure Function Invariant
+### 1. Address Identity Invariant
 ```
-∀ actor: Actor created by factory function
-  ⟹ actor has no hidden dependencies
-```
-
-### 2. Send Injection Invariant
-```
-∀ actor: Actor
-  ⟹ actor received send function at creation
+∀ address: Address
+  ⟹ address.__id is unique symbol
+  ⟹ address.__id never changes
 ```
 
-### 3. Bridge Invariant
+### 2. Address Send Invariant
 ```
-External code → Actor
-  ⟹ Uses actor.send(message)
-
-Actor → Actor
-  ⟹ Uses send(targetId, message)
+∀ address: Address
+  ⟹ address.send(msg) ≡ system.send(address, msg)
+  ⟹ Both produce identical results
 ```
 
-### 4. System Composition Invariant
+### 3. Factory Returns Address Invariant
 ```
-∀ system: System
-  ⟹ system IS an Actor (has .send() method)
-  ⟹ system CAN be registered in another system
+∀ factory: ActorFactory
+  ⟹ factory(data) returns Address
+  ⟹ Address is already registered in system
 ```
 
-### 5. Addressing Invariant
+### 4. System Dependency Invariant
 ```
-∀ message sent via send(targetId, message)
-  ⟹ Implementation of send is opaque to sender
-  ⟹ Routing mechanism irrelevant to actor
+∀ factory: ActorFactory
+  ⟹ data parameter includes system: System
+  ⟹ System used for registration
+```
+
+### 5. No Magic Strings Invariant
+```
+∀ code using actor system
+  ⟹ No string literals used as addresses
+  ⟹ Only Address objects used for targeting
 ```
 
 ## Non-Requirements
 
 What this spec **does NOT** require:
 
-- ❌ Specific routing mechanism (registry vs direct refs vs other)
-- ❌ Synchronous vs asynchronous delivery
-- ❌ Mailboxes (can be implemented but not required)
-- ❌ Supervision (can be added as separate concern)
-- ❌ Distribution (can be added later)
-- ❌ Persistence (can be added later)
+- ❌ Virtual actors (can be added but not required)
+- ❌ Automatic activation/deactivation
+- ❌ Serializable addresses (symbols are runtime-only)
+- ❌ Mailboxes
+- ❌ Supervision
+- ❌ Distribution
+- ❌ Persistence
 
 The spec defines the **interface**, not the implementation.
 
@@ -298,15 +332,16 @@ The spec defines the **interface**, not the implementation.
 
 Use this checklist to verify an implementation against the spec:
 
-- [ ] Actors are pure functions (all dependencies passed as parameters)
-- [ ] Actors receive `send` function at creation
-- [ ] `send` signature is `(targetAddress: Address, message: Message) => Promise<Response>`
-- [ ] System provides `send` implementation
-- [ ] System maintains actor registry
-- [ ] External code uses `actor.send(message)`
-- [ ] Internal actor code uses `send(targetAddress, message)`
-- [ ] Systems ARE actors (have `.send()` method)
-- [ ] Systems can be registered in other systems
+- [ ] Address is object with `__id: symbol` and `send: (msg) => Promise<Response>`
+- [ ] Actor factories take data with `system: System` as required field
+- [ ] Actor factories return `Address` (not `Actor`)
+- [ ] `system.register(actor)` returns `Address`
+- [ ] `address.send(msg)` works (ergonomic API)
+- [ ] `system.send(address, msg)` works (explicit API)
+- [ ] Both send styles produce identical results
+- [ ] No string literals used as addresses
+- [ ] Addresses can be passed in message payloads
+- [ ] Addresses can be stored in actor data
 
 ### Datalog Verification
 
@@ -316,25 +351,24 @@ Load `ACTOR_SYSTEM.spec.datalog` and run these queries:
 % Verify all invariants hold
 ?- all_invariants_hold.
 
-% Check specific actor is well-formed
-?- actor_well_formed("task-1").
+% Check address has identity and send
+?- address_well_formed(Addr).
 
-% Check specific system is well-formed
-?- system_well_formed("system").
+% Check factory returns address
+?- factory_returns_address(FactoryID).
 
-% Find all actors with send in scope
-?- send_in_scope(ActorID, SendFnID).
-
-% Find all bridge calls
-?- is_bridge_call(CallerID, ActorID, Message).
+% Verify no magic strings used
+?- no_magic_strings.
 ```
 
 ## Summary
 
-**Three key insights:**
+**Key insights:**
 
-1. **Actors are pure functions** - All dependencies injected, no hidden state
-2. **Send is the only primitive** - `send(targetAddress, message)` is the universal operation
-3. **Two APIs for bridging** - External uses `actor.send()`, internal uses `send()`
+1. **Addresses are first-class objects** - Have identity (__id) and behavior (.send())
+2. **Factories return addresses** - Single call creates, registers, and returns reference
+3. **Two send styles** - Ergonomic (addr.send()) and explicit (system.send(addr, msg))
+4. **No magic strings** - Type-safe addresses eliminate typos
+5. **System in data** - Pure functions with explicit dependencies
 
 This is the complete, final specification.

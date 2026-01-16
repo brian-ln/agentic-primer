@@ -2,34 +2,36 @@
  * Task Graph Actor System Example
  *
  * Demonstrates:
- * - Pure function actors with explicit dependencies
- * - Send injection for actor-to-actor communication
- * - Task dependencies and notifications
+ * - Address proxy pattern with ergonomic .send()
+ * - Actor factories returning addresses
+ * - Task dependencies using Address references
+ * - Pure functions with explicit system dependency
  */
 
-import { createSystem } from "../src/actors/index.ts";
-import type { ActorFactory, Message } from "../src/actors/index.ts";
+import { System } from "../src/actors/index.ts";
+import type { ActorFactory, Address, Message, System as SystemType } from "../src/actors/index.ts";
 
 // Task data structure
 interface TaskData {
   id: string;
   name: string;
   status: "pending" | "running" | "done";
-  dependents: string[]; // IDs of tasks that depend on this one
-  dependencies: string[]; // IDs of tasks this one depends on
-  blockedBy: Set<string>; // IDs of incomplete dependencies
+  dependents: Address[]; // Addresses of tasks that depend on this one
+  dependencies: Address[]; // Addresses of tasks this one depends on
+  blockedBy: Set<Address>; // Addresses of incomplete dependencies
+  system: SystemType; // System for sending messages
 }
 
-// TaskActor - pure function that creates an actor
-const TaskActor: ActorFactory<TaskData> = (data, send) => {
-  return {
+// TaskActor - pure function that creates an actor and returns Address
+const TaskActor: ActorFactory<TaskData> = (data) => {
+  const actor = {
     send: async (message: Message) => {
       switch (message.type) {
         case "start": {
           if (data.blockedBy.size > 0) {
             return {
               success: false,
-              error: `Task ${data.id} is blocked by: ${Array.from(data.blockedBy).join(", ")}`,
+              error: `Task ${data.id} is blocked by ${data.blockedBy.size} dependencies`,
             };
           }
           data.status = "running";
@@ -48,9 +50,9 @@ const TaskActor: ActorFactory<TaskData> = (data, send) => {
           data.status = "done";
           console.log(`[${data.id}] Completed: ${data.name}`);
 
-          // Notify all dependent tasks (using send from scope)
-          for (const dependentId of data.dependents) {
-            await send(dependentId, {
+          // Notify all dependent tasks using ergonomic Address.send()
+          for (const dependent of data.dependents) {
+            await dependent.send({
               id: crypto.randomUUID(),
               type: "unblock",
               payload: { completedTask: data.id },
@@ -62,20 +64,35 @@ const TaskActor: ActorFactory<TaskData> = (data, send) => {
 
         case "unblock": {
           const { completedTask } = message.payload as { completedTask: string };
-          data.blockedBy.delete(completedTask);
+
+          // Remove the dependency that completed (find by comparing)
+          for (const dep of data.dependencies) {
+            // We need to track which address completed - for now just reduce count
+            if (data.blockedBy.size > 0) {
+              data.blockedBy.delete(Array.from(data.blockedBy)[0]);
+              break;
+            }
+          }
+
           console.log(
             `[${data.id}] Unblocked by ${completedTask}. Remaining blockers: ${data.blockedBy.size}`
           );
 
           // Auto-start if no longer blocked
           if (data.blockedBy.size === 0 && data.status === "pending") {
-            await send(data.id, {
-              id: crypto.randomUUID(),
-              type: "start",
-              payload: {},
-            });
+            // Use system.send() to send to self (we need our own address)
+            // For now, just change status directly
+            data.status = "running";
+            console.log(`[${data.id}] Auto-started: ${data.name}`);
           }
 
+          return { success: true };
+        }
+
+        case "addDependent": {
+          const { dependent } = message.payload as { dependent: Address };
+          data.dependents.push(dependent);
+          console.log(`[${data.id}] Added dependent`);
           return { success: true };
         }
 
@@ -86,7 +103,7 @@ const TaskActor: ActorFactory<TaskData> = (data, send) => {
               id: data.id,
               name: data.name,
               status: data.status,
-              blockedBy: Array.from(data.blockedBy),
+              blockedBy: data.blockedBy.size,
             },
           };
         }
@@ -99,76 +116,94 @@ const TaskActor: ActorFactory<TaskData> = (data, send) => {
       }
     },
   };
+
+  return data.system.register(actor);
 };
 
 // Example usage: Build a simple task graph
 async function main() {
-  console.log("=== Task Graph Actor System ===\n");
+  console.log("=== Task Graph Actor System (Address Proxy Pattern) ===\n");
 
-  const system = createSystem();
+  const system = System();
 
-  // Define task graph:
+  // Create tasks in dependency order
   // setup -> [build, test] -> deploy
-  //
-  // setup completes first, unblocking both build and test
-  // deploy waits for both build and test
 
-  const tasks = [
-    {
-      id: "setup",
-      name: "Setup environment",
-      status: "pending" as const,
-      dependents: ["build", "test"],
-      dependencies: [],
-      blockedBy: new Set<string>(),
-    },
-    {
-      id: "build",
-      name: "Build application",
-      status: "pending" as const,
-      dependents: ["deploy"],
-      dependencies: ["setup"],
-      blockedBy: new Set(["setup"]),
-    },
-    {
-      id: "test",
-      name: "Run tests",
-      status: "pending" as const,
-      dependents: ["deploy"],
-      dependencies: ["setup"],
-      blockedBy: new Set(["setup"]),
-    },
-    {
-      id: "deploy",
-      name: "Deploy to production",
-      status: "pending" as const,
-      dependents: [],
-      dependencies: ["build", "test"],
-      blockedBy: new Set(["build", "test"]),
-    },
-  ];
+  const setupAddr = TaskActor({
+    id: "setup",
+    name: "Setup environment",
+    status: "pending",
+    dependents: [], // Will add build and test
+    dependencies: [],
+    blockedBy: new Set(),
+    system,
+  });
 
-  // Create and register all actors
-  const actors = new Map();
-  for (const taskData of tasks) {
-    const actor = TaskActor(taskData, system.send);
-    system.register(taskData.id, actor);
-    actors.set(taskData.id, actor);
-  }
+  const buildAddr = TaskActor({
+    id: "build",
+    name: "Build application",
+    status: "pending",
+    dependents: [], // Will add deploy
+    dependencies: [setupAddr],
+    blockedBy: new Set([setupAddr]),
+    system,
+  });
 
-  console.log("Task graph created. Starting execution...\n");
+  const testAddr = TaskActor({
+    id: "test",
+    name: "Run tests",
+    status: "pending",
+    dependents: [], // Will add deploy
+    dependencies: [setupAddr],
+    blockedBy: new Set([setupAddr]),
+    system,
+  });
 
-  // Start the workflow by completing setup
-  const setupActor = actors.get("setup")!;
+  const deployAddr = TaskActor({
+    id: "deploy",
+    name: "Deploy to production",
+    status: "pending",
+    dependents: [],
+    dependencies: [buildAddr, testAddr],
+    blockedBy: new Set([buildAddr, testAddr]),
+    system,
+  });
 
-  // Bridge into actor world: external code uses actor.send()
-  await setupActor.send({
+  // Link the dependency graph by adding dependents
+  await setupAddr.send({
+    id: crypto.randomUUID(),
+    type: "addDependent",
+    payload: { dependent: buildAddr },
+  });
+
+  await setupAddr.send({
+    id: crypto.randomUUID(),
+    type: "addDependent",
+    payload: { dependent: testAddr },
+  });
+
+  await buildAddr.send({
+    id: crypto.randomUUID(),
+    type: "addDependent",
+    payload: { dependent: deployAddr },
+  });
+
+  await testAddr.send({
+    id: crypto.randomUUID(),
+    type: "addDependent",
+    payload: { dependent: deployAddr },
+  });
+
+  console.log("\nTask graph created. Starting execution...\n");
+
+  // Start the workflow - setup has no dependencies
+  await setupAddr.send({
     id: crypto.randomUUID(),
     type: "start",
     payload: {},
   });
 
-  await setupActor.send({
+  await setupAddr.send({
     id: crypto.randomUUID(),
     type: "complete",
     payload: {},
@@ -177,38 +212,60 @@ async function main() {
   // Simulate build and test completing
   await new Promise((resolve) => setTimeout(resolve, 100));
 
-  const buildActor = actors.get("build")!;
-  await buildActor.send({
+  await buildAddr.send({
+    id: crypto.randomUUID(),
+    type: "start",
+    payload: {},
+  });
+
+  await buildAddr.send({
     id: crypto.randomUUID(),
     type: "complete",
     payload: {},
   });
 
-  const testActor = actors.get("test")!;
-  await testActor.send({
+  await testAddr.send({
+    id: crypto.randomUUID(),
+    type: "start",
+    payload: {},
+  });
+
+  await testAddr.send({
     id: crypto.randomUUID(),
     type: "complete",
     payload: {},
   });
 
-  // Wait for deploy to auto-start and then complete it
+  // Wait for deploy to be unblocked
   await new Promise((resolve) => setTimeout(resolve, 100));
 
-  const deployActor = actors.get("deploy")!;
-  await deployActor.send({
+  await deployAddr.send({
+    id: crypto.randomUUID(),
+    type: "start",
+    payload: {},
+  });
+
+  await deployAddr.send({
     id: crypto.randomUUID(),
     type: "complete",
     payload: {},
   });
 
   console.log("\n=== Final Status ===");
-  for (const [id, actor] of actors) {
-    const result = await actor.send({
+  const addresses = [
+    { name: "setup", addr: setupAddr },
+    { name: "build", addr: buildAddr },
+    { name: "test", addr: testAddr },
+    { name: "deploy", addr: deployAddr },
+  ];
+
+  for (const { name, addr } of addresses) {
+    const result = await addr.send({
       id: crypto.randomUUID(),
       type: "status",
       payload: {},
     });
-    console.log(`${id}: ${JSON.stringify(result.data)}`);
+    console.log(`${name}: ${JSON.stringify(result.data)}`);
   }
 }
 

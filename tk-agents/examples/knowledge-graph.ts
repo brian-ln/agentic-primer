@@ -3,40 +3,43 @@
  *
  * Demonstrates:
  * - Actors managing interconnected data (knowledge nodes)
- * - Query propagation through graph structure
- * - Actor-to-actor communication for graph traversal
+ * - Query propagation through graph structure using Address references
+ * - Actor-to-actor communication via ergonomic Address.send()
+ * - Dynamic graph topology modification
  */
 
-import { createSystem } from "../src/actors/index.ts";
-import type { ActorFactory, Message } from "../src/actors/index.ts";
+import { System } from "../src/actors/index.ts";
+import type { ActorFactory, Address, Message, System as SystemType } from "../src/actors/index.ts";
 
 // Knowledge node data
 interface KnowledgeNodeData {
   id: string;
   content: string;
-  links: string[]; // IDs of related nodes
+  links: Address[]; // Addresses of related nodes
   visits: number;
+  system: SystemType;
 }
 
 // KnowledgeNode actor - manages a node in the knowledge graph
-const KnowledgeNodeActor: ActorFactory<KnowledgeNodeData> = (data, send) => {
-  return {
+const KnowledgeNodeActor: ActorFactory<KnowledgeNodeData> = (data) => {
+  const actor = {
     send: async (message: Message) => {
       switch (message.type) {
         case "query": {
           const { searchTerm, visited = [] } = message.payload as {
             searchTerm: string;
-            visited?: string[];
+            visited?: symbol[]; // Track visited by Address.__id
           };
 
           data.visits++;
 
-          // Avoid cycles
-          if (visited.includes(data.id)) {
+          // Avoid cycles - check if we've visited this address
+          const myAddress = message.payload.__self as Address | undefined;
+          if (visited.some(id => myAddress && id === myAddress.__id)) {
             return { success: true, data: [] };
           }
 
-          const newVisited = [...visited, data.id];
+          const newVisited = myAddress ? [...visited, myAddress.__id] : visited;
           const results: Array<{ id: string; content: string }> = [];
 
           // Check if this node matches
@@ -45,12 +48,12 @@ const KnowledgeNodeActor: ActorFactory<KnowledgeNodeData> = (data, send) => {
             console.log(`[${data.id}] Match found: "${data.content}"`);
           }
 
-          // Propagate query to linked nodes (using send from scope)
-          for (const linkId of data.links) {
-            const response = await send(linkId, {
+          // Propagate query to linked nodes using ergonomic Address.send()
+          for (const linkAddr of data.links) {
+            const response = await linkAddr.send({
               id: crypto.randomUUID(),
               type: "query",
-              payload: { searchTerm, visited: newVisited },
+              payload: { searchTerm, visited: newVisited, __self: linkAddr },
             });
 
             if (response.success && response.data) {
@@ -67,17 +70,18 @@ const KnowledgeNodeActor: ActorFactory<KnowledgeNodeData> = (data, send) => {
             data: {
               id: data.id,
               content: data.content,
-              links: data.links,
+              linkCount: data.links.length,
               visits: data.visits,
             },
           };
         }
 
         case "addLink": {
-          const { targetId } = message.payload as { targetId: string };
-          if (!data.links.includes(targetId)) {
-            data.links.push(targetId);
-            console.log(`[${data.id}] Added link to ${targetId}`);
+          const { targetAddr } = message.payload as { targetAddr: Address };
+          // Check if link already exists
+          if (!data.links.some(addr => addr.__id === targetAddr.__id)) {
+            data.links.push(targetAddr);
+            console.log(`[${data.id}] Added link to another node`);
           }
           return { success: true };
         }
@@ -90,116 +94,186 @@ const KnowledgeNodeActor: ActorFactory<KnowledgeNodeData> = (data, send) => {
       }
     },
   };
+
+  return data.system.register(actor);
 };
 
 async function main() {
-  console.log("=== Knowledge Graph Actor System ===\n");
+  console.log("=== Knowledge Graph Actor System (Address Proxy Pattern) ===\n");
 
-  const system = createSystem();
+  const system = System();
 
   // Build a knowledge graph about programming concepts
-  const nodes = [
-    {
-      id: "actors",
-      content: "Actors are concurrent entities that communicate via messages",
-      links: ["concurrency", "messages"],
-      visits: 0,
-    },
-    {
-      id: "concurrency",
-      content: "Concurrency enables multiple computations to progress simultaneously",
-      links: ["actors", "parallelism"],
-      visits: 0,
-    },
-    {
-      id: "messages",
-      content: "Messages are data structures sent between actors",
-      links: ["actors", "data"],
-      visits: 0,
-    },
-    {
-      id: "parallelism",
-      content: "Parallelism is the simultaneous execution of computations",
-      links: ["concurrency"],
-      visits: 0,
-    },
-    {
-      id: "data",
-      content: "Data structures organize and store information",
-      links: ["messages"],
-      visits: 0,
-    },
-    {
-      id: "functions",
-      content: "Functions are pure transformations from inputs to outputs",
-      links: ["purity"],
-      visits: 0,
-    },
-    {
-      id: "purity",
-      content: "Pure functions have no side effects and depend only on inputs",
-      links: ["functions"],
-      visits: 0,
-    },
-  ];
+  // We'll create addresses first, then link them
 
-  // Create and register actors
-  const actors = new Map();
-  for (const nodeData of nodes) {
-    const actor = KnowledgeNodeActor(nodeData, system.send);
-    system.register(nodeData.id, actor);
-    actors.set(nodeData.id, actor);
-  }
+  console.log("Creating knowledge nodes...");
 
-  console.log(`Created knowledge graph with ${nodes.length} nodes\n`);
+  const actorsNode = KnowledgeNodeActor({
+    id: "actors",
+    content: "Actors are concurrent entities that communicate via messages",
+    links: [],
+    visits: 0,
+    system,
+  });
+
+  const concurrencyNode = KnowledgeNodeActor({
+    id: "concurrency",
+    content: "Concurrency enables multiple computations to progress simultaneously",
+    links: [],
+    visits: 0,
+    system,
+  });
+
+  const messagesNode = KnowledgeNodeActor({
+    id: "messages",
+    content: "Messages are data structures sent between actors",
+    links: [],
+    visits: 0,
+    system,
+  });
+
+  const parallelismNode = KnowledgeNodeActor({
+    id: "parallelism",
+    content: "Parallelism is the simultaneous execution of computations",
+    links: [],
+    visits: 0,
+    system,
+  });
+
+  const dataNode = KnowledgeNodeActor({
+    id: "data",
+    content: "Data structures organize and store information",
+    links: [],
+    visits: 0,
+    system,
+  });
+
+  const functionsNode = KnowledgeNodeActor({
+    id: "functions",
+    content: "Functions are pure transformations from inputs to outputs",
+    links: [],
+    visits: 0,
+    system,
+  });
+
+  const purityNode = KnowledgeNodeActor({
+    id: "purity",
+    content: "Pure functions have no side effects and depend only on inputs",
+    links: [],
+    visits: 0,
+    system,
+  });
+
+  // Now add links between nodes by sending addLink messages
+  console.log("Building graph connections...");
+
+  await actorsNode.send({
+    id: crypto.randomUUID(),
+    type: "addLink",
+    payload: { targetAddr: concurrencyNode },
+  });
+
+  await actorsNode.send({
+    id: crypto.randomUUID(),
+    type: "addLink",
+    payload: { targetAddr: messagesNode },
+  });
+
+  await concurrencyNode.send({
+    id: crypto.randomUUID(),
+    type: "addLink",
+    payload: { targetAddr: actorsNode },
+  });
+
+  await concurrencyNode.send({
+    id: crypto.randomUUID(),
+    type: "addLink",
+    payload: { targetAddr: parallelismNode },
+  });
+
+  await messagesNode.send({
+    id: crypto.randomUUID(),
+    type: "addLink",
+    payload: { targetAddr: actorsNode },
+  });
+
+  await messagesNode.send({
+    id: crypto.randomUUID(),
+    type: "addLink",
+    payload: { targetAddr: dataNode },
+  });
+
+  await parallelismNode.send({
+    id: crypto.randomUUID(),
+    type: "addLink",
+    payload: { targetAddr: concurrencyNode },
+  });
+
+  await dataNode.send({
+    id: crypto.randomUUID(),
+    type: "addLink",
+    payload: { targetAddr: messagesNode },
+  });
+
+  await functionsNode.send({
+    id: crypto.randomUUID(),
+    type: "addLink",
+    payload: { targetAddr: purityNode },
+  });
+
+  await purityNode.send({
+    id: crypto.randomUUID(),
+    type: "addLink",
+    payload: { targetAddr: functionsNode },
+  });
+
+  console.log("Knowledge graph created with 7 nodes\n");
 
   // Query 1: Search for "actors"
   console.log('=== Query 1: Search for "actors" ===');
-  const actorsActor = actors.get("actors")!;
-  const result1 = await actorsActor.send({
+  const result1 = await actorsNode.send({
     id: crypto.randomUUID(),
     type: "query",
-    payload: { searchTerm: "actors" },
+    payload: { searchTerm: "actors", __self: actorsNode },
   });
   console.log(`Found ${(result1.data as any[]).length} results\n`);
 
   // Query 2: Search for "concurrent"
   console.log('=== Query 2: Search for "concurrent" ===');
-  const concurrencyActor = actors.get("concurrency")!;
-  const result2 = await concurrencyActor.send({
+  const result2 = await concurrencyNode.send({
     id: crypto.randomUUID(),
     type: "query",
-    payload: { searchTerm: "concurrent" },
+    payload: { searchTerm: "concurrent", __self: concurrencyNode },
   });
   console.log(`Found ${(result2.data as any[]).length} results\n`);
 
-  // Query 3: Search for "pure" starting from different node
+  // Query 3: Search for "pure" starting from actors node
   console.log('=== Query 3: Search for "pure" from actors node ===');
   // This demonstrates graph traversal - starting from "actors" node
-  // It won't reach "purity" because they're not connected
-  const result3 = await actorsActor.send({
+  // It won't reach "purity" because they're in separate subgraphs
+  const result3 = await actorsNode.send({
     id: crypto.randomUUID(),
     type: "query",
-    payload: { searchTerm: "pure" },
+    payload: { searchTerm: "pure", __self: actorsNode },
   });
   console.log(`Found ${(result3.data as any[]).length} results`);
   console.log("(No results - 'actors' and 'purity' are in separate subgraphs)\n");
 
   // Add connection between subgraphs
   console.log("=== Adding link between subgraphs ===");
-  await actorsActor.send({
+  await actorsNode.send({
     id: crypto.randomUUID(),
     type: "addLink",
-    payload: { targetId: "functions" },
+    payload: { targetAddr: functionsNode },
   });
   console.log("Connected 'actors' -> 'functions'\n");
 
   // Query 4: Search again after connecting subgraphs
   console.log('=== Query 4: Search for "pure" again (after connection) ===');
-  const result4 = await actorsActor.send({
+  const result4 = await actorsNode.send({
     id: crypto.randomUUID(),
     type: "query",
-    payload: { searchTerm: "pure" },
+    payload: { searchTerm: "pure", __self: actorsNode },
   });
   console.log(`Found ${(result4.data as any[]).length} results`);
   const matches = result4.data as Array<{ id: string; content: string }>;
@@ -209,23 +283,34 @@ async function main() {
 
   // Show visit statistics
   console.log("\n=== Node Visit Statistics ===");
-  for (const [id, actor] of actors) {
-    const info = await actor.send({
+  const nodes = [
+    { name: "actors", addr: actorsNode },
+    { name: "concurrency", addr: concurrencyNode },
+    { name: "messages", addr: messagesNode },
+    { name: "parallelism", addr: parallelismNode },
+    { name: "data", addr: dataNode },
+    { name: "functions", addr: functionsNode },
+    { name: "purity", addr: purityNode },
+  ];
+
+  for (const { name, addr } of nodes) {
+    const info = await addr.send({
       id: crypto.randomUUID(),
       type: "getInfo",
       payload: {},
     });
     const data = info.data as any;
-    console.log(`${id}: ${data.visits} visits`);
+    console.log(`${name}: ${data.visits} visits`);
   }
 
   console.log("\n=== Key Insights ===");
-  console.log("1. Actors can form complex graph structures");
+  console.log("1. Actors can form complex graph structures using Address references");
   console.log(
     "2. Message propagation enables distributed graph traversal"
   );
-  console.log("3. Each node uses send() to reach neighbors without knowing routing");
+  console.log("3. Each node uses Address.send() to reach neighbors");
   console.log("4. Graph topology can be modified dynamically via messages");
+  console.log("5. No magic strings - type-safe Address objects for all references");
 }
 
 main().catch(console.error);

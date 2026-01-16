@@ -22,10 +22,13 @@ export interface Response {
 }
 
 /**
- * Actor address - flexible addressing for future evolution
- * Currently string, but can be extended (PIDs, UUIDs, etc.)
+ * Address - first-class object with identity and behavior
+ * Addresses are returned by actor factories and have a built-in .send() method
  */
-export type Address = string;
+export type Address = {
+  readonly __id: symbol; // Internal unique identifier
+  send: (message: Message) => Promise<Response>;
+};
 
 /**
  * Actor interface - has a send method for receiving messages
@@ -45,7 +48,7 @@ export type SendFunction = (
 
 /**
  * Actor factory signature - pure function that creates actors
- * @param data - Actor's initial data/state
- * @param send - Injected send function for actor-to-actor communication
+ * @param data - Actor's initial data/state (must include system: System)
+ * @returns Address - First-class address with .send() method
  */
-export type ActorFactory<TData> = (data: TData, send: SendFunction) => Actor;
+export type ActorFactory<TData> = (data: TData) => Address;
