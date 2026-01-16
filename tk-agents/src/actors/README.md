@@ -4,10 +4,9 @@ A clean, spec-compliant implementation of the actor model.
 
 ## Specifications
 
-- **[ACTOR_SYSTEM.spec.md](./ACTOR_SYSTEM.spec.md)** - Complete specification
+- **[ACTOR_SYSTEM.spec.md](./ACTOR_SYSTEM.spec.md)** - Complete specification with verification checklist
 - **[ACTOR_SYSTEM.spec.datalog](./ACTOR_SYSTEM.spec.datalog)** - Formal verification model
-- **[SPEC.md](./SPEC.md)** - Quick reference and verification guide
-- **[IMPLEMENTATION_NOTES.md](./IMPLEMENTATION_NOTES.md)** - How implementation satisfies spec
+- **[spec-verification.test.ts](./spec-verification.test.ts)** - Test suite verifying all spec requirements (22/22 passing)
 
 ## Overview
 

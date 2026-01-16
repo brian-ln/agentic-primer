@@ -292,12 +292,49 @@ What this spec **does NOT** require:
 
 The spec defines the **interface**, not the implementation.
 
+## Verification
+
+### Manual Verification Checklist
+
+Use this checklist to verify an implementation against the spec:
+
+- [ ] Actors are pure functions (all dependencies passed as parameters)
+- [ ] Actors receive `send` function at creation
+- [ ] `send` signature is `(targetAddress: Address, message: Message) => Promise<Response>`
+- [ ] System provides `send` implementation
+- [ ] System maintains actor registry
+- [ ] External code uses `actor.send(message)`
+- [ ] Internal actor code uses `send(targetAddress, message)`
+- [ ] Systems ARE actors (have `.send()` method)
+- [ ] Systems can be registered in other systems
+
+### Datalog Verification
+
+Load `ACTOR_SYSTEM.spec.datalog` and run these queries:
+
+```prolog
+% Verify all invariants hold
+?- all_invariants_hold.
+
+% Check specific actor is well-formed
+?- actor_well_formed("task-1").
+
+% Check specific system is well-formed
+?- system_well_formed("system").
+
+% Find all actors with send in scope
+?- send_in_scope(ActorID, SendFnID).
+
+% Find all bridge calls
+?- is_bridge_call(CallerID, ActorID, Message).
+```
+
 ## Summary
 
 **Three key insights:**
 
 1. **Actors are pure functions** - All dependencies injected, no hidden state
-2. **Send is the only primitive** - `send(targetId, message)` is the universal operation
+2. **Send is the only primitive** - `send(targetAddress, message)` is the universal operation
 3. **Two APIs for bridging** - External uses `actor.send()`, internal uses `send()`
 
 This is the complete, final specification.
