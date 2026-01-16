@@ -23,6 +23,14 @@ export class BashActor implements Actor {
   }
 
   async send(message: Message): Promise<Response> {
+    // Handle ping for heartbeat
+    if (message.type === 'ping') {
+      return {
+        success: true,
+        data: { alive: true, timestamp: Date.now() },
+      };
+    }
+
     // Payload should be the command string or {command: string, args?: string[]}
     let command: string;
     let args: string[] = [];

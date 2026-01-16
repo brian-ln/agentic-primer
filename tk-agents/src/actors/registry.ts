@@ -1,5 +1,6 @@
 // Registry - Actor management and message routing
 
+import { EventEmitter } from "events";
 import type { Actor, Message, Response } from "./base";
 
 export interface ActorInfo {
@@ -7,10 +8,16 @@ export interface ActorInfo {
   registeredAt: Date;
   messageCount: number;
   lastMessageAt?: Date;
+  lastSuccessAt?: Date;
+  heartbeatInterval?: NodeJS.Timeout;
 }
 
-export class Registry {
+export class Registry extends EventEmitter {
   private actors: Map<string, ActorInfo> = new Map();
+
+  constructor() {
+    super();
+  }
 
   // Register an actor
   register(actor: Actor): void {
@@ -28,8 +35,11 @@ export class Registry {
   // Unregister an actor
   unregister(actorId: string): boolean {
     const info = this.actors.get(actorId);
-    if (info?.actor.stop) {
-      info.actor.stop();
+    if (info) {
+      this.stopHeartbeat(actorId);
+      if (info.actor.stop) {
+        info.actor.stop();
+      }
     }
     return this.actors.delete(actorId);
   }
@@ -67,11 +77,24 @@ export class Registry {
     info.lastMessageAt = new Date();
 
     try {
-      return await info.actor.send(message);
+      const response = await info.actor.send(message);
+      info.lastSuccessAt = new Date(); // Track last successful message
+      return response;
     } catch (error) {
+      // Actor crashed!
+      this.emit('actor_died', {
+        actorId,
+        error: error instanceof Error ? error.message : String(error),
+        reason: 'exception',
+        lastMessageAt: info.lastMessageAt,
+      });
+
+      // Remove dead actor from registry
+      this.actors.delete(actorId);
+
       return {
         success: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: `Actor ${actorId} died: ${error instanceof Error ? error.message : String(error)}`,
       };
     }
   }
@@ -88,12 +111,64 @@ export class Registry {
 
   // Clear all actors
   clear(): void {
-    for (const info of this.actors.values()) {
+    for (const [actorId, info] of this.actors.entries()) {
+      this.stopHeartbeat(actorId);
       if (info.actor.stop) {
         info.actor.stop();
       }
     }
     this.actors.clear();
+  }
+
+  /**
+   * Start heartbeat monitoring for an actor
+   * Pings actor periodically, emits 'actor_died' if ping fails
+   */
+  startHeartbeat(actorId: string, intervalMs: number = 30000): void {
+    const info = this.actors.get(actorId);
+    if (!info) {
+      throw new Error(`Cannot start heartbeat: Actor not found ${actorId}`);
+    }
+
+    // Clear existing heartbeat if any
+    if (info.heartbeatInterval) {
+      clearInterval(info.heartbeatInterval);
+    }
+
+    info.heartbeatInterval = setInterval(async () => {
+      // Check if actor still exists (might have been removed by exception handler)
+      const currentInfo = this.actors.get(actorId);
+      if (!currentInfo) {
+        // Actor was already removed, clean up interval
+        if (info.heartbeatInterval) {
+          clearInterval(info.heartbeatInterval);
+        }
+        return;
+      }
+
+      const response = await this.send(actorId, { type: 'ping', id: `heartbeat_${Date.now()}`, payload: {} });
+
+      // If send() returned an error, the actor is dead
+      // Note: send() already emitted 'actor_died' if there was an exception
+      if (!response.success) {
+        // Actor already removed by send() if it threw exception
+        // Just clean up the interval
+        if (currentInfo.heartbeatInterval) {
+          clearInterval(currentInfo.heartbeatInterval);
+        }
+      }
+    }, intervalMs);
+  }
+
+  /**
+   * Stop heartbeat monitoring
+   */
+  stopHeartbeat(actorId: string): void {
+    const info = this.actors.get(actorId);
+    if (info?.heartbeatInterval) {
+      clearInterval(info.heartbeatInterval);
+      info.heartbeatInterval = undefined;
+    }
   }
 }
 

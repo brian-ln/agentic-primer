@@ -77,6 +77,14 @@ export class ClaudeActor implements Actor {
 
   // Simple send - wait for completion
   async send(message: Message): Promise<Response> {
+    // Handle ping for heartbeat
+    if (message.type === 'ping') {
+      return {
+        success: true,
+        data: { alive: true, timestamp: Date.now() },
+      };
+    }
+
     const prompt = typeof message.payload === "string"
       ? message.payload
       : JSON.stringify(message.payload);

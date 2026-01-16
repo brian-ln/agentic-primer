@@ -305,3 +305,164 @@ describe("Scenario: Pipeline", () => {
     expect((execResult.data as { stepsCompleted: number }).stepsCompleted).toBe(3);
   });
 });
+
+describe("Death Detection", () => {
+  test("emits actor_died on exception", async () => {
+    const registry = new Registry();
+
+    // Create actor that throws exception
+    const crashingActor = new MockActor({
+      id: "crasher",
+      handler: () => {
+        throw new Error("Actor crashed!");
+      },
+    });
+
+    registry.register(crashingActor);
+
+    // Listen for actor_died event
+    let deathEvent: unknown = null;
+    registry.once('actor_died', (event) => {
+      deathEvent = event;
+    });
+
+    // Send message that triggers exception
+    const response = await registry.sendTo("crasher", "test", {});
+
+    // Verify response indicates failure
+    expect(response.success).toBe(false);
+    expect(response.error).toContain("died");
+    expect(response.error).toContain("Actor crashed!");
+
+    // Verify actor_died event was emitted
+    expect(deathEvent).toBeDefined();
+    expect((deathEvent as { actorId: string }).actorId).toBe("crasher");
+    expect((deathEvent as { reason: string }).reason).toBe("exception");
+    expect((deathEvent as { error: string }).error).toContain("Actor crashed!");
+
+    // Verify actor was removed from registry
+    expect(registry.has("crasher")).toBe(false);
+  });
+
+  test("handles ping message", async () => {
+    const registry = new Registry();
+    const actor = createEchoMock("pinger");
+    registry.register(actor);
+
+    const response = await registry.send(actor.id, {
+      type: 'ping',
+      id: 'test-ping',
+      payload: {},
+    });
+
+    expect(response.success).toBe(true);
+    expect((response.data as { alive: boolean }).alive).toBe(true);
+    expect((response.data as { timestamp: number }).timestamp).toBeGreaterThan(0);
+  });
+
+  test("startHeartbeat monitors actor health", async () => {
+    const registry = new Registry();
+    const actor = createEchoMock("monitored");
+    registry.register(actor);
+
+    // Start heartbeat with short interval
+    registry.startHeartbeat("monitored", 100);
+
+    // Wait for at least one heartbeat cycle
+    await new Promise(r => setTimeout(r, 150));
+
+    // Actor should have received at least one ping
+    const pings = actor.receivedMessages.filter(msg => msg.type === 'ping');
+    expect(pings.length).toBeGreaterThanOrEqual(1);
+
+    // Stop heartbeat
+    registry.stopHeartbeat("monitored");
+  });
+
+  test("heartbeat detects unresponsive actor", async () => {
+    const registry = new Registry();
+
+    // Create actor that fails on ping
+    let callCount = 0;
+    const unresponsiveActor = new MockActor({
+      id: "unresponsive",
+      handler: (msg) => {
+        if (msg.type === 'ping') {
+          callCount++;
+          if (callCount > 1) {
+            throw new Error("Actor became unresponsive");
+          }
+        }
+        return { response: { success: true, data: {} } };
+      },
+    });
+
+    registry.register(unresponsiveActor);
+
+    // Listen for actor_died event
+    let deathEvent: unknown = null;
+    registry.once('actor_died', (event) => {
+      deathEvent = event;
+    });
+
+    // Start heartbeat with short interval
+    registry.startHeartbeat("unresponsive", 100);
+
+    // Wait for heartbeat to detect failure
+    await new Promise(r => setTimeout(r, 300));
+
+    // Verify actor_died event was emitted
+    expect(deathEvent).toBeDefined();
+    expect((deathEvent as { actorId: string }).actorId).toBe("unresponsive");
+    // When actor throws during ping, it's detected as 'exception', not 'heartbeat_timeout'
+    expect((deathEvent as { reason: string }).reason).toBe("exception");
+
+    // Verify actor was removed from registry
+    expect(registry.has("unresponsive")).toBe(false);
+  });
+
+  test("stopHeartbeat prevents further monitoring", async () => {
+    const registry = new Registry();
+    const actor = createEchoMock("stopped");
+    registry.register(actor);
+
+    // Start then immediately stop heartbeat
+    registry.startHeartbeat("stopped", 100);
+    registry.stopHeartbeat("stopped");
+
+    // Wait to ensure no pings occur
+    await new Promise(r => setTimeout(r, 250));
+
+    // Actor should have received no pings
+    const pings = actor.receivedMessages.filter(msg => msg.type === 'ping');
+    expect(pings.length).toBe(0);
+  });
+
+  test("unregister cleans up heartbeat", async () => {
+    const registry = new Registry();
+    const actor = createEchoMock("cleanup");
+    registry.register(actor);
+
+    // Start heartbeat
+    registry.startHeartbeat("cleanup", 100);
+
+    // Unregister should clean up
+    registry.unregister("cleanup");
+
+    // Wait to ensure no more pings occur
+    const initialPings = actor.receivedMessages.filter(msg => msg.type === 'ping').length;
+    await new Promise(r => setTimeout(r, 250));
+
+    // No new pings should arrive
+    const finalPings = actor.receivedMessages.filter(msg => msg.type === 'ping').length;
+    expect(finalPings).toBe(initialPings);
+  });
+
+  test("startHeartbeat throws for non-existent actor", () => {
+    const registry = new Registry();
+
+    expect(() => {
+      registry.startHeartbeat("not-found");
+    }).toThrow("Cannot start heartbeat: Actor not found not-found");
+  });
+});

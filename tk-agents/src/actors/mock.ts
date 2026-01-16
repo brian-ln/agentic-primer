@@ -38,13 +38,21 @@ export class MockActor implements Actor {
   async send(message: Message): Promise<Response> {
     this.receivedMessages.push(message);
 
-    // Use handler if provided
+    // Use handler if provided (handler can handle ping or any message type)
     if (this.handler) {
       const mockResponse = await this.handler(message);
       if (mockResponse.delay) {
         await new Promise(r => setTimeout(r, mockResponse.delay));
       }
       return mockResponse.response;
+    }
+
+    // Default ping handler for heartbeat (only if no custom handler)
+    if (message.type === 'ping') {
+      return {
+        success: true,
+        data: { alive: true, timestamp: Date.now() },
+      };
     }
 
     // Use response queue
@@ -101,9 +109,18 @@ export class MockActor implements Actor {
 export function createEchoMock(id: string): MockActor {
   return new MockActor({
     id,
-    handler: (msg) => ({
-      response: { success: true, data: msg.payload },
-    }),
+    handler: (msg) => {
+      // Handle ping messages
+      if (msg.type === 'ping') {
+        return {
+          response: { success: true, data: { alive: true, timestamp: Date.now() } },
+        };
+      }
+      // Echo other messages
+      return {
+        response: { success: true, data: msg.payload },
+      };
+    },
   });
 }
 
