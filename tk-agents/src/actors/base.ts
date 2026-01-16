@@ -7,6 +7,7 @@ export interface Message {
   type: string;
   payload: unknown;
   correlationId?: string;  // For matching responses to requests
+  sender?: string;  // Optional: ID of the actor or entity that sent this message
 }
 
 export interface Response {
@@ -35,8 +36,13 @@ export interface Actor {
   readonly id: string;
   readonly type: ActorType;
 
-  // Synchronous-style send (returns when complete)
+  // Required for backward compatibility (will be deprecated in Phase 2)
+  // During Phase 1-2, this is still the primary method
   send(message: Message): Promise<Response>;
+
+  // NEW: Semantically correct method (Hewitt Actor Model) - optional during Phase 1
+  // Will become required in Phase 3, replacing send()
+  receive?(message: Message): Promise<Response>;
 
   // Optional: streaming interface for long-running actors
   stream?(message: Message): AsyncGenerator<StreamEvent, Response>;

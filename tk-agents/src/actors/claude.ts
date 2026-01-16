@@ -131,6 +131,12 @@ export class ClaudeActor implements Actor {
     };
   }
 
+  // NEW: Semantically correct method (Hewitt Actor Model)
+  // During Phase 2, this delegates to send() for backward compatibility
+  async receive(message: Message): Promise<Response> {
+    return this.send(message);
+  }
+
   // Streaming send - yields events as they arrive
   async *stream(message: Message): AsyncGenerator<StreamEvent, Response> {
     const prompt = typeof message.payload === "string"

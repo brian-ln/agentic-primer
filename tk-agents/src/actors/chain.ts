@@ -136,6 +136,12 @@ export class ChainedActors implements Actor {
     };
   }
 
+  // NEW: Semantically correct method (Hewitt Actor Model)
+  // During Phase 2, this delegates to send() for backward compatibility
+  async receive(message: Message): Promise<Response> {
+    return this.send(message);
+  }
+
   // Streaming version - yields events from both stages
   async *stream(message: Message): AsyncGenerator<StreamEvent, Response> {
     const inputPrompt = typeof message.payload === "string"

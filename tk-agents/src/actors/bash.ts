@@ -116,6 +116,12 @@ export class BashActor implements Actor {
       metadata: { durationMs },
     };
   }
+
+  // NEW: Semantically correct method (Hewitt Actor Model)
+  // During Phase 2, this delegates to send() for backward compatibility
+  async receive(message: Message): Promise<Response> {
+    return this.send(message);
+  }
 }
 
 // Factory

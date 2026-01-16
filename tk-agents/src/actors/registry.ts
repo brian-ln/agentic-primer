@@ -86,7 +86,7 @@ export class Registry extends EventEmitter {
 
   // List all actors
   list(): Array<{ id: string; type: string; messageCount: number }> {
-    return [...this.actors.entries()].map(([id, info]) => ({
+    return Array.from(this.actors.entries()).map(([id, info]) => ({
       id,
       type: info.actor.type,
       messageCount: info.messageCount,
@@ -101,6 +101,11 @@ export class Registry extends EventEmitter {
         success: false,
         error: `Actor not found: ${actorId}`,
       };
+    }
+
+    // Populate sender if not already set
+    if (!message.sender) {
+      message.sender = "registry";
     }
 
     info.messageCount++;
@@ -176,13 +181,14 @@ export class Registry extends EventEmitter {
       id: `msg_${Date.now()}_${Math.random().toString(36).slice(2)}`,
       type,
       payload,
+      sender: "registry",
     };
     return this.send(actorId, message);
   }
 
   // Clear all actors
   clear(): void {
-    for (const [actorId, info] of this.actors.entries()) {
+    for (const [actorId, info] of Array.from(this.actors.entries())) {
       this.stopHeartbeat(actorId);
       this.stopMessageProcessing(actorId);
       if (info.actor.stop) {
@@ -240,12 +246,13 @@ export class Registry extends EventEmitter {
         payload: { actorId },
       });
 
-      if (!dequeueResult.success || !dequeueResult.data?.message) {
+      const dequeueData = dequeueResult.data as { message?: Message; size?: number };
+      if (!dequeueResult.success || !dequeueData?.message) {
         // No message available or error - continue polling
         return;
       }
 
-      const message = dequeueResult.data.message as Message;
+      const message = dequeueData.message;
 
       // Deliver message to actor
       try {

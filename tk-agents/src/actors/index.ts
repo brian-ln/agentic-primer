@@ -8,3 +8,7 @@ export * from "./claude";
 export * from "./chain";
 export * from "./mock";
 export * from "./human";
+
+// NEW: Hewitt Actor Model infrastructure (Phase 1)
+export * from "./system";
+export * from "./base-actor";

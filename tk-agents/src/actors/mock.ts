@@ -71,6 +71,12 @@ export class MockActor implements Actor {
     };
   }
 
+  // NEW: Semantically correct method (Hewitt Actor Model)
+  // During Phase 2, this delegates to send() for backward compatibility
+  async receive(message: Message): Promise<Response> {
+    return this.send(message);
+  }
+
   async *stream(message: Message): AsyncGenerator<StreamEvent, Response> {
     this.receivedMessages.push(message);
 

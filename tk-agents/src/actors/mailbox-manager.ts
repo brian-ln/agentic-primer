@@ -362,7 +362,7 @@ export class MailboxManagerActor implements Actor {
   listMailboxes(): Array<{ actorId: string; size: number; maxSize: number; isFull: boolean }> {
     const result: Array<{ actorId: string; size: number; maxSize: number; isFull: boolean }> = [];
 
-    for (const [actorId, mailbox] of this.mailboxes.entries()) {
+    for (const [actorId, mailbox] of Array.from(this.mailboxes.entries())) {
       result.push({
         actorId,
         size: mailbox.size(),
