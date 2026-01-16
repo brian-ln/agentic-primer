@@ -164,7 +164,9 @@ function initGraph() {
     .attr("d", "M0,-5L10,0L0,5")
     .attr("fill", (d: string) => d === "arrow-highlighted" ? "#e74c3c" : "#999");
 
-  // Create force simulation
+  // Create force simulation with boundary constraints
+  const MARGIN = 50; // Keep nodes away from edges
+
   simulation = (window as any).d3
     .forceSimulation(concepts)
     .force(
@@ -176,7 +178,9 @@ function initGraph() {
     )
     .force("charge", (window as any).d3.forceManyBody().strength(-400))
     .force("center", (window as any).d3.forceCenter(width / 2, height / 2))
-    .force("collision", (window as any).d3.forceCollide().radius(30));
+    .force("collision", (window as any).d3.forceCollide().radius(30))
+    .force("x", (window as any).d3.forceX(width / 2).strength(0.05))
+    .force("y", (window as any).d3.forceY(height / 2).strength(0.05));
 
   // Create links
   link = g
@@ -233,8 +237,20 @@ function initGraph() {
 
   node = nodeGroup;
 
+  // Track simulation stability for testing
+  let stabilityCheckCount = 0;
+  const STABILITY_THRESHOLD = 0.05;
+  const STABILITY_CHECKS_NEEDED = 5; // Consecutive ticks below threshold
+
   // Update positions on simulation tick
   simulation.on("tick", () => {
+    // Constrain nodes within viewport boundaries
+    concepts.forEach((d: any) => {
+      d.x = Math.max(MARGIN, Math.min(width - MARGIN, d.x));
+      d.y = Math.max(MARGIN, Math.min(height - MARGIN, d.y));
+    });
+
+    // Update visual positions
     link.attr("d", linkPath);
 
     linkLabel
@@ -242,6 +258,18 @@ function initGraph() {
       .attr("y", (d: any) => (d.source.y + d.target.y) / 2);
 
     node.attr("transform", (d: any) => `translate(${d.x},${d.y})`);
+
+    // Check if simulation has stabilized (for test automation)
+    const currentAlpha = simulation.alpha();
+    if (currentAlpha < STABILITY_THRESHOLD) {
+      stabilityCheckCount++;
+      if (stabilityCheckCount >= STABILITY_CHECKS_NEEDED) {
+        document.body.setAttribute("data-simulation-stable", "true");
+      }
+    } else {
+      stabilityCheckCount = 0;
+      document.body.removeAttribute("data-simulation-stable");
+    }
   });
 
   // Click on background to deselect
@@ -262,7 +290,10 @@ function linkPath(d: any) {
 
 // Drag handlers
 function dragstarted(event: any, d: any) {
-  if (!event.active) simulation.alphaTarget(0.3).restart();
+  if (!event.active) {
+    simulation.alphaTarget(0.3).restart();
+    document.body.removeAttribute("data-simulation-stable");
+  }
   d.fx = d.x;
   d.fy = d.y;
 }

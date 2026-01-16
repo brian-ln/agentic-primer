@@ -62,7 +62,7 @@ test.describe('API Endpoint Tests', () => {
 
       const relationships = await response.json();
       expect(Array.isArray(relationships)).toBe(true);
-      expect(relationships.length).toBe(61);
+      expect(relationships.length).toBe(61); // API returns all relationships from JSON
     });
 
     test('should return relationships with valid structure', async ({ request }) => {
@@ -107,7 +107,7 @@ test.describe('API Endpoint Tests', () => {
       const stats = await response.json();
 
       expect(stats.totalConcepts).toBe(50);
-      expect(stats.totalRelationships).toBe(61);
+      expect(stats.totalRelationships).toBe(61); // API stats count all relationships
       expect(stats.domains).toBeGreaterThan(0);
       expect(stats.tags).toBeGreaterThan(0);
       expect(stats.relationshipTypes).toBeGreaterThan(0);

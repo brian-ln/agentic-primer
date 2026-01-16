@@ -6,7 +6,7 @@ This document describes the testing infrastructure for the Concept Graph Web Ser
 
 ## Quick Start
 
-### Run All Tests
+### Run All Playwright Tests (Concept Graph)
 
 ```bash
 cd CONCEPT_GRAPH
@@ -18,6 +18,19 @@ This will:
 2. Start the server on port 3000
 3. Run all API and browser tests
 4. Generate an HTML report
+
+**Important:** These Playwright tests are separate from the actor system tests.
+
+### Run Actor System Tests (src/)
+
+```bash
+# From project root
+bun test src/
+
+# This runs all Bun tests for the actor system (82 tests)
+```
+
+**Note:** Do NOT run `bun test` without arguments, as it will try to load Playwright test files which use incompatible test framework (@playwright/test vs bun:test).
 
 ### Run Specific Test Files
 
@@ -174,7 +187,29 @@ test('should interact with browser', async ({ page }) => {
 
 ### Best Practices
 
-1. **Use waitFor selectors:** Always wait for elements before interacting
+1. **Wait for D3 simulation stability:** D3 force simulation animates nodes, which can make them unstable for clicking
+   ```typescript
+   // Helper function to wait for simulation to stabilize
+   async function waitForSimulationStable(page: any, timeout = 10000) {
+     await page.waitForFunction(
+       () => document.body.getAttribute('data-simulation-stable') === 'true',
+       { timeout }
+     );
+   }
+
+   // Use in tests that interact with nodes
+   await page.waitForSelector('.node', { timeout: 5000 });
+   await waitForSimulationStable(page);
+   await page.locator('.node').first().click({ force: true });
+   ```
+
+2. **Use force clicks for animated elements:** When elements are continuously animated by D3, use `{ force: true }`
+   ```typescript
+   // Bypass actionability checks for D3-animated nodes
+   await page.locator('.node').first().click({ force: true });
+   ```
+
+3. **Use waitFor selectors:** Always wait for elements before interacting
    ```typescript
    await page.waitForSelector('.node', { timeout: 5000 });
    ```
@@ -325,6 +360,9 @@ bunx playwright test tests/browser.test.ts --grep "load"
 
 - **concepts.json:** 50 concepts across 15 domains
 - **relationships.json:** 61 relationships between concepts
+  - **Note:** The frontend filters to 59 valid relationships (2 relationships point to non-existent concepts: `referential-transparency` and `replication`)
+  - API endpoints return all 61 relationships from JSON
+  - Browser tests verify 59 relationships are rendered in the graph
 
 ### Test Fixtures (Future)
 
@@ -386,6 +424,25 @@ PORT=3001 ./run-tests.sh
 2. Run server manually and open browser DevTools
 3. Verify D3.js CDN is accessible
 4. Check for CORS issues
+
+### Node Click Tests Timeout or Fail
+
+**Problem:** D3 force simulation makes nodes unstable or places them outside viewport
+
+**Solution:**
+1. **Simulation stability:** The app exposes `data-simulation-stable` attribute when the force simulation settles. Tests should wait for this:
+   ```typescript
+   await waitForSimulationStable(page);
+   ```
+
+2. **Viewport constraints:** The app constrains nodes within viewport bounds using:
+   - Force positioning: `forceX()` and `forceY()` pull nodes toward center
+   - Bounding box: Tick handler clamps node positions within margins
+
+3. **Force clicks:** Use `{ force: true }` to bypass Playwright's actionability checks:
+   ```typescript
+   await page.locator('.node').first().click({ force: true });
+   ```
 
 ### Tests Pass Locally but Fail in CI
 
