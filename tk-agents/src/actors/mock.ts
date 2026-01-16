@@ -35,7 +35,7 @@ export class MockActor implements Actor {
     this.responseQueue = config.responses || [];
   }
 
-  async send(message: Message): Promise<Response> {
+  async receive(message: Message): Promise<Response> {
     this.receivedMessages.push(message);
 
     // Use handler if provided (handler can handle ping or any message type)
@@ -69,12 +69,6 @@ export class MockActor implements Actor {
       success: true,
       data: { echo: message.payload },
     };
-  }
-
-  // NEW: Semantically correct method (Hewitt Actor Model)
-  // During Phase 2, this delegates to send() for backward compatibility
-  async receive(message: Message): Promise<Response> {
-    return this.send(message);
   }
 
   async *stream(message: Message): AsyncGenerator<StreamEvent, Response> {

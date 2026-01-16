@@ -55,7 +55,7 @@ export class MailboxManagerActor implements Actor {
     this.id = id;
   }
 
-  async send(message: Message): Promise<Response> {
+  async receive(message: Message): Promise<Response> {
     try {
       switch (message.type) {
         case "create_mailbox":

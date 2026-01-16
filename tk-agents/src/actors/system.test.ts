@@ -13,16 +13,11 @@ class TestActor implements Actor {
     this.id = id;
   }
 
-  async send(message: Message): Promise<Response> {
+  async receive(message: Message): Promise<Response> {
     if (message.type === "ping") {
       return { success: true, data: { alive: true } };
     }
     return { success: true, data: { received: message.payload } };
-  }
-
-  // Optional receive() - will be used if System prefers it
-  async receive(message: Message): Promise<Response> {
-    return this.send(message);
   }
 }
 
@@ -150,17 +145,4 @@ test("System - convenience sendTo method", async () => {
 
   expect(response.success).toBe(true);
   expect((response.data as any).received).toBe("test");
-});
-
-test("System - backward compatible send() method", async () => {
-  const system = new System();
-
-  const response = await system.send({
-    id: "ping-1",
-    type: "ping",
-    payload: {},
-  });
-
-  expect(response.success).toBe(true);
-  expect((response.data as any).alive).toBe(true);
 });

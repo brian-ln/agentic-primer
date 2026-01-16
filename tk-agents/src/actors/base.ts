@@ -32,17 +32,13 @@ export interface StreamEvent {
 export type ActorType = "deterministic" | "agent";
 
 // All actors implement this interface - deterministic or not
+// SPEC-COMPLIANT: receive() is REQUIRED, send() does NOT exist
 export interface Actor {
   readonly id: string;
   readonly type: ActorType;
 
-  // Required for backward compatibility (will be deprecated in Phase 2)
-  // During Phase 1-2, this is still the primary method
-  send(message: Message): Promise<Response>;
-
-  // NEW: Semantically correct method (Hewitt Actor Model) - optional during Phase 1
-  // Will become required in Phase 3, replacing send()
-  receive?(message: Message): Promise<Response>;
+  // PUBLIC: Receive incoming messages (Hewitt semantics)
+  receive(message: Message): Promise<Response>;
 
   // Optional: streaming interface for long-running actors
   stream?(message: Message): AsyncGenerator<StreamEvent, Response>;

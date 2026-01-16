@@ -84,7 +84,7 @@ describe("MailboxManagerActor", () => {
   });
 
   test("should create mailboxes for actors", async () => {
-    const response = await manager.send({
+    const response = await manager.receive({
       id: "msg-1",
       type: "create_mailbox",
       payload: { actorId: "actor-1" },
@@ -98,13 +98,13 @@ describe("MailboxManagerActor", () => {
   });
 
   test("should reject duplicate mailbox creation", async () => {
-    await manager.send({
+    await manager.receive({
       id: "msg-1",
       type: "create_mailbox",
       payload: { actorId: "actor-1" },
     });
 
-    const response = await manager.send({
+    const response = await manager.receive({
       id: "msg-2",
       type: "create_mailbox",
       payload: { actorId: "actor-1" },
@@ -117,7 +117,7 @@ describe("MailboxManagerActor", () => {
 
   test("should enqueue messages to actor mailbox", async () => {
     // Create mailbox
-    await manager.send({
+    await manager.receive({
       id: "msg-1",
       type: "create_mailbox",
       payload: { actorId: "actor-1" },
@@ -125,7 +125,7 @@ describe("MailboxManagerActor", () => {
 
     // Enqueue message
     const msg: Message = { id: "test-1", type: "test", payload: "hello" };
-    const response = await manager.send({
+    const response = await manager.receive({
       id: "msg-2",
       type: "enqueue",
       payload: { actorId: "actor-1", message: msg },
@@ -137,7 +137,7 @@ describe("MailboxManagerActor", () => {
 
   test("should dequeue messages from actor mailbox", async () => {
     // Create mailbox
-    await manager.send({
+    await manager.receive({
       id: "msg-1",
       type: "create_mailbox",
       payload: { actorId: "actor-1" },
@@ -145,14 +145,14 @@ describe("MailboxManagerActor", () => {
 
     // Enqueue message
     const msg: Message = { id: "test-1", type: "test", payload: "hello" };
-    await manager.send({
+    await manager.receive({
       id: "msg-2",
       type: "enqueue",
       payload: { actorId: "actor-1", message: msg },
     });
 
     // Dequeue message
-    const response = await manager.send({
+    const response = await manager.receive({
       id: "msg-3",
       type: "dequeue",
       payload: { actorId: "actor-1" },
@@ -166,7 +166,7 @@ describe("MailboxManagerActor", () => {
 
   test("should report mailbox status", async () => {
     // Create mailbox
-    await manager.send({
+    await manager.receive({
       id: "msg-1",
       type: "create_mailbox",
       payload: { actorId: "actor-1" },
@@ -174,14 +174,14 @@ describe("MailboxManagerActor", () => {
 
     // Enqueue some messages
     const msg: Message = { id: "test-1", type: "test", payload: "hello" };
-    await manager.send({
+    await manager.receive({
       id: "msg-2",
       type: "enqueue",
       payload: { actorId: "actor-1", message: msg },
     });
 
     // Get status
-    const response = await manager.send({
+    const response = await manager.receive({
       id: "msg-3",
       type: "status",
       payload: { actorId: "actor-1" },
@@ -196,7 +196,7 @@ describe("MailboxManagerActor", () => {
   });
 
   test("should handle status request for non-existent mailbox", async () => {
-    const response = await manager.send({
+    const response = await manager.receive({
       id: "msg-1",
       type: "status",
       payload: { actorId: "actor-nonexistent" },
@@ -208,21 +208,21 @@ describe("MailboxManagerActor", () => {
 
   test("should clear mailbox", async () => {
     // Create mailbox and add messages
-    await manager.send({
+    await manager.receive({
       id: "msg-1",
       type: "create_mailbox",
       payload: { actorId: "actor-1" },
     });
 
     const msg: Message = { id: "test-1", type: "test", payload: "hello" };
-    await manager.send({
+    await manager.receive({
       id: "msg-2",
       type: "enqueue",
       payload: { actorId: "actor-1", message: msg },
     });
 
     // Clear
-    const response = await manager.send({
+    const response = await manager.receive({
       id: "msg-3",
       type: "clear",
       payload: { actorId: "actor-1" },
@@ -234,14 +234,14 @@ describe("MailboxManagerActor", () => {
 
   test("should delete mailbox", async () => {
     // Create mailbox
-    await manager.send({
+    await manager.receive({
       id: "msg-1",
       type: "create_mailbox",
       payload: { actorId: "actor-1" },
     });
 
     // Delete
-    const response = await manager.send({
+    const response = await manager.receive({
       id: "msg-2",
       type: "delete_mailbox",
       payload: { actorId: "actor-1" },
@@ -251,7 +251,7 @@ describe("MailboxManagerActor", () => {
     expect((response.data as { existed?: boolean })?.existed).toBe(true);
 
     // Verify it's gone
-    const statusResponse = await manager.send({
+    const statusResponse = await manager.receive({
       id: "msg-3",
       type: "status",
       payload: { actorId: "actor-1" },
@@ -261,13 +261,13 @@ describe("MailboxManagerActor", () => {
   });
 
   test("should list all mailboxes", async () => {
-    await manager.send({
+    await manager.receive({
       id: "msg-1",
       type: "create_mailbox",
       payload: { actorId: "actor-1" },
     });
 
-    await manager.send({
+    await manager.receive({
       id: "msg-2",
       type: "create_mailbox",
       payload: { actorId: "actor-2" },
@@ -281,7 +281,7 @@ describe("MailboxManagerActor", () => {
 
   test("should reject enqueue when mailbox is full", async () => {
     // Create small mailbox
-    await manager.send({
+    await manager.receive({
       id: "msg-1",
       type: "create_mailbox",
       payload: { actorId: "actor-1", config: { maxSize: 2 } },
@@ -290,19 +290,19 @@ describe("MailboxManagerActor", () => {
     const msg: Message = { id: "test-1", type: "test", payload: "hello" };
 
     // Fill mailbox
-    await manager.send({
+    await manager.receive({
       id: "msg-2",
       type: "enqueue",
       payload: { actorId: "actor-1", message: msg },
     });
-    await manager.send({
+    await manager.receive({
       id: "msg-3",
       type: "enqueue",
       payload: { actorId: "actor-1", message: msg },
     });
 
     // Try to enqueue when full
-    const response = await manager.send({
+    const response = await manager.receive({
       id: "msg-4",
       type: "enqueue",
       payload: { actorId: "actor-1", message: msg },

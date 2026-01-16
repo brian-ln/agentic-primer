@@ -37,7 +37,7 @@ export class HumanActor implements Actor {
     this.onInputNeeded = config.onInputNeeded;
   }
 
-  async send(message: Message): Promise<Response> {
+  async receive(message: Message): Promise<Response> {
     // Handle ping for heartbeat
     if (message.type === 'ping') {
       return {
@@ -79,12 +79,6 @@ export class HumanActor implements Actor {
         messageId: message.id,
       },
     };
-  }
-
-  // NEW: Semantically correct method (Hewitt Actor Model)
-  // During Phase 2, this delegates to send() for backward compatibility
-  async receive(message: Message): Promise<Response> {
-    return this.send(message);
   }
 
   /**

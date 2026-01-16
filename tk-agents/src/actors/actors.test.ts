@@ -73,7 +73,7 @@ describe("Registry", () => {
 describe("BashActor", () => {
   test("executes simple command", async () => {
     const actor = createBashActor({ id: "bash-1" });
-    const response = await actor.send(createMessage("exec", "echo hello"));
+    const response = await actor.receive(createMessage("exec", "echo hello"));
 
     expect(response.success).toBe(true);
     expect(response.data).toBe("hello\n");
@@ -81,14 +81,14 @@ describe("BashActor", () => {
 
   test("captures exit code on failure", async () => {
     const actor = createBashActor({ id: "bash-2" });
-    const response = await actor.send(createMessage("exec", "exit 1"));
+    const response = await actor.receive(createMessage("exec", "exit 1"));
 
     expect(response.success).toBe(false);
   });
 
   test("respects timeout", async () => {
     const actor = createBashActor({ id: "bash-3", timeout: 100 });
-    const response = await actor.send(createMessage("exec", "sleep 5"));
+    const response = await actor.receive(createMessage("exec", "sleep 5"));
 
     expect(response.success).toBe(false);
     expect(response.error).toContain("timed out");
@@ -96,7 +96,7 @@ describe("BashActor", () => {
 
   test("uses custom cwd", async () => {
     const actor = createBashActor({ id: "bash-4", cwd: "/tmp" });
-    const response = await actor.send(createMessage("exec", "pwd"));
+    const response = await actor.receive(createMessage("exec", "pwd"));
 
     expect(response.success).toBe(true);
     // macOS: /tmp -> /private/tmp
@@ -108,7 +108,7 @@ describe("BashActor", () => {
       id: "bash-5",
       env: { MY_VAR: "test-value" },
     });
-    const response = await actor.send(createMessage("exec", "echo $MY_VAR"));
+    const response = await actor.receive(createMessage("exec", "echo $MY_VAR"));
 
     expect(response.success).toBe(true);
     expect(response.data).toBe("test-value\n");
@@ -118,7 +118,7 @@ describe("BashActor", () => {
 describe("MockActor", () => {
   test("echo mock returns payload", async () => {
     const actor = createEchoMock("echo");
-    const response = await actor.send(createMessage("test", { foo: "bar" }));
+    const response = await actor.receive(createMessage("test", { foo: "bar" }));
 
     expect(response.success).toBe(true);
     expect(response.data).toEqual({ foo: "bar" });
@@ -126,7 +126,7 @@ describe("MockActor", () => {
 
   test("failing mock returns error", async () => {
     const actor = createFailingMock("fail", "Something went wrong");
-    const response = await actor.send(createMessage("test", {}));
+    const response = await actor.receive(createMessage("test", {}));
 
     expect(response.success).toBe(false);
     expect(response.error).toBe("Something went wrong");
@@ -135,8 +135,8 @@ describe("MockActor", () => {
   test("tracks received messages", async () => {
     const actor = createEchoMock("tracker");
 
-    await actor.send(createMessage("first", { n: 1 }));
-    await actor.send(createMessage("second", { n: 2 }));
+    await actor.receive(createMessage("first", { n: 1 }));
+    await actor.receive(createMessage("second", { n: 2 }));
 
     expect(actor.receivedMessages.length).toBe(2);
     expect(actor.receivedMessages[0].type).toBe("first");
@@ -149,8 +149,8 @@ describe("MockActor", () => {
       "Here's the plan...",
     ]);
 
-    const r1 = await actor.send(createMessage("prompt", "Help me"));
-    const r2 = await actor.send(createMessage("prompt", "What's next?"));
+    const r1 = await actor.receive(createMessage("prompt", "Help me"));
+    const r2 = await actor.receive(createMessage("prompt", "What's next?"));
 
     expect(r1.success).toBe(true);
     expect(r1.data).toBe("I'll help you with that.");
@@ -168,8 +168,8 @@ describe("MockActor", () => {
       ],
     });
 
-    const r1 = await actor.send(createMessage("test", {}));
-    const r2 = await actor.send(createMessage("test", { x: 1 }));
+    const r1 = await actor.receive(createMessage("test", {}));
+    const r2 = await actor.receive(createMessage("test", { x: 1 }));
 
     expect(r1.data).toBe("first");
     expect(r2.data).toEqual({ echo: { x: 1 } }); // Default echo
@@ -243,9 +243,9 @@ describe("Scenario: Multi-turn Conversation", () => {
       },
     });
 
-    const r1 = await agent.send(createMessage("user", "Hello"));
-    const r2 = await agent.send(createMessage("user", "How are you?"));
-    const r3 = await agent.send(createMessage("user", "Goodbye"));
+    const r1 = await agent.receive(createMessage("user", "Hello"));
+    const r2 = await agent.receive(createMessage("user", "How are you?"));
+    const r3 = await agent.receive(createMessage("user", "Goodbye"));
 
     expect(r1.metadata?.turnCount).toBe(1);
     expect(r2.metadata?.turnCount).toBe(2);
@@ -677,7 +677,7 @@ describe("HumanActor", () => {
   test("responds with awaiting_human_response by default", async () => {
     const human = createHumanActor({ id: "human-1" });
 
-    const response = await human.send(createMessage("question", { text: "What should I do?" }));
+    const response = await human.receive(createMessage("question", { text: "What should I do?" }));
 
     expect(response.success).toBe(true);
     expect(response.data).toBeDefined();
@@ -689,7 +689,7 @@ describe("HumanActor", () => {
   test("handles ping message", async () => {
     const human = createHumanActor({ id: "human-1" });
 
-    const response = await human.send(createMessage("ping", {}));
+    const response = await human.receive(createMessage("ping", {}));
 
     expect(response.success).toBe(true);
     const data = response.data as { alive: boolean };
@@ -705,7 +705,7 @@ describe("HumanActor", () => {
       },
     });
 
-    const response = await human.send(createMessage("approval", { action: "deploy" }));
+    const response = await human.receive(createMessage("approval", { action: "deploy" }));
 
     expect(response.success).toBe(true);
     const data = response.data as { humanResponse: string };
@@ -717,8 +717,8 @@ describe("HumanActor", () => {
 
     expect(human.getPendingMessages().length).toBe(0);
 
-    await human.send(createMessage("question", { text: "Question 1" }));
-    await human.send(createMessage("question", { text: "Question 2" }));
+    await human.receive(createMessage("question", { text: "Question 1" }));
+    await human.receive(createMessage("question", { text: "Question 2" }));
 
     expect(human.getPendingMessages().length).toBe(2);
 

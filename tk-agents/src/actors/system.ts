@@ -56,12 +56,8 @@ export class System implements Actor {
       return { success: false, error: `Actor not found: ${actorId}` };
     }
 
-    // During migration: prefer receive() if available, otherwise use send()
-    if (actor.receive) {
-      return actor.receive(message);
-    } else {
-      return actor.send(message);
-    }
+    // Call actor's receive() method
+    return actor.receive(message);
   }
 
   // PRIVATE: Registration management
@@ -127,12 +123,5 @@ export class System implements Actor {
   // Convenience method for unregistering actors
   unregister(actorId: string): Response {
     return this.unregisterActor(actorId);
-  }
-
-  // Required by Actor interface - delegates to receive()
-  // During Phase 1-2, both methods exist for compatibility
-  async send(message: Message): Promise<Response> {
-    // Delegate to receive() - no deprecation warning yet (Phase 1)
-    return this.receive(message);
   }
 }

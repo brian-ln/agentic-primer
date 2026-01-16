@@ -63,8 +63,7 @@ export class ChainedActors implements Actor {
     return args;
   }
 
-  // Execute the chain - A | B
-  async send(message: Message): Promise<Response> {
+  async receive(message: Message): Promise<Response> {
     const inputPrompt = typeof message.payload === "string"
       ? message.payload
       : JSON.stringify(message.payload);
@@ -134,12 +133,6 @@ export class ChainedActors implements Actor {
       data: finalResult,
       metadata: { durationMs },
     };
-  }
-
-  // NEW: Semantically correct method (Hewitt Actor Model)
-  // During Phase 2, this delegates to send() for backward compatibility
-  async receive(message: Message): Promise<Response> {
-    return this.send(message);
   }
 
   // Streaming version - yields events from both stages

@@ -64,7 +64,7 @@ export class Registry extends EventEmitter {
 
       // Delete mailbox if using mailboxes
       if (this.useMailboxes) {
-        this.mailboxManager.send({
+        this.mailboxManager.receive({
           id: `delete_mailbox_${actorId}`,
           type: "delete_mailbox",
           payload: { actorId },
@@ -122,7 +122,7 @@ export class Registry extends EventEmitter {
       this.pendingResponses.set(message.id, { resolve, reject });
 
       // Enqueue message
-      this.mailboxManager.send({
+      this.mailboxManager.receive({
         id: `enqueue_${actorId}_${Date.now()}`,
         type: "enqueue",
         payload: { actorId, message },
@@ -153,7 +153,7 @@ export class Registry extends EventEmitter {
   // Direct send (original synchronous behavior)
   private async sendDirect(actorId: string, message: Message, info: ActorInfo): Promise<Response> {
     try {
-      const response = await info.actor.send(message);
+      const response = await info.actor.receive(message);
       info.lastSuccessAt = new Date(); // Track last successful message
       return response;
     } catch (error) {
@@ -207,7 +207,7 @@ export class Registry extends EventEmitter {
     if (!info) return;
 
     // Create mailbox (idempotent - will fail if already exists, which is fine)
-    this.mailboxManager.send({
+    this.mailboxManager.receive({
       id: `create_mailbox_${actorId}`,
       type: "create_mailbox",
       payload: { actorId },
@@ -240,7 +240,7 @@ export class Registry extends EventEmitter {
       }
 
       // Dequeue next message
-      const dequeueResult = await this.mailboxManager.send({
+      const dequeueResult = await this.mailboxManager.receive({
         id: `dequeue_${actorId}_${Date.now()}`,
         type: "dequeue",
         payload: { actorId },
@@ -256,7 +256,7 @@ export class Registry extends EventEmitter {
 
       // Deliver message to actor
       try {
-        const response = await currentInfo.actor.send(message);
+        const response = await currentInfo.actor.receive(message);
         currentInfo.lastSuccessAt = new Date();
 
         // Resolve pending promise if exists
@@ -313,7 +313,7 @@ export class Registry extends EventEmitter {
       };
     }
 
-    return this.mailboxManager.send({
+    return this.mailboxManager.receive({
       id: `status_${actorId}_${Date.now()}`,
       type: "status",
       payload: { actorId },
