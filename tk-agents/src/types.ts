@@ -65,6 +65,8 @@ export interface TaskProperties extends NodeProperties {
   completedAt?: Date;
   parentTaskId?: string;
   result?: unknown;
+  labels?: string[];
+  priority?: 0 | 1 | 2 | 3 | 4;
 }
 
 // Knowledge Node Properties

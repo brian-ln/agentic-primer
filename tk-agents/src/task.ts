@@ -22,6 +22,8 @@ export interface CreateTaskOptions {
   informationGaps?: string[];
   toolsAvailable?: string[];
   parentTaskId?: string;
+  labels?: string[];
+  priority?: 0 | 1 | 2 | 3 | 4;
 }
 
 interface TaskActorData extends CreateTaskOptions {
@@ -49,6 +51,8 @@ export const TaskActor: ActorFactory<TaskActorData> = (data) => {
     informationGaps: data.informationGaps ?? [],
     toolsAvailable: data.toolsAvailable ?? [],
     parentTaskId: data.parentTaskId,
+    labels: data.labels,
+    priority: data.priority,
   };
 
   // Create actor with message handler
