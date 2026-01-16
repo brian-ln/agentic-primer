@@ -2,6 +2,7 @@
 
 import { EventEmitter } from "events";
 import type { Actor, Message, Response } from "./base";
+import { MailboxManagerActor } from "./mailbox-manager";
 
 export interface ActorInfo {
   actor: Actor;
@@ -10,13 +11,25 @@ export interface ActorInfo {
   lastMessageAt?: Date;
   lastSuccessAt?: Date;
   heartbeatInterval?: NodeJS.Timeout;
+  processingLoop?: NodeJS.Timeout; // Message processing interval
+}
+
+// Pending response tracker
+interface PendingResponse {
+  resolve: (response: Response) => void;
+  reject: (error: Error) => void;
 }
 
 export class Registry extends EventEmitter {
   private actors: Map<string, ActorInfo> = new Map();
+  private mailboxManager: MailboxManagerActor;
+  private processingIntervalMs: number = 10; // Process messages every 10ms
+  private pendingResponses: Map<string, PendingResponse> = new Map();
+  private useMailboxes: boolean = true; // Feature flag for mailbox integration
 
   constructor() {
     super();
+    this.mailboxManager = new MailboxManagerActor("registry-mailbox-manager");
   }
 
   // Register an actor
@@ -25,11 +38,18 @@ export class Registry extends EventEmitter {
       throw new Error(`Actor already registered: ${actor.id}`);
     }
 
-    this.actors.set(actor.id, {
+    const info: ActorInfo = {
       actor,
       registeredAt: new Date(),
       messageCount: 0,
-    });
+    };
+
+    this.actors.set(actor.id, info);
+
+    // Create mailbox and start processing loop if mailboxes enabled
+    if (this.useMailboxes) {
+      this.ensureMailboxAndProcessing(actor.id);
+    }
   }
 
   // Unregister an actor
@@ -37,8 +57,18 @@ export class Registry extends EventEmitter {
     const info = this.actors.get(actorId);
     if (info) {
       this.stopHeartbeat(actorId);
+      this.stopMessageProcessing(actorId);
       if (info.actor.stop) {
         info.actor.stop();
+      }
+
+      // Delete mailbox if using mailboxes
+      if (this.useMailboxes) {
+        this.mailboxManager.send({
+          id: `delete_mailbox_${actorId}`,
+          type: "delete_mailbox",
+          payload: { actorId },
+        });
       }
     }
     return this.actors.delete(actorId);
@@ -76,6 +106,47 @@ export class Registry extends EventEmitter {
     info.messageCount++;
     info.lastMessageAt = new Date();
 
+    // If mailboxes disabled, use direct delivery (original behavior)
+    if (!this.useMailboxes) {
+      return this.sendDirect(actorId, message, info);
+    }
+
+    // Mailbox-based delivery with promise-based response
+    return new Promise((resolve, reject) => {
+      // Store response handlers
+      this.pendingResponses.set(message.id, { resolve, reject });
+
+      // Enqueue message
+      this.mailboxManager.send({
+        id: `enqueue_${actorId}_${Date.now()}`,
+        type: "enqueue",
+        payload: { actorId, message },
+      }).then((enqueueResult) => {
+        if (!enqueueResult.success) {
+          // Failed to enqueue - reject immediately
+          this.pendingResponses.delete(message.id);
+          const errorMsg = typeof enqueueResult.error === 'string'
+            ? enqueueResult.error
+            : (enqueueResult.error as { message?: string })?.message || 'Unknown error';
+
+          resolve({
+            success: false,
+            error: `Failed to enqueue message for ${actorId}: ${errorMsg}`,
+          });
+        }
+        // Message enqueued - response will come from processing loop
+      }).catch((error) => {
+        this.pendingResponses.delete(message.id);
+        resolve({
+          success: false,
+          error: `Enqueue error: ${error instanceof Error ? error.message : String(error)}`,
+        });
+      });
+    });
+  }
+
+  // Direct send (original synchronous behavior)
+  private async sendDirect(actorId: string, message: Message, info: ActorInfo): Promise<Response> {
     try {
       const response = await info.actor.send(message);
       info.lastSuccessAt = new Date(); // Track last successful message
@@ -113,11 +184,133 @@ export class Registry extends EventEmitter {
   clear(): void {
     for (const [actorId, info] of this.actors.entries()) {
       this.stopHeartbeat(actorId);
+      this.stopMessageProcessing(actorId);
       if (info.actor.stop) {
         info.actor.stop();
       }
     }
     this.actors.clear();
+    this.pendingResponses.clear();
+  }
+
+  /**
+   * Ensure mailbox exists and processing loop is running for an actor
+   */
+  private ensureMailboxAndProcessing(actorId: string): void {
+    const info = this.actors.get(actorId);
+    if (!info) return;
+
+    // Create mailbox (idempotent - will fail if already exists, which is fine)
+    this.mailboxManager.send({
+      id: `create_mailbox_${actorId}`,
+      type: "create_mailbox",
+      payload: { actorId },
+    }).catch(() => {
+      // Ignore errors - mailbox might already exist
+    });
+
+    // Start processing loop if not already running
+    if (!info.processingLoop) {
+      this.startMessageProcessing(actorId);
+    }
+  }
+
+  /**
+   * Start message processing loop for an actor
+   * Continuously dequeues messages from mailbox and delivers to actor
+   */
+  private startMessageProcessing(actorId: string): void {
+    const info = this.actors.get(actorId);
+    if (!info || info.processingLoop) return;
+
+    info.processingLoop = setInterval(async () => {
+      const currentInfo = this.actors.get(actorId);
+      if (!currentInfo) {
+        // Actor removed, clean up
+        if (info.processingLoop) {
+          clearInterval(info.processingLoop);
+        }
+        return;
+      }
+
+      // Dequeue next message
+      const dequeueResult = await this.mailboxManager.send({
+        id: `dequeue_${actorId}_${Date.now()}`,
+        type: "dequeue",
+        payload: { actorId },
+      });
+
+      if (!dequeueResult.success || !dequeueResult.data?.message) {
+        // No message available or error - continue polling
+        return;
+      }
+
+      const message = dequeueResult.data.message as Message;
+
+      // Deliver message to actor
+      try {
+        const response = await currentInfo.actor.send(message);
+        currentInfo.lastSuccessAt = new Date();
+
+        // Resolve pending promise if exists
+        const pending = this.pendingResponses.get(message.id);
+        if (pending) {
+          pending.resolve(response);
+          this.pendingResponses.delete(message.id);
+        }
+      } catch (error) {
+        // Actor crashed!
+        this.emit('actor_died', {
+          actorId,
+          error: error instanceof Error ? error.message : String(error),
+          reason: 'exception',
+          lastMessageAt: currentInfo.lastMessageAt,
+        });
+
+        // Resolve/reject pending promise
+        const pending = this.pendingResponses.get(message.id);
+        if (pending) {
+          pending.resolve({
+            success: false,
+            error: `Actor ${actorId} died: ${error instanceof Error ? error.message : String(error)}`,
+          });
+          this.pendingResponses.delete(message.id);
+        }
+
+        // Clean up
+        this.stopMessageProcessing(actorId);
+        this.actors.delete(actorId);
+      }
+    }, this.processingIntervalMs);
+  }
+
+  /**
+   * Stop message processing loop for an actor
+   */
+  private stopMessageProcessing(actorId: string): void {
+    const info = this.actors.get(actorId);
+    if (info?.processingLoop) {
+      clearInterval(info.processingLoop);
+      info.processingLoop = undefined;
+    }
+  }
+
+  /**
+   * Get mailbox status for an actor
+   */
+  async getMailboxStatus(actorId: string): Promise<Response> {
+    if (!this.useMailboxes) {
+      return {
+        success: false,
+        error: "Mailboxes are disabled",
+      };
+    }
+
+    return this.mailboxManager.send({
+      id: `status_${actorId}_${Date.now()}`,
+      type: "status",
+      payload: { actorId },
+    });
   }
 
   /**

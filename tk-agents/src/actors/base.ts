@@ -27,10 +27,13 @@ export interface StreamEvent {
   timestamp: Date;
 }
 
+// Actor types
+export type ActorType = "deterministic" | "agent";
+
 // All actors implement this interface - deterministic or not
 export interface Actor {
   readonly id: string;
-  readonly type: "deterministic" | "agent";
+  readonly type: ActorType;
 
   // Synchronous-style send (returns when complete)
   send(message: Message): Promise<Response>;

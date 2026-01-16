@@ -1,8 +1,9 @@
 // MailboxManager Actor - Manages mailboxes for other actors
 // Follows actor model: Everything is an actor, all interactions are messages
 
-import { Actor, Message, Response, ActorType } from "./base";
-import { Mailbox, MailboxConfig } from "./mailbox";
+import type { Actor, Message, Response, ActorType } from "./base";
+import type { MailboxConfig } from "./mailbox";
+import { Mailbox } from "./mailbox";
 
 /**
  * MailboxManager Actor
