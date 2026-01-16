@@ -14,7 +14,7 @@
  */
 
 import { Graph } from "../graph.ts";
-import { TaskNode, type CreateTaskOptions } from "../task.ts";
+import { TaskActor, type CreateTaskOptions, getTaskProperties } from "../task.ts";
 import type { Edge, NodeProperties, ObjectiveCriterion, TaskProperties } from "../types.ts";
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { resolve } from "path";
@@ -38,13 +38,13 @@ async function loadGraph(filePath: string): Promise<Graph> {
 
   const graph = new Graph();
 
-  // Recreate nodes
+  // Recreate nodes using TaskActor factory
   for (const nodeProps of taskFile.nodes) {
     if (nodeProps.type === "task") {
       const taskProps = nodeProps as TaskProperties;
 
-      // Reconstruct TaskNode from saved properties
-      const task = new TaskNode({
+      // Create task actor using factory
+      TaskActor({
         goal: taskProps.goal,
         desiredDeliverables: taskProps.desiredDeliverables,
         objectiveSuccessCriteria: taskProps.objectiveSuccessCriteria,
@@ -52,23 +52,25 @@ async function loadGraph(filePath: string): Promise<Graph> {
         informationGaps: taskProps.informationGaps,
         toolsAvailable: taskProps.toolsAvailable,
         parentTaskId: taskProps.parentTaskId,
+        graph,
       });
 
-      // Restore task state
-      task.properties = { ...taskProps };
-
-      graph.registerNode(task);
+      // Restore task state by updating properties in graph
+      const restoredProps = graph.getNodeProperties(taskProps.id);
+      if (restoredProps) {
+        Object.assign(restoredProps, taskProps);
+      }
     }
   }
 
   // Recreate edges
   for (const edge of taskFile.edges) {
-    (graph as any).edges.set(edge.id, edge);
-    // Update edge counter to avoid ID conflicts
+    // Add edge directly to graph's internal edges map
     const edgeNum = parseInt(edge.id.replace("edge_", ""));
-    if (!isNaN(edgeNum) && edgeNum >= (graph as any).edgeCounter) {
-      (graph as any).edgeCounter = edgeNum;
+    if (!isNaN(edgeNum)) {
+      graph.setEdgeCounter(Math.max(edgeNum, 0));
     }
+    graph.addEdge(edge.fromId, edge.toId, edge.type, edge.properties);
   }
 
   return graph;
@@ -101,8 +103,8 @@ async function cmdInit() {
 
   const graph = new Graph();
 
-  // Create an example task
-  const exampleTask = new TaskNode({
+  // Create an example task using TaskActor
+  TaskActor({
     goal: "Example task - getting started",
     desiredDeliverables: ["Understand the task system", "Run first commands"],
     objectiveSuccessCriteria: [
@@ -113,27 +115,32 @@ async function cmdInit() {
       },
     ],
     toolsAvailable: ["CLI"],
+    graph,
   });
 
-  graph.registerNode(exampleTask);
+  // Get the task ID from graph
+  const taskId = graph.getNodeIds()[0];
 
   await saveGraph(graph, filePath);
   console.log(`Created ${TASKS_FILE} with example task`);
-  console.log(`Task ID: ${exampleTask.properties.id}`);
+  console.log(`Task ID: ${taskId}`);
 }
 
 async function cmdList() {
   const filePath = resolve(TASKS_FILE);
   const graph = await loadGraph(filePath);
-  const nodes = graph.getAllNodes();
+  const nodeIds = graph.getNodeIds();
 
-  const tasks = nodes.filter((n) => n.properties.type === "task");
+  const tasks = nodeIds.filter((id) => {
+    const props = graph.getNodeProperties(id);
+    return props?.type === "task";
+  });
 
   console.log("\nTasks:");
   console.log("─".repeat(80));
 
-  for (const node of tasks) {
-    const props = node.properties as TaskProperties;
+  for (const id of tasks) {
+    const props = graph.getNodeProperties(id) as TaskProperties;
     const statusEmoji = {
       created: "⭕",
       ready: "🟡",
@@ -144,7 +151,7 @@ async function cmdList() {
     }[props.state] || "❓";
 
     const goalPreview = props.goal.length > 50 ? props.goal.slice(0, 47) + "..." : props.goal;
-    console.log(`${statusEmoji} ${props.id.padEnd(15)} ${props.state.padEnd(10)} ${goalPreview}`);
+    console.log(`${statusEmoji} ${id.padEnd(15)} ${props.state.padEnd(10)} ${goalPreview}`);
   }
   console.log();
 }
@@ -153,7 +160,7 @@ async function cmdShow(id: string) {
   const filePath = resolve(TASKS_FILE);
   const graph = await loadGraph(filePath);
 
-  const result = graph.send(id, "get", {});
+  const result = await graph.send(id, "get", {});
   const getResponse = result as { id: string; properties: TaskProperties; edges: Edge[] };
 
   const props = getResponse.properties;
@@ -223,24 +230,28 @@ async function cmdAdd(goal: string, options: { deliverables?: string[]; criteria
     toolsAvailable: ["CLI"],
   };
 
-  const task = new TaskNode(createOptions);
-  graph.registerNode(task);
+  // Create task using TaskActor factory
+  TaskActor({ ...createOptions, graph });
+
+  // Get the new task ID (last one added)
+  const allIds = graph.getNodeIds();
+  const taskId = allIds[allIds.length - 1];
 
   // Add dependency edges
   if (options.depends) {
     const deps = options.depends.split(",");
     for (const depId of deps) {
-      graph.addEdge(task.properties.id, depId.trim(), "depends_on");
+      graph.addEdge(taskId, depId.trim(), "depends_on");
     }
   }
 
   // Add parent edge
   if (options.parent) {
-    graph.addEdge(task.properties.id, options.parent, "spawned_by");
+    graph.addEdge(taskId, options.parent, "spawned_by");
   }
 
   await saveGraph(graph, filePath);
-  console.log(`Added task: ${task.properties.id}`);
+  console.log(`Added task: ${taskId}`);
   console.log(`Goal: ${goal}`);
 }
 
@@ -252,14 +263,14 @@ async function cmdUpdate(id: string, action: string, ...args: string[]) {
 
   switch (action) {
     case "start": {
-      result = graph.send(id, "start", {});
+      result = await graph.send(id, "start", {});
       console.log(`Started task ${id}:`, result);
       break;
     }
 
     case "complete": {
       // Get task to set actual values for criteria
-      const getResponse = graph.send(id, "get", {}) as { properties: TaskProperties };
+      const getResponse = await graph.send(id, "get", {}) as { properties: TaskProperties };
       const props = getResponse.properties;
 
       // For now, auto-pass all criteria
@@ -267,14 +278,14 @@ async function cmdUpdate(id: string, action: string, ...args: string[]) {
         criterion.actual = criterion.threshold;
       }
 
-      result = graph.send(id, "complete", { result: "Task completed" });
+      result = await graph.send(id, "complete", { result: "Task completed" });
       console.log(`Completed task ${id}:`, result);
       break;
     }
 
     case "block": {
       const reason = args[0] || "Blocked by dependency";
-      result = graph.send(id, "block", { reason });
+      result = await graph.send(id, "block", { reason });
       console.log(`Blocked task ${id}:`, result);
       break;
     }
@@ -292,7 +303,7 @@ async function cmdEval(id: string) {
   const filePath = resolve(TASKS_FILE);
   const graph = await loadGraph(filePath);
 
-  const result = graph.send(id, "eval", {});
+  const result = await graph.send(id, "eval", {});
   console.log(`\nEvaluation for task ${id}:`);
   console.log(JSON.stringify(result, null, 2));
 }
@@ -301,7 +312,7 @@ async function cmdStatus(id: string) {
   const filePath = resolve(TASKS_FILE);
   const graph = await loadGraph(filePath);
 
-  const result = graph.send(id, "query_status", {});
+  const result = await graph.send(id, "query_status", {});
   console.log(`\nStatus for task ${id}:`);
   console.log(JSON.stringify(result, null, 2));
 }
