@@ -1,7 +1,7 @@
 // Simple bounded mailbox for actor message queueing
 // KISS principle: Just a queue with a size limit
 
-import { Message } from "./base";
+import type { Message } from "./base";
 
 export interface MailboxConfig {
   maxSize: number; // Reasonable default: 1000 messages

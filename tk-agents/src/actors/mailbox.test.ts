@@ -2,7 +2,7 @@
 import { describe, test, expect, beforeEach } from "bun:test";
 import { Mailbox } from "./mailbox";
 import { MailboxManagerActor } from "./mailbox-manager";
-import { Message } from "./base";
+import type { Message } from "./base";
 
 describe("Mailbox", () => {
   let mailbox: Mailbox;
@@ -111,7 +111,8 @@ describe("MailboxManagerActor", () => {
     });
 
     expect(response.success).toBe(false);
-    expect(response.error?.message).toContain("already exists");
+    const errorMsg = typeof response.error === 'string' ? response.error : response.error?.message;
+    expect(errorMsg).toContain("already exists");
   });
 
   test("should enqueue messages to actor mailbox", async () => {
@@ -131,7 +132,7 @@ describe("MailboxManagerActor", () => {
     });
 
     expect(response.success).toBe(true);
-    expect(response.data?.size).toBe(1);
+    expect((response.data as { size?: number })?.size).toBe(1);
   });
 
   test("should dequeue messages from actor mailbox", async () => {
@@ -158,8 +159,9 @@ describe("MailboxManagerActor", () => {
     });
 
     expect(response.success).toBe(true);
-    expect(response.data?.message).toEqual(msg);
-    expect(response.data?.size).toBe(0);
+    const data = response.data as { message?: Message; size?: number };
+    expect(data?.message).toEqual(msg);
+    expect(data?.size).toBe(0);
   });
 
   test("should report mailbox status", async () => {
@@ -186,10 +188,11 @@ describe("MailboxManagerActor", () => {
     });
 
     expect(response.success).toBe(true);
-    expect(response.data?.exists).toBe(true);
-    expect(response.data?.size).toBe(1);
-    expect(response.data?.isEmpty).toBe(false);
-    expect(response.data?.isFull).toBe(false);
+    const statusData = response.data as { exists?: boolean; size?: number; isEmpty?: boolean; isFull?: boolean };
+    expect(statusData?.exists).toBe(true);
+    expect(statusData?.size).toBe(1);
+    expect(statusData?.isEmpty).toBe(false);
+    expect(statusData?.isFull).toBe(false);
   });
 
   test("should handle status request for non-existent mailbox", async () => {
@@ -200,7 +203,7 @@ describe("MailboxManagerActor", () => {
     });
 
     expect(response.success).toBe(true);
-    expect(response.data?.exists).toBe(false);
+    expect((response.data as { exists?: boolean })?.exists).toBe(false);
   });
 
   test("should clear mailbox", async () => {
@@ -226,7 +229,7 @@ describe("MailboxManagerActor", () => {
     });
 
     expect(response.success).toBe(true);
-    expect(response.data?.size).toBe(0);
+    expect((response.data as { size?: number })?.size).toBe(0);
   });
 
   test("should delete mailbox", async () => {
@@ -245,7 +248,7 @@ describe("MailboxManagerActor", () => {
     });
 
     expect(response.success).toBe(true);
-    expect(response.data?.existed).toBe(true);
+    expect((response.data as { existed?: boolean })?.existed).toBe(true);
 
     // Verify it's gone
     const statusResponse = await manager.send({
@@ -254,7 +257,7 @@ describe("MailboxManagerActor", () => {
       payload: { actorId: "actor-1" },
     });
 
-    expect(statusResponse.data?.exists).toBe(false);
+    expect((statusResponse.data as { exists?: boolean })?.exists).toBe(false);
   });
 
   test("should list all mailboxes", async () => {
@@ -306,8 +309,10 @@ describe("MailboxManagerActor", () => {
     });
 
     expect(response.success).toBe(false);
-    expect(response.error?.category).toBe("transient");
-    expect(response.error?.retryable).toBe(true);
-    expect(response.error?.message).toContain("full");
+    const error = typeof response.error === 'string' ? undefined : response.error;
+    expect(error?.category).toBe("transient");
+    expect(error?.retryable).toBe(true);
+    const errorMsg = typeof response.error === 'string' ? response.error : response.error?.message;
+    expect(errorMsg).toContain("full");
   });
 });

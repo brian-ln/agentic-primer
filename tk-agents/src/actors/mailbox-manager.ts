@@ -259,7 +259,7 @@ export class MailboxManagerActor implements Actor {
     };
   }
 
-  private handleStatus(payload: MailboxOperationPayload): Response<MailboxStatusResponse> {
+  private handleStatus(payload: MailboxOperationPayload): Response {
     const { actorId } = payload;
 
     if (!actorId) {
