@@ -7,8 +7,8 @@
  * - Task dependencies and notifications
  */
 
-import { createSystem } from "../src/actors-new/index.ts";
-import type { ActorFactory, Message } from "../src/actors-new/index.ts";
+import { createSystem } from "../src/actors/index.ts";
+import type { ActorFactory, Message } from "../src/actors/index.ts";
 
 // Task data structure
 interface TaskData {

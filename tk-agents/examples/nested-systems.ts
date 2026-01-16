@@ -7,8 +7,8 @@
  * - Message routing through hierarchy
  */
 
-import { createSystem } from "../src/actors-new/index.ts";
-import type { ActorFactory, Message } from "../src/actors-new/index.ts";
+import { createSystem } from "../src/actors/index.ts";
+import type { ActorFactory, Message } from "../src/actors/index.ts";
 
 // Simple echo actor
 const EchoActor: ActorFactory<{ prefix: string }> = (data, send) => ({
