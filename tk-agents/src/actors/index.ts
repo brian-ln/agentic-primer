@@ -1,14 +1,15 @@
-// Actors module - all actor types and infrastructure
+/**
+ * Actor System - Public API
+ *
+ * Core Principles:
+ * 1. Actors are pure functions - all dependencies explicit
+ * 2. Send is the only primitive - send(targetId, message)
+ * 3. Two APIs for bridging:
+ *    - External: actor.send(message)
+ *    - Internal: send(targetId, message)
+ * 4. Systems ARE actors - uniform composition
+ */
 
-export * from "./base";
-export * from "./errors";
-export * from "./registry";
-export * from "./bash";
-export * from "./claude";
-export * from "./chain";
-export * from "./mock";
-export * from "./human";
-
-// NEW: Hewitt Actor Model infrastructure (Phase 1)
-export * from "./system";
-export * from "./base-actor";
+export type { Actor, Message, Response, SendFunction, ActorFactory } from "./base.ts";
+export type { System } from "./system.ts";
+export { createSystem } from "./system.ts";

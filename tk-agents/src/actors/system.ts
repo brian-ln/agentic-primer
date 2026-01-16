@@ -1,127 +1,111 @@
-// System: The Actor That Manages Actors
-//
-// Implements the Hewitt Actor Model where System is itself an actor
-// that manages other actors through message passing.
-//
-// System receives messages to:
-// - route: Route messages to contained actors
-// - register: Register new actors
-// - unregister: Unregister actors
-// - list: List all registered actors
-// - ping: Health check
+/**
+ * System implementation - provides send and maintains actor registry
+ * Following ACTOR_SPEC.md
+ */
 
-import type { Actor, Message, Response } from "./base";
+import type { Actor, Address, Message, Response, SendFunction } from "./base";
 
-export class System implements Actor {
-  readonly id = "system";
-  readonly type = "deterministic" as const;
+/**
+ * System interface - extends Actor with registration capability
+ * Systems ARE actors (uniform composition)
+ */
+export interface System extends Actor {
+  /**
+   * Send function that can be used both as:
+   * 1. SendFunction - send(targetId, message) for actor-to-actor
+   * 2. Actor.send - send(message) for external -> actor
+   */
+  send: SendFunction & ((message: Message) => Promise<Response>);
 
-  private actors: Map<string, Actor> = new Map();
+  /**
+   * Register an actor with an address
+   */
+  register: (address: Address, actor: Actor) => void;
+}
 
-  // PUBLIC: System receives messages from outside
-  async receive(message: Message): Promise<Response> {
-    switch (message.type) {
-      case 'route':
-        // Route message to contained actor
-        const routePayload = message.payload as { targetId: string; message: Message };
-        return this.routeToActor(routePayload.targetId, routePayload.message);
+/**
+ * Create a new actor system
+ *
+ * The system:
+ * - Provides the send implementation
+ * - Maintains the actor registry
+ * - Routes messages to actors
+ * - IS an actor itself (uniform composition)
+ */
+export function createSystem(): System {
+  const actors = new Map<Address, Actor>();
 
-      case 'register':
-        // Register new actor
-        const regPayload = message.payload as { actor: Actor };
-        return this.registerActor(regPayload.actor);
-
-      case 'unregister':
-        // Unregister actor
-        const unregPayload = message.payload as { actorId: string };
-        return this.unregisterActor(unregPayload.actorId);
-
-      case 'list':
-        // List all actors
-        return this.listActors();
-
-      case 'ping':
-        // System responds to ping
-        return { success: true, data: { alive: true, timestamp: Date.now() } };
-
-      default:
-        return { success: false, error: `Unknown message type: ${message.type}` };
-    }
-  }
-
-  // PRIVATE: Route to contained actor
-  private async routeToActor(actorId: string, message: Message): Promise<Response> {
-    const actor = this.actors.get(actorId);
+  // The send primitive implementation
+  const send: SendFunction = async (targetAddress: Address, message: Message) => {
+    const actor = actors.get(targetAddress);
     if (!actor) {
-      return { success: false, error: `Actor not found: ${actorId}` };
+      return {
+        success: false,
+        error: `Actor not found: ${targetAddress}`,
+      };
+    }
+    return actor.send(message);
+  };
+
+  // Register an actor
+  const register = (address: Address, actor: Actor) => {
+    actors.set(address, actor);
+  };
+
+  // System as actor - when messages sent to system itself
+  // This enables uniform composition (systems in systems)
+  const systemAsSend = async (message: Message) => {
+    // System can handle meta-messages like "list", "stats", etc.
+    if (message.type === "list") {
+      return {
+        success: true,
+        data: Array.from(actors.keys()),
+      };
     }
 
-    // Call actor's receive() method
-    return actor.receive(message);
-  }
-
-  // PRIVATE: Registration management
-  private registerActor(actor: Actor): Response {
-    if (this.actors.has(actor.id)) {
-      return { success: false, error: `Actor already registered: ${actor.id}` };
+    if (message.type === "stats") {
+      return {
+        success: true,
+        data: { actorCount: actors.size },
+      };
     }
 
-    this.actors.set(actor.id, actor);
-
-    // If actor extends BaseActor, inject System reference
-    if ('setSystem' in actor && typeof (actor as any).setSystem === 'function') {
-      (actor as any).setSystem(this);
+    // Route to specific actor if targetAddress in payload
+    if (
+      message.type === "route" &&
+      typeof message.payload === "object" &&
+      message.payload !== null &&
+      "targetAddress" in message.payload &&
+      "message" in message.payload
+    ) {
+      const { targetAddress, message: innerMessage } = message.payload as {
+        targetAddress: Address;
+        message: Message;
+      };
+      return send(targetAddress, innerMessage);
     }
 
-    // Call actor's start() if it exists
-    if (actor.start) {
-      actor.start();
+    return {
+      success: false,
+      error: `Unknown system message type: ${message.type}`,
+    };
+  };
+
+  // Create the dual-purpose send function
+  // It can be called with 1 arg (as Actor) or 2 args (as SendFunction)
+  const dualSend = ((...args: unknown[]) => {
+    if (args.length === 1) {
+      // Called as actor.send(message)
+      return systemAsSend(args[0] as Message);
+    } else if (args.length === 2) {
+      // Called as send(targetId, message)
+      return send(args[0] as string, args[1] as Message);
     }
+    throw new Error("Invalid send call - expected 1 or 2 arguments");
+  }) as SendFunction & ((message: Message) => Promise<Response>);
 
-    return { success: true, data: { actorId: actor.id } };
-  }
-
-  private unregisterActor(actorId: string): Response {
-    const actor = this.actors.get(actorId);
-    if (!actor) {
-      return { success: false, error: `Actor not found: ${actorId}` };
-    }
-
-    // Call actor's stop() if it exists
-    if (actor.stop) {
-      actor.stop();
-    }
-
-    this.actors.delete(actorId);
-    return { success: true, data: { actorId } };
-  }
-
-  private listActors(): Response {
-    const actors = Array.from(this.actors.values()).map(actor => ({
-      id: actor.id,
-      type: actor.type
-    }));
-    return { success: true, data: { actors } };
-  }
-
-  // Convenience method for external code to send to actors
-  // (wraps the route message pattern)
-  async sendTo(targetId: string, message: Message): Promise<Response> {
-    return this.receive({
-      id: crypto.randomUUID(),
-      type: 'route',
-      payload: { targetId, message },
-      sender: 'system'
-    });
-  }
-
-  // Convenience method for registering actors
-  register(actor: Actor): Response {
-    return this.registerActor(actor);
-  }
-
-  // Convenience method for unregistering actors
-  unregister(actorId: string): Response {
-    return this.unregisterActor(actorId);
-  }
+  return {
+    send: dualSend,
+    register,
+  };
 }
