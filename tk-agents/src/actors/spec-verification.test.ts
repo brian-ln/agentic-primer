@@ -420,7 +420,7 @@ describe("Actor System Spec Verification", () => {
         id: "1",
         type: "route",
         payload: {
-          targetId: "actor-1",
+          targetAddress: "actor-1",
           message: { id: "2", type: "test", payload: null },
         },
       });
