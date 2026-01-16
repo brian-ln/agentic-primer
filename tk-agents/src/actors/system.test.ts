@@ -2,6 +2,7 @@
 
 import { test, expect } from "bun:test";
 import { System } from "./system";
+import { BaseActor } from "./base-actor";
 import type { Actor, Message, Response } from "./base";
 
 // Simple test actor
@@ -145,4 +146,37 @@ test("System - convenience sendTo method", async () => {
 
   expect(response.success).toBe(true);
   expect((response.data as any).received).toBe("test");
+});
+
+// Test actor that extends BaseActor (can send to other actors)
+class CoordinatorActor extends BaseActor {
+  constructor(id: string) {
+    super(id, "deterministic");
+  }
+
+  async receive(message: Message): Promise<Response> {
+    if (message.type === "coordinate") {
+      // Try to send to another actor
+      return this.send("worker", {
+        id: "work-1",
+        type: "work",
+        payload: message.payload,
+      });
+    }
+    return { success: true, data: {} };
+  }
+}
+
+test("BaseActor - returns error when not connected to System", async () => {
+  const actor = new CoordinatorActor("coordinator");
+  // Don't call setSystem() - actor not connected
+
+  const response = await actor.receive({
+    id: "test-1",
+    type: "coordinate",
+    payload: "test work",
+  });
+
+  expect(response.success).toBe(false);
+  expect(response.error).toContain("not connected to System");
 });
