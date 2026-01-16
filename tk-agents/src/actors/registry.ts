@@ -2,6 +2,7 @@
 
 import { EventEmitter } from "events";
 import type { Actor, Message, Response } from "./base";
+import { MailboxManagerActor } from "./mailbox-manager";
 
 export interface ActorInfo {
   actor: Actor;
@@ -10,13 +11,17 @@ export interface ActorInfo {
   lastMessageAt?: Date;
   lastSuccessAt?: Date;
   heartbeatInterval?: NodeJS.Timeout;
+  processingLoop?: NodeJS.Timeout; // Message processing interval
 }
 
 export class Registry extends EventEmitter {
   private actors: Map<string, ActorInfo> = new Map();
+  private mailboxManager: MailboxManagerActor;
+  private processingIntervalMs: number = 10; // Process messages every 10ms
 
   constructor() {
     super();
+    this.mailboxManager = new MailboxManagerActor("registry-mailbox-manager");
   }
 
   // Register an actor
@@ -25,11 +30,27 @@ export class Registry extends EventEmitter {
       throw new Error(`Actor already registered: ${actor.id}`);
     }
 
-    this.actors.set(actor.id, {
+    // Create mailbox for actor
+    const mailboxResult = await this.mailboxManager.send({
+      id: `create_mailbox_${actor.id}`,
+      type: "create_mailbox",
+      payload: { actorId: actor.id },
+    });
+
+    if (!mailboxResult.success) {
+      throw new Error(`Failed to create mailbox for ${actor.id}: ${mailboxResult.error}`);
+    }
+
+    const info: ActorInfo = {
       actor,
       registeredAt: new Date(),
       messageCount: 0,
-    });
+    };
+
+    this.actors.set(actor.id, info);
+
+    // Start message processing loop for this actor
+    this.startMessageProcessing(actor.id);
   }
 
   // Unregister an actor

@@ -466,3 +466,110 @@ describe("Death Detection", () => {
     }).toThrow("Cannot start heartbeat: Actor not found not-found");
   });
 });
+
+describe("Structured Errors", () => {
+  test("actor can return structured error", async () => {
+    const registry = new Registry();
+
+    // Create actor that returns structured error
+    const { validationError } = await import("./errors");
+    const actor = new MockActor({
+      id: "validator",
+      handler: (msg) => {
+        if (!msg.payload || typeof msg.payload !== 'object') {
+          return {
+            response: {
+              success: false,
+              error: validationError("Payload must be an object", {
+                received: typeof msg.payload,
+              }),
+            },
+          };
+        }
+        return {
+          response: { success: true, data: { validated: true } },
+        };
+      },
+    });
+
+    registry.register(actor);
+
+    // Send invalid payload
+    const response = await registry.sendTo("validator", "validate", null);
+
+    expect(response.success).toBe(false);
+    expect(response.error).toBeDefined();
+
+    // Check if it's a structured error
+    if (typeof response.error === 'object' && response.error !== null && 'category' in response.error) {
+      const structuredError = response.error as { category: string; retryable: boolean };
+      expect(structuredError.category).toBe("validation");
+      expect(structuredError.retryable).toBe(false);
+    }
+  });
+
+  test("actor can return transient error", async () => {
+    const registry = new Registry();
+
+    const { transientError } = await import("./errors");
+    let attemptCount = 0;
+
+    const actor = new MockActor({
+      id: "unreliable",
+      handler: () => {
+        attemptCount++;
+        if (attemptCount < 3) {
+          return {
+            response: {
+              success: false,
+              error: transientError("Service temporarily unavailable", undefined, {
+                attemptCount,
+              }),
+            },
+          };
+        }
+        return {
+          response: { success: true, data: { result: "success" } },
+        };
+      },
+    });
+
+    registry.register(actor);
+
+    // First attempt fails
+    const response1 = await registry.sendTo("unreliable", "call", {});
+    expect(response1.success).toBe(false);
+    if (typeof response1.error === 'object' && response1.error !== null && 'retryable' in response1.error) {
+      const error = response1.error as { retryable: boolean };
+      expect(error.retryable).toBe(true);
+    }
+
+    // Second attempt fails
+    const response2 = await registry.sendTo("unreliable", "call", {});
+    expect(response2.success).toBe(false);
+
+    // Third attempt succeeds
+    const response3 = await registry.sendTo("unreliable", "call", {});
+    expect(response3.success).toBe(true);
+  });
+
+  test("error helpers create correct error types", () => {
+    const { validationError, transientError, permanentError, fatalError } = require("./errors");
+
+    const valError = validationError("Invalid input");
+    expect(valError.category).toBe("validation");
+    expect(valError.retryable).toBe(false);
+
+    const tempError = transientError("Timeout");
+    expect(tempError.category).toBe("transient");
+    expect(tempError.retryable).toBe(true);
+
+    const permError = permanentError("Permission denied");
+    expect(permError.category).toBe("permanent");
+    expect(permError.retryable).toBe(false);
+
+    const fatal = fatalError("Out of memory");
+    expect(fatal.category).toBe("fatal");
+    expect(fatal.retryable).toBe(false);
+  });
+});

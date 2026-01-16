@@ -1,5 +1,7 @@
 // Actor base interface and types
 
+import type { ActorError } from "./errors";
+
 export interface Message {
   id: string;
   type: string;
@@ -10,11 +12,12 @@ export interface Message {
 export interface Response {
   success: boolean;
   data?: unknown;
-  error?: string;
+  error?: string | ActorError;  // Support both string (legacy) and structured errors
   metadata?: {
     durationMs?: number;
     costUsd?: number;
     sessionId?: string;
+    [key: string]: unknown;  // Allow additional metadata fields
   };
 }
 

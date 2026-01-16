@@ -1,6 +1,7 @@
 // Actors module - all actor types and infrastructure
 
 export * from "./base";
+export * from "./errors";
 export * from "./registry";
 export * from "./bash";
 export * from "./claude";
