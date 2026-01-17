@@ -1,0 +1,27 @@
+[
+  {
+    "goal": "Set up authentication system",
+    "priority": 0,
+    "deliverables": ["Login page", "Auth middleware", "JWT tokens"],
+    "labels": ["backend", "auth", "p0"],
+    "criteria": [
+      {
+        "criterion": "All tests passing",
+        "measure": "Test suite",
+        "threshold": true
+      }
+    ]
+  },
+  {
+    "goal": "Create user registration flow",
+    "priority": 1,
+    "deliverables": ["Registration form", "Email verification"],
+    "labels": ["backend", "auth"]
+  },
+  {
+    "goal": "Build API endpoints",
+    "priority": 1,
+    "deliverables": ["REST API", "GraphQL API"],
+    "labels": ["backend", "api"]
+  }
+]

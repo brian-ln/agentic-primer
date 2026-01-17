@@ -1,0 +1,16 @@
+[
+  {
+    "id": "task_1",
+    "action": "start"
+  },
+  {
+    "id": "task_2",
+    "action": "complete",
+    "result": "All features implemented and tested"
+  },
+  {
+    "id": "task_3",
+    "action": "block",
+    "reason": "Waiting for design approval"
+  }
+]
