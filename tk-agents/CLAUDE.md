@@ -224,3 +224,88 @@ Before launching ANY background agent, ask:
 - [ ] For sub-agents: Did I link to parent task?
 
 **If NO to any question: STOP and create the task first.**
+
+---
+
+## Troubleshooting
+
+When debugging errors or issues, use systematic depth-first troubleshooting.
+
+**See:** `TROUBLESHOOTING_PROTOCOL.md` for complete protocol
+
+**Quick reference:**
+- Try 3+ variations before pivoting to alternatives
+- Document each attempt with exact commands and results
+- Check official documentation/examples
+- Reproduce in isolation before declaring failure
+- Only pivot after exhausting current approach
+
+**Example:**
+```markdown
+Attempt 1: Add init() call → Result: [exact outcome]
+Attempt 2: Verify WASM file → Result: [exact outcome]
+Attempt 3: Check documentation → Result: [found solution!]
+```
+
+**Anti-pattern:** "This doesn't work" → immediately try different approach
+**Good pattern:** "Attempt 1 failed because X, trying variation 2..."
+
+---
+
+## Agent Completion Protocol
+
+### CRITICAL: Create Review Task Before Announcing Completion
+
+When you complete agent work:
+
+1. **Create review task FIRST:**
+
+```bash
+bun src/cli/task.ts add "Review: <concise-description>" \
+  --parent <your-agent-task-id> \
+  --labels review,<work-type> \
+  --priority <P0-P3> \
+  --assignee bln
+```
+
+2. **Priority guide:**
+   - P0: Blocks other work, critical path
+   - P1: Feature work, significant changes
+   - P2: Research, documentation (default)
+   - P3: Experiments, drafts
+
+3. **Announce completion WITH review task ID:**
+
+```
+COMPLETION: <work-description>
+
+Deliverables:
+- <file1> (<size>, <description>)
+- <file2> (<size>, <description>)
+
+Review Task: task_review_XX (<priority>, <labels>)
+
+Status: COMPLETE - Ready for review
+```
+
+### Example
+
+```bash
+# Agent completed graph research
+bun src/cli/task.ts add "Review: Graph query optimization research" \
+  --parent task_agent_a8f57b5 \
+  --labels review,research,graph \
+  --priority P1 \
+  --assignee bln
+
+# Announce
+COMPLETION: Graph query optimization research
+
+Deliverables:
+- GRAPH_QUERY_RESEARCH.md (57KB, 10 patterns)
+- examples/ (5 query examples)
+
+Review Task: task_review_21 (P1, research)
+
+Status: COMPLETE - Ready for review
+```
