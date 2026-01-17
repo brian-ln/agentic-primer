@@ -31,6 +31,43 @@ interface TaskFile {
   edges: Edge[];
 }
 
+// JSON output format for machine-readable responses
+interface JsonResponse<T = any> {
+  success: boolean;
+  data?: T;
+  error?: {
+    code: string;
+    message: string;
+    details?: any;
+  };
+}
+
+// Global CLI options
+interface CliOptions {
+  json?: boolean;
+  yes?: boolean;
+  fields?: string[];
+}
+
+// Helper to output JSON response
+function jsonOutput<T>(success: boolean, data?: T, error?: any): void {
+  const response: JsonResponse<T> = { success };
+  if (data !== undefined) response.data = data;
+  if (error) response.error = error;
+  console.log(JSON.stringify(response, null, 2));
+}
+
+// Helper to project specific fields from object
+function projectFields<T extends object>(obj: T, fields: string[]): Partial<T> {
+  const result: any = {};
+  for (const field of fields) {
+    if (field in obj) {
+      result[field as keyof T] = obj[field as keyof T];
+    }
+  }
+  return result;
+}
+
 // Load tasks from file into Graph
 async function loadGraph(filePath: string): Promise<Graph> {
   if (!existsSync(filePath)) {
@@ -132,7 +169,7 @@ async function cmdInit() {
   console.log(`Task ID: ${taskId}`);
 }
 
-async function cmdList(filters?: { status?: string; label?: string; priority?: number }) {
+async function cmdList(filters?: { status?: string; label?: string; priority?: number }, options?: CliOptions) {
   const filePath = resolve(TASKS_FILE);
   const graph = await loadGraph(filePath);
   const nodeIds = graph.getNodeIds();
@@ -168,6 +205,26 @@ async function cmdList(filters?: { status?: string; label?: string; priority?: n
     });
   }
 
+  // Get task properties
+  const taskList = tasks.map((id) => {
+    const props = graph.getNodeProperties(id) as TaskProperties;
+    return { id, ...props };
+  });
+
+  // JSON output mode
+  if (options?.json) {
+    let data = taskList;
+
+    // Apply field projection if requested
+    if (options.fields && options.fields.length > 0) {
+      data = taskList.map(task => projectFields(task, options.fields!)) as any;
+    }
+
+    jsonOutput(true, data);
+    return;
+  }
+
+  // Human-friendly output
   console.log("\nTasks:");
   console.log("─".repeat(80));
 
@@ -194,7 +251,7 @@ async function cmdList(filters?: { status?: string; label?: string; priority?: n
   console.log();
 }
 
-async function cmdShow(id: string) {
+async function cmdShow(id: string, options?: CliOptions) {
   const filePath = resolve(TASKS_FILE);
   const graph = await loadGraph(filePath);
 
@@ -203,6 +260,20 @@ async function cmdShow(id: string) {
 
   const props = getResponse.properties;
 
+  // JSON output mode
+  if (options?.json) {
+    let data: any = { id, ...props, edges: getResponse.edges };
+
+    // Apply field projection if requested
+    if (options.fields && options.fields.length > 0) {
+      data = projectFields(data, options.fields);
+    }
+
+    jsonOutput(true, data);
+    return;
+  }
+
+  // Human-friendly output
   console.log(`\nTask: ${id}`);
   console.log("─".repeat(80));
   console.log(`Goal:           ${props.goal}`);
@@ -237,10 +308,17 @@ async function cmdShow(id: string) {
   console.log();
 }
 
-async function cmdAdd(goal: string, options: { deliverables?: string[]; criteria?: string; depends?: string; parent?: string; labels?: string[]; priority?: 0 | 1 | 2 | 3 | 4 }) {
+async function cmdAdd(goal: string, options: { deliverables?: string[]; criteria?: string; depends?: string; parent?: string; labels?: string[]; priority?: 0 | 1 | 2 | 3 | 4; json?: boolean }) {
   const filePath = resolve(TASKS_FILE);
 
   if (!existsSync(filePath)) {
+    if (options.json) {
+      jsonOutput(false, undefined, {
+        code: "FILE_NOT_FOUND",
+        message: `${TASKS_FILE} not found. Run 'task init' first.`,
+      });
+      process.exit(1);
+    }
     console.error(`Error: ${TASKS_FILE} not found. Run 'task init' first.`);
     process.exit(1);
   }
@@ -293,13 +371,21 @@ async function cmdAdd(goal: string, options: { deliverables?: string[]; criteria
   }
 
   await saveGraph(graph, filePath);
+
+  // JSON output mode
+  if (options.json) {
+    jsonOutput(true, { id: taskId, goal, labels: options.labels, priority: options.priority });
+    return;
+  }
+
+  // Human-friendly output
   console.log(`Added task: ${taskId}`);
   console.log(`Goal: ${goal}`);
   if (options.labels && options.labels.length > 0) console.log(`Labels: ${options.labels.join(", ")}`);
   if (options.priority !== undefined) console.log(`Priority: P${options.priority}`);
 }
 
-async function cmdUpdate(id: string, action: string, ...args: string[]) {
+async function cmdUpdate(id: string, action: string, options?: CliOptions, ...args: string[]) {
   const filePath = resolve(TASKS_FILE);
   const graph = await loadGraph(filePath);
 
@@ -308,6 +394,11 @@ async function cmdUpdate(id: string, action: string, ...args: string[]) {
   switch (action) {
     case "start": {
       result = await graph.send(id, "start", {});
+      if (options?.json) {
+        jsonOutput(true, { id, action: "start", result });
+        await saveGraph(graph, filePath);
+        return;
+      }
       console.log(`Started task ${id}:`, result);
       break;
     }
@@ -322,7 +413,12 @@ async function cmdUpdate(id: string, action: string, ...args: string[]) {
         criterion.actual = criterion.threshold;
       }
 
-      result = await graph.send(id, "complete", { result: "Task completed" });
+      result = await graph.send(id, "complete", { result: args[0] || "Task completed" });
+      if (options?.json) {
+        jsonOutput(true, { id, action: "complete", result });
+        await saveGraph(graph, filePath);
+        return;
+      }
       console.log(`Completed task ${id}:`, result);
       break;
     }
@@ -330,11 +426,24 @@ async function cmdUpdate(id: string, action: string, ...args: string[]) {
     case "block": {
       const reason = args[0] || "Blocked by dependency";
       result = await graph.send(id, "block", { reason });
+      if (options?.json) {
+        jsonOutput(true, { id, action: "block", reason, result });
+        await saveGraph(graph, filePath);
+        return;
+      }
       console.log(`Blocked task ${id}:`, result);
       break;
     }
 
     default:
+      if (options?.json) {
+        jsonOutput(false, undefined, {
+          code: "INVALID_ACTION",
+          message: `Unknown action: ${action}`,
+          details: { validActions: ["start", "complete", "block"] },
+        });
+        process.exit(1);
+      }
       console.error(`Unknown action: ${action}`);
       console.error(`Valid actions: start, complete, block`);
       process.exit(1);
@@ -343,25 +452,37 @@ async function cmdUpdate(id: string, action: string, ...args: string[]) {
   await saveGraph(graph, filePath);
 }
 
-async function cmdEval(id: string) {
+async function cmdEval(id: string, options?: CliOptions) {
   const filePath = resolve(TASKS_FILE);
   const graph = await loadGraph(filePath);
 
   const result = await graph.send(id, "eval", {});
+
+  if (options?.json) {
+    jsonOutput(true, { id, evaluation: result });
+    return;
+  }
+
   console.log(`\nEvaluation for task ${id}:`);
   console.log(JSON.stringify(result, null, 2));
 }
 
-async function cmdStatus(id: string) {
+async function cmdStatus(id: string, options?: CliOptions) {
   const filePath = resolve(TASKS_FILE);
   const graph = await loadGraph(filePath);
 
   const result = await graph.send(id, "query_status", {});
+
+  if (options?.json) {
+    jsonOutput(true, { id, status: result });
+    return;
+  }
+
   console.log(`\nStatus for task ${id}:`);
   console.log(JSON.stringify(result, null, 2));
 }
 
-async function cmdSearch(query: string) {
+async function cmdSearch(query: string, options?: CliOptions) {
   const filePath = resolve(TASKS_FILE);
   const graph = await loadGraph(filePath);
   const nodeIds = graph.getNodeIds();
@@ -409,6 +530,13 @@ async function cmdSearch(query: string) {
     }
   }
 
+  // JSON output mode
+  if (options?.json) {
+    const data = matches.map(m => ({ id: m.id, ...m.props, matchedIn: m.matchedIn }));
+    jsonOutput(true, data);
+    return;
+  }
+
   // Display results
   if (matches.length === 0) {
     console.log(`\nNo tasks found matching "${query}"`);
@@ -437,13 +565,20 @@ async function cmdSearch(query: string) {
   console.log();
 }
 
-async function cmdDelete(id: string, force: boolean = false) {
+async function cmdDelete(id: string, options?: { force?: boolean; yes?: boolean; json?: boolean }) {
   const filePath = resolve(TASKS_FILE);
   const graph = await loadGraph(filePath);
 
   // Check if task exists
   const props = graph.getNodeProperties(id);
   if (!props) {
+    if (options?.json) {
+      jsonOutput(false, undefined, {
+        code: "TASK_NOT_FOUND",
+        message: `Task not found: ${id}`,
+      });
+      process.exit(1);
+    }
     console.error(`Error: Task not found: ${id}`);
     process.exit(1);
   }
@@ -451,8 +586,10 @@ async function cmdDelete(id: string, force: boolean = false) {
   // Get connected edges for confirmation message
   const edges = graph.getAllEdges(id);
 
-  // Show what will be deleted (unless forced)
-  if (!force) {
+  // Show what will be deleted (unless forced or yes flag)
+  const skipConfirmation = options?.force || options?.yes;
+
+  if (!skipConfirmation) {
     console.log(`\nTask to delete: ${id}`);
     console.log("─".repeat(80));
     console.log(`Goal: ${(props as TaskProperties).goal}`);
@@ -479,17 +616,30 @@ async function cmdDelete(id: string, force: boolean = false) {
 
   if (removed) {
     await saveGraph(graph, filePath);
+
+    if (options?.json) {
+      jsonOutput(true, { id, deleted: true, edgesRemoved: edges.length });
+      return;
+    }
+
     console.log(`\nDeleted task ${id}`);
     if (edges.length > 0) {
       console.log(`Removed ${edges.length} connected edge(s)`);
     }
   } else {
+    if (options?.json) {
+      jsonOutput(false, undefined, {
+        code: "DELETE_FAILED",
+        message: `Failed to delete task ${id}`,
+      });
+      process.exit(1);
+    }
     console.error(`Error: Failed to delete task ${id}`);
     process.exit(1);
   }
 }
 
-async function cmdReady() {
+async function cmdReady(options?: CliOptions) {
   const filePath = resolve(TASKS_FILE);
   const graph = await loadGraph(filePath);
   const nodeIds = graph.getNodeIds();
@@ -550,6 +700,19 @@ async function cmdReady() {
     return dateA - dateB;
   });
 
+  // JSON output mode
+  if (options?.json) {
+    let data = readyTasks.map(t => ({ id: t.id, ...t.props }));
+
+    // Apply field projection if requested
+    if (options.fields && options.fields.length > 0) {
+      data = data.map(task => projectFields(task, options.fields!)) as any;
+    }
+
+    jsonOutput(true, data);
+    return;
+  }
+
   // Display results
   console.log("\nReady Tasks (no blockers):");
   console.log("─".repeat(80));
@@ -576,29 +739,81 @@ async function cmdReady() {
 }
 
 
-async function cmdGraph(id: string) {
+async function cmdGraph(id: string, options?: CliOptions) {
   const filePath = resolve(TASKS_FILE);
   const graph = await loadGraph(filePath);
 
   // Check if task exists
   const props = graph.getNodeProperties(id) as TaskProperties;
   if (!props || props.type !== "task") {
+    if (options?.json) {
+      jsonOutput(false, undefined, {
+        code: "TASK_NOT_FOUND",
+        message: `Task not found: ${id}`,
+      });
+      process.exit(1);
+    }
     throw new Error(`Task not found: ${id}`);
   }
 
+  // Build dependency tree
+  interface TreeNode {
+    id: string;
+    goal: string;
+    state: string;
+    dependencies: TreeNode[];
+    circular?: boolean;
+  }
+
+  const visited = new Set<string>();
+
+  function buildTree(taskId: string): TreeNode {
+    const taskProps = graph.getNodeProperties(taskId) as TaskProperties;
+
+    if (visited.has(taskId)) {
+      return { id: taskId, goal: "", state: "", dependencies: [], circular: true };
+    }
+
+    if (!taskProps) {
+      return { id: taskId, goal: "not found", state: "unknown", dependencies: [] };
+    }
+
+    visited.add(taskId);
+
+    const dependencyEdges = graph.getEdgesFrom(taskId).filter(e => e.type === "depends_on");
+    const dependencies = dependencyEdges.map(edge => buildTree(edge.toId));
+
+    visited.delete(taskId);
+
+    return {
+      id: taskId,
+      goal: taskProps.goal,
+      state: taskProps.state,
+      dependencies,
+    };
+  }
+
+  const tree = buildTree(id);
+
+  // JSON output mode
+  if (options?.json) {
+    jsonOutput(true, tree);
+    return;
+  }
+
+  // Human-friendly output
   console.log(`\nDependency graph for ${id}:`);
   console.log("─".repeat(80));
 
-  // Track visited nodes to detect cycles
-  const visited = new Set<string>();
+  const visitedPrint = new Set<string>();
 
   function printTree(taskId: string, indent: number = 0, prefix: string = "", isLast: boolean = true): void {
     // Detect cycles
-    if (visited.has(taskId)) {
+    if (visitedPrint.has(taskId)) {
       console.log(`${prefix}⚠️  (circular dependency detected)`);
       return;
     }
-    visited.add(taskId);
+    visitedPrint.add(taskId);
 
     // Get task properties
     const taskProps = graph.getNodeProperties(taskId) as TaskProperties;
@@ -638,7 +853,7 @@ async function cmdGraph(id: string) {
       });
     }
 
-    visited.delete(taskId); // Allow revisiting in other branches
+    visitedPrint.delete(taskId); // Allow revisiting in other branches
   }
 
   printTree(id);
@@ -646,11 +861,296 @@ async function cmdGraph(id: string) {
 }
 
 
+// Batch operations
+
+interface BatchTaskSpec {
+  goal: string;
+  deliverables?: string[];
+  criteria?: ObjectiveCriterion[];
+  depends?: string[];
+  parent?: string;
+  labels?: string[];
+  priority?: 0 | 1 | 2 | 3 | 4;
+}
+
+interface BatchUpdateSpec {
+  id: string;
+  action: "start" | "complete" | "block";
+  reason?: string;
+  result?: string;
+}
+
+async function cmdBatchAdd(filePath: string, options?: CliOptions) {
+  const tasksFilePath = resolve(TASKS_FILE);
+
+  if (!existsSync(tasksFilePath)) {
+    if (options?.json) {
+      jsonOutput(false, undefined, {
+        code: "FILE_NOT_FOUND",
+        message: `${TASKS_FILE} not found. Run 'task init' first.`,
+      });
+      process.exit(1);
+    }
+    console.error(`Error: ${TASKS_FILE} not found. Run 'task init' first.`);
+    process.exit(1);
+  }
+
+  // Read batch specs from file
+  let specs: BatchTaskSpec[];
+  try {
+    const content = readFileSync(filePath, "utf-8");
+    specs = JSON.parse(content);
+  } catch (err) {
+    if (options?.json) {
+      jsonOutput(false, undefined, {
+        code: "INVALID_JSON",
+        message: "Failed to parse batch task specs file",
+        details: err instanceof Error ? err.message : String(err),
+      });
+      process.exit(1);
+    }
+    console.error(`Error: Failed to parse batch task specs file: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+
+  // Validate array
+  if (!Array.isArray(specs)) {
+    if (options?.json) {
+      jsonOutput(false, undefined, {
+        code: "INVALID_INPUT",
+        message: "Batch task specs must be an array",
+      });
+      process.exit(1);
+    }
+    console.error("Error: Batch task specs must be an array");
+    process.exit(1);
+  }
+
+  // Load graph once
+  const graph = await loadGraph(tasksFilePath);
+
+  const created: string[] = [];
+  const errors: Array<{ index: number; error: string }> = [];
+
+  // Create all tasks in single graph
+  for (let i = 0; i < specs.length; i++) {
+    const spec = specs[i];
+
+    try {
+      // Validate required fields
+      if (!spec.goal) {
+        throw new Error("Missing required field: goal");
+      }
+
+      const createOptions: CreateTaskOptions = {
+        goal: spec.goal,
+        desiredDeliverables: spec.deliverables || ["Task completion"],
+        objectiveSuccessCriteria: spec.criteria || [
+          { criterion: "Task marked complete", measure: "Manual completion", threshold: true }
+        ],
+        parentTaskId: spec.parent,
+        toolsAvailable: ["CLI"],
+        labels: spec.labels,
+        priority: spec.priority,
+      };
+
+      // Create task using TaskActor factory
+      TaskActor({ ...createOptions, graph });
+
+      // Get the new task ID (last one added)
+      const allIds = graph.getNodeIds();
+      const taskId = allIds[allIds.length - 1];
+
+      // Add dependency edges
+      if (spec.depends && spec.depends.length > 0) {
+        for (const depId of spec.depends) {
+          graph.addEdge(taskId, depId, "depends_on");
+        }
+      }
+
+      // Add parent edge
+      if (spec.parent) {
+        graph.addEdge(taskId, spec.parent, "spawned_by");
+      }
+
+      created.push(taskId);
+    } catch (err) {
+      errors.push({
+        index: i,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // Save graph once
+  await saveGraph(graph, tasksFilePath);
+
+  // Output results
+  if (options?.json) {
+    jsonOutput(true, { created, errors });
+    return;
+  }
+
+  console.log(`\nBatch task creation completed:`);
+  console.log(`Created: ${created.length} task(s)`);
+  if (created.length > 0) {
+    created.forEach(id => console.log(`  - ${id}`));
+  }
+  if (errors.length > 0) {
+    console.log(`\nErrors: ${errors.length}`);
+    errors.forEach(e => console.log(`  [${e.index}]: ${e.error}`));
+  }
+}
+
+async function cmdBatchUpdate(filePath: string, options?: CliOptions) {
+  const tasksFilePath = resolve(TASKS_FILE);
+
+  if (!existsSync(tasksFilePath)) {
+    if (options?.json) {
+      jsonOutput(false, undefined, {
+        code: "FILE_NOT_FOUND",
+        message: `${TASKS_FILE} not found. Run 'task init' first.`,
+      });
+      process.exit(1);
+    }
+    console.error(`Error: ${TASKS_FILE} not found. Run 'task init' first.`);
+    process.exit(1);
+  }
+
+  // Read batch specs from file
+  let specs: BatchUpdateSpec[];
+  try {
+    const content = readFileSync(filePath, "utf-8");
+    specs = JSON.parse(content);
+  } catch (err) {
+    if (options?.json) {
+      jsonOutput(false, undefined, {
+        code: "INVALID_JSON",
+        message: "Failed to parse batch update specs file",
+        details: err instanceof Error ? err.message : String(err),
+      });
+      process.exit(1);
+    }
+    console.error(`Error: Failed to parse batch update specs file: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+
+  // Validate array
+  if (!Array.isArray(specs)) {
+    if (options?.json) {
+      jsonOutput(false, undefined, {
+        code: "INVALID_INPUT",
+        message: "Batch update specs must be an array",
+      });
+      process.exit(1);
+    }
+    console.error("Error: Batch update specs must be an array");
+    process.exit(1);
+  }
+
+  // Load graph once
+  const graph = await loadGraph(tasksFilePath);
+
+  const updated: string[] = [];
+  const errors: Array<{ index: number; id: string; error: string }> = [];
+
+  // Update all tasks
+  for (let i = 0; i < specs.length; i++) {
+    const spec = specs[i];
+
+    try {
+      // Validate required fields
+      if (!spec.id) {
+        throw new Error("Missing required field: id");
+      }
+      if (!spec.action) {
+        throw new Error("Missing required field: action");
+      }
+
+      // Execute action
+      switch (spec.action) {
+        case "start":
+          await graph.send(spec.id, "start", {});
+          break;
+
+        case "complete": {
+          // Get task to set actual values for criteria
+          const getResponse = await graph.send(spec.id, "get", {}) as { properties: TaskProperties };
+          const props = getResponse.properties;
+
+          // For now, auto-pass all criteria
+          for (const criterion of props.objectiveSuccessCriteria) {
+            criterion.actual = criterion.threshold;
+          }
+
+          await graph.send(spec.id, "complete", { result: spec.result || "Task completed" });
+          break;
+        }
+
+        case "block":
+          await graph.send(spec.id, "block", { reason: spec.reason || "Blocked by dependency" });
+          break;
+
+        default:
+          throw new Error(`Invalid action: ${spec.action}`);
+      }
+
+      updated.push(spec.id);
+    } catch (err) {
+      errors.push({
+        index: i,
+        id: spec.id || "unknown",
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // Save graph once
+  await saveGraph(graph, tasksFilePath);
+
+  // Output results
+  if (options?.json) {
+    jsonOutput(true, { updated, errors });
+    return;
+  }
+
+  console.log(`\nBatch task update completed:`);
+  console.log(`Updated: ${updated.length} task(s)`);
+  if (updated.length > 0) {
+    updated.forEach(id => console.log(`  - ${id}`));
+  }
+  if (errors.length > 0) {
+    console.log(`\nErrors: ${errors.length}`);
+    errors.forEach(e => console.log(`  [${e.index}] ${e.id}: ${e.error}`));
+  }
+}
+
 // Main CLI
 
 async function main() {
   const args = process.argv.slice(2);
-  const command = args[0];
+
+  // Parse global flags
+  const globalOptions: CliOptions = {
+    json: args.includes("--json"),
+    yes: args.includes("--yes"),
+  };
+
+  // Parse --fields flag
+  const fieldsIndex = args.indexOf("--fields");
+  if (fieldsIndex >= 0 && args[fieldsIndex + 1]) {
+    globalOptions.fields = args[fieldsIndex + 1].split(",").map(f => f.trim());
+  }
+
+  // Remove global flags from args for command parsing
+  const cleanArgs = args.filter(arg =>
+    arg !== "--json" &&
+    arg !== "--yes" &&
+    arg !== "--fields" &&
+    (fieldsIndex < 0 || arg !== args[fieldsIndex + 1])
+  );
+
+  const command = cleanArgs[0];
 
   switch (command) {
     case "init":
@@ -660,71 +1160,70 @@ async function main() {
     case "list": {
       const filters: { status?: string; label?: string; priority?: number } = {};
 
-      for (let i = 1; i < args.length; i++) {
-        if (args[i] === "--status" && args[i + 1]) {
-          filters.status = args[i + 1];
+      for (let i = 1; i < cleanArgs.length; i++) {
+        if (cleanArgs[i] === "--status" && cleanArgs[i + 1]) {
+          filters.status = cleanArgs[i + 1];
           i++;
-        } else if (args[i] === "--label" && args[i + 1]) {
-          filters.label = args[i + 1];
+        } else if (cleanArgs[i] === "--label" && cleanArgs[i + 1]) {
+          filters.label = cleanArgs[i + 1];
           i++;
-        } else if (args[i] === "--priority" && args[i + 1]) {
-          const priorityStr = args[i + 1].toUpperCase();
+        } else if (cleanArgs[i] === "--priority" && cleanArgs[i + 1]) {
+          const priorityStr = cleanArgs[i + 1].toUpperCase();
           const priorityMatch = priorityStr.match(/^P?([0-4])$/);
           if (priorityMatch) {
             filters.priority = parseInt(priorityMatch[1]);
           } else {
-            console.error(`Error: Invalid priority "${args[i + 1]}". Use P0-P4 or 0-4 (where 0 is highest).`);
+            console.error(`Error: Invalid priority "${cleanArgs[i + 1]}". Use P0-P4 or 0-4 (where 0 is highest).`);
             process.exit(1);
           }
           i++;
         }
       }
 
-      await cmdList(Object.keys(filters).length > 0 ? filters : undefined);
+      await cmdList(Object.keys(filters).length > 0 ? filters : undefined, globalOptions);
       break;
     }
 
     case "show":
-      if (args.length < 2) {
-        console.error("Usage: task show <id>");
-      console.log("  task graph <id>                        Show dependency tree for a task");
+      if (cleanArgs.length < 2) {
+        console.error("Usage: task show <id> [--json] [--fields field1,field2]");
         process.exit(1);
       }
-      await cmdShow(args[1]);
+      await cmdShow(cleanArgs[1], globalOptions);
       break;
 
     case "add": {
-      if (args.length < 2) {
-        console.error("Usage: task add <goal> [--deliverables d1,d2] [--criteria name:measure:threshold] [--depends id1,id2] [--parent id] [--labels tag1,tag2] [--priority P0]");
+      if (cleanArgs.length < 2) {
+        console.error("Usage: task add <goal> [--deliverables d1,d2] [--criteria name:measure:threshold] [--depends id1,id2] [--parent id] [--labels tag1,tag2] [--priority P0] [--json]");
         process.exit(1);
       }
 
-      const goal = args[1];
-      const options: { deliverables?: string[]; criteria?: string; depends?: string; parent?: string; labels?: string[]; priority?: 0 | 1 | 2 | 3 | 4 } = {};
+      const goal = cleanArgs[1];
+      const options: any = { json: globalOptions.json };
 
-      for (let i = 2; i < args.length; i++) {
-        if (args[i] === "--deliverables" && args[i + 1]) {
-          options.deliverables = args[i + 1].split(",");
+      for (let i = 2; i < cleanArgs.length; i++) {
+        if (cleanArgs[i] === "--deliverables" && cleanArgs[i + 1]) {
+          options.deliverables = cleanArgs[i + 1].split(",");
           i++;
-        } else if (args[i] === "--criteria" && args[i + 1]) {
-          options.criteria = args[i + 1];
+        } else if (cleanArgs[i] === "--criteria" && cleanArgs[i + 1]) {
+          options.criteria = cleanArgs[i + 1];
           i++;
-        } else if (args[i] === "--depends" && args[i + 1]) {
-          options.depends = args[i + 1];
+        } else if (cleanArgs[i] === "--depends" && cleanArgs[i + 1]) {
+          options.depends = cleanArgs[i + 1];
           i++;
-        } else if (args[i] === "--parent" && args[i + 1]) {
-          options.parent = args[i + 1];
+        } else if (cleanArgs[i] === "--parent" && cleanArgs[i + 1]) {
+          options.parent = cleanArgs[i + 1];
           i++;
-        } else if (args[i] === "--labels" && args[i + 1]) {
-          options.labels = args[i + 1].split(",").map(l => l.trim());
+        } else if (cleanArgs[i] === "--labels" && cleanArgs[i + 1]) {
+          options.labels = cleanArgs[i + 1].split(",").map(l => l.trim());
           i++;
-        } else if (args[i] === "--priority" && args[i + 1]) {
-          const priorityStr = args[i + 1].toUpperCase();
+        } else if (cleanArgs[i] === "--priority" && cleanArgs[i + 1]) {
+          const priorityStr = cleanArgs[i + 1].toUpperCase();
           const priorityMatch = priorityStr.match(/^P?([0-4])$/);
           if (priorityMatch) {
             options.priority = parseInt(priorityMatch[1]) as 0 | 1 | 2 | 3 | 4;
           } else {
-            console.error(`Error: Invalid priority "${args[i + 1]}". Use P0-P4 or 0-4 (where 0 is highest).`);
+            console.error(`Error: Invalid priority "${cleanArgs[i + 1]}". Use P0-P4 or 0-4 (where 0 is highest).`);
             process.exit(1);
           }
           i++;
@@ -736,62 +1235,80 @@ async function main() {
     }
 
     case "update":
-      if (args.length < 3) {
-        console.error("Usage: task update <id> <action> [args...]");
+      if (cleanArgs.length < 3) {
+        console.error("Usage: task update <id> <action> [args...] [--json]");
         console.error("Actions: start, complete, block");
         process.exit(1);
       }
-      await cmdUpdate(args[1], args[2], ...args.slice(3));
+      await cmdUpdate(cleanArgs[1], cleanArgs[2], globalOptions, ...cleanArgs.slice(3));
       break;
 
     case "eval":
-      if (args.length < 2) {
-        console.error("Usage: task eval <id>");
+      if (cleanArgs.length < 2) {
+        console.error("Usage: task eval <id> [--json]");
         process.exit(1);
       }
-      await cmdEval(args[1]);
+      await cmdEval(cleanArgs[1], globalOptions);
       break;
 
     case "status":
-      if (args.length < 2) {
-        console.error("Usage: task status <id>");
+      if (cleanArgs.length < 2) {
+        console.error("Usage: task status <id> [--json]");
         process.exit(1);
       }
-      await cmdStatus(args[1]);
+      await cmdStatus(cleanArgs[1], globalOptions);
       break;
 
     case "search":
-      if (args.length < 2) {
-        console.error("Usage: task search <query>");
+      if (cleanArgs.length < 2) {
+        console.error("Usage: task search <query> [--json]");
         process.exit(1);
       }
-      await cmdSearch(args[1]);
+      await cmdSearch(cleanArgs[1], globalOptions);
       break;
 
     case "delete": {
-      if (args.length < 2) {
-        console.error("Usage: task delete <id> [--force]");
+      if (cleanArgs.length < 2) {
+        console.error("Usage: task delete <id> [--force|--yes] [--json]");
         process.exit(1);
       }
 
-      const taskId = args[1];
+      const taskId = cleanArgs[1];
       const force = args.includes("--force");
 
-      await cmdDelete(taskId, force);
+      await cmdDelete(taskId, { force, yes: globalOptions.yes, json: globalOptions.json });
       break;
     }
 
     case "ready":
-      await cmdReady();
+      await cmdReady(globalOptions);
       break;
 
     case "graph":
-      if (args.length < 2) {
-        console.error("Usage: task graph <id>");
+      if (cleanArgs.length < 2) {
+        console.error("Usage: task graph <id> [--json]");
         process.exit(1);
       }
-      await cmdGraph(args[1]);
+      await cmdGraph(cleanArgs[1], globalOptions);
       break;
+
+    case "batch-add": {
+      if (cleanArgs.length < 2 || cleanArgs[1] !== "--file" || !cleanArgs[2]) {
+        console.error("Usage: task batch-add --file <path.json> [--json]");
+        process.exit(1);
+      }
+      await cmdBatchAdd(cleanArgs[2], globalOptions);
+      break;
+    }
+
+    case "batch-update": {
+      if (cleanArgs.length < 2 || cleanArgs[1] !== "--file" || !cleanArgs[2]) {
+        console.error("Usage: task batch-update --file <path.json> [--json]");
+        process.exit(1);
+      }
+      await cmdBatchUpdate(cleanArgs[2], globalOptions);
+      break;
+    }
 
     default:
       console.log("Task CLI - Manage task graphs using the Graph/TaskNode system\n");
@@ -806,9 +1323,9 @@ async function main() {
       console.log("    --priority P0|P1|P2|P3|P4            Priority (P0 is highest)");
       console.log("  task update <id> <action>              Update task");
       console.log("    start                                Start the task");
-      console.log("    complete                             Complete the task");
-      console.log("    block <reason>                       Block the task");
-      console.log("  task delete <id> [--force]             Delete a task and its edges");
+      console.log("    complete [result]                    Complete the task");
+      console.log("    block [reason]                       Block the task");
+      console.log("  task delete <id> [--force|--yes]       Delete a task and its edges");
       console.log("  task list [options]                    List all tasks");
       console.log("    --status <state>                     Filter by state (created, active, blocked, completed)");
       console.log("    --label <label>                      Filter by label (match any)");
@@ -819,6 +1336,12 @@ async function main() {
       console.log("  task eval <id>                         Evaluate task criteria");
       console.log("  task status <id>                       Show task status with blockers");
       console.log("  task search <query>                    Search tasks by keyword");
+      console.log("  task batch-add --file <path.json>      Create multiple tasks from JSON file");
+      console.log("  task batch-update --file <path.json>   Update multiple tasks from JSON file");
+      console.log("\nGlobal Options:");
+      console.log("  --json                                 Output in JSON format (machine-readable)");
+      console.log("  --yes                                  Skip confirmation prompts (non-interactive)");
+      console.log("  --fields field1,field2                 Project only specified fields (with --json)");
       process.exit(command ? 1 : 0);
   }
 }
