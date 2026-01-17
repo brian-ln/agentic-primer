@@ -1,0 +1,462 @@
+% ============================================================================
+% Knowledge System Specification - Formal Verification Model
+% ============================================================================
+% This Datalog specification captures the behavioral requirements and
+% invariants of the Knowledge System for programmatic verification.
+
+% ============================================================================
+% 1. CORE ENTITIES
+% ============================================================================
+
+% Knowledge nodes exist in the system
+knowledge_node(NodeId, Title, Version) :-
+    node_exists(NodeId),
+    node_type(NodeId, knowledge),
+    has_title(NodeId, Title),
+    has_version(NodeId, Version).
+
+% Node exists in graph
+node_exists(NodeId).
+
+% Node has type
+node_type(NodeId, Type) :-
+    node_exists(NodeId),
+    has_type(NodeId, Type).
+
+% Node properties
+has_title(NodeId, Title).
+has_content(NodeId, Content).
+has_version(NodeId, Version).
+has_source(NodeId, Source).
+has_created_at(NodeId, Timestamp).
+
+% ============================================================================
+% 2. VERSION MONOTONICITY INVARIANT
+% ============================================================================
+
+% Version is positive
+version_positive(NodeId) :-
+    knowledge_node(NodeId, _, Version),
+    Version >= 1.
+
+% Version at time T1 is less than or equal to version at time T2 (T1 < T2)
+version_at_time(NodeId, Time, Version).
+
+% Version is monotonically increasing
+version_monotonic(NodeId) :-
+    knowledge_node(NodeId, _, _),
+    forall(
+        (version_at_time(NodeId, T1, V1), version_at_time(NodeId, T2, V2), T1 < T2),
+        V1 =< V2
+    ).
+
+% Version increments by exactly 1 on append
+version_increments_on_append(NodeId, OldVersion, NewVersion) :-
+    append_operation(NodeId, _, OldVersion, NewVersion),
+    NewVersion =:= OldVersion + 1.
+
+% INVARIANT: All versions are positive and monotonic
+version_monotonicity_invariant :-
+    forall(knowledge_node(NodeId, _, _), version_positive(NodeId)),
+    forall(knowledge_node(NodeId, _, _), version_monotonic(NodeId)).
+
+% ============================================================================
+% 3. SOURCE APPEND-ONLY INVARIANT
+% ============================================================================
+
+% Sources at a given time
+sources_at_time(NodeId, Time, Sources).
+
+% Sources only grow over time (append-only)
+sources_append_only(NodeId) :-
+    knowledge_node(NodeId, _, _),
+    forall(
+        (sources_at_time(NodeId, T1, S1), sources_at_time(NodeId, T2, S2), T1 < T2),
+        subset(S1, S2)
+    ).
+
+% Source is added during append (if provided)
+source_added_on_append(NodeId, Source) :-
+    append_operation(NodeId, _, _, _),
+    append_payload(NodeId, _, Source),
+    Source \= nil,
+    has_source(NodeId, Source).
+
+% INVARIANT: Sources are append-only
+source_append_only_invariant :-
+    forall(knowledge_node(NodeId, _, _), sources_append_only(NodeId)).
+
+% ============================================================================
+% 4. CONTENT ACCUMULATION INVARIANT
+% ============================================================================
+
+% Content before and after append
+content_before_append(NodeId, Content).
+content_after_append(NodeId, Content).
+
+% Append payload
+append_payload(NodeId, Data, Source).
+
+% Content accumulates on append
+content_accumulates(NodeId) :-
+    append_operation(NodeId, _, _, _),
+    append_payload(NodeId, Data, _),
+    content_after_append(NodeId, NewContent),
+    substring(NewContent, Data).
+
+% INVARIANT: Content always contains appended data
+content_accumulation_invariant :-
+    forall(
+        (knowledge_node(NodeId, _, _), append_operation(NodeId, _, _, _)),
+        content_accumulates(NodeId)
+    ).
+
+% ============================================================================
+% 5. ID IMMUTABILITY INVARIANT
+% ============================================================================
+
+% ID at creation
+id_at_creation(NodeId, Id) :-
+    knowledge_node(NodeId, _, _),
+    has_id(NodeId, Id).
+
+% ID format matches knowledge_N pattern
+id_format_valid(NodeId) :-
+    knowledge_node(NodeId, _, _),
+    atom_string(NodeId, IdStr),
+    re_match("^knowledge_[0-9]+$", IdStr).
+
+% ID never changes (checked against update operations)
+id_immutable(NodeId) :-
+    knowledge_node(NodeId, _, _),
+    forall(
+        update_operation(NodeId, _),
+        \+ id_changed(NodeId)
+    ).
+
+% INVARIANT: IDs are immutable and properly formatted
+id_immutability_invariant :-
+    forall(knowledge_node(NodeId, _, _), id_immutable(NodeId)),
+    forall(knowledge_node(NodeId, _, _), id_format_valid(NodeId)).
+
+% ============================================================================
+% 6. TYPE IMMUTABILITY INVARIANT
+% ============================================================================
+
+% Type at creation
+type_at_creation(NodeId, Type) :-
+    knowledge_node(NodeId, _, _),
+    node_type(NodeId, Type).
+
+% Type is always "knowledge"
+type_is_knowledge(NodeId) :-
+    knowledge_node(NodeId, _, _),
+    node_type(NodeId, knowledge).
+
+% Type never changes
+type_immutable(NodeId) :-
+    knowledge_node(NodeId, _, _),
+    forall(
+        update_operation(NodeId, _),
+        type_is_knowledge(NodeId)
+    ).
+
+% INVARIANT: Type is always "knowledge"
+type_immutability_invariant :-
+    forall(knowledge_node(NodeId, _, _), type_immutable(NodeId)).
+
+% ============================================================================
+% 7. QUERY CONFIDENCE INVARIANT
+% ============================================================================
+
+% Query operation with confidence result
+query_operation(NodeId, Question, Answer, Confidence, Sources).
+
+% Confidence is bounded [0, 1]
+confidence_bounded(NodeId, Confidence) :-
+    query_operation(NodeId, _, _, Confidence, _),
+    Confidence >= 0.0,
+    Confidence =< 1.0.
+
+% Confidence calculation
+% confidence = matched_keywords / total_keywords
+confidence_calculation(Keywords, Content, Confidence) :-
+    length(Keywords, TotalKW),
+    TotalKW > 0,
+    matched_keywords(Keywords, Content, MatchedKW),
+    Confidence is MatchedKW / TotalKW.
+
+confidence_calculation(Keywords, _, 0.0) :-
+    length(Keywords, TotalKW),
+    TotalKW =:= 0.
+
+matched_keywords([], _, 0).
+matched_keywords([KW|Rest], Content, Count) :-
+    matched_keywords(Rest, Content, RestCount),
+    (contains_keyword(Content, KW) -> Count is RestCount + 1 ; Count = RestCount).
+
+% INVARIANT: Confidence is always in [0, 1]
+confidence_invariant :-
+    forall(
+        query_operation(NodeId, _, _, Confidence, _),
+        confidence_bounded(NodeId, Confidence)
+    ).
+
+% ============================================================================
+% 8. SYNTHESIZE SOURCE DEDUPLICATION INVARIANT
+% ============================================================================
+
+% Synthesize operation
+synthesize_operation(NodeId, FromNodes, Synthesis, Sources).
+
+% Sources are unique (no duplicates)
+sources_unique(Sources) :-
+    is_set(Sources).
+
+% All contributing nodes' sources are included
+sources_complete(NodeId, FromNodes, ResultSources) :-
+    synthesize_operation(NodeId, FromNodes, _, ResultSources),
+    % This node's sources included
+    forall(has_source(NodeId, S), member(S, ResultSources)),
+    % Other nodes' sources included
+    forall(
+        (member(OtherId, FromNodes), knowledge_node(OtherId, _, _), has_source(OtherId, S)),
+        member(S, ResultSources)
+    ).
+
+% INVARIANT: Synthesize deduplicates sources
+synthesize_deduplication_invariant :-
+    forall(
+        synthesize_operation(_, _, _, Sources),
+        sources_unique(Sources)
+    ).
+
+% ============================================================================
+% 9. MESSAGE HANDLING INVARIANTS
+% ============================================================================
+
+% Messages accepted by knowledge nodes
+accepts_message(NodeId, MessageType) :-
+    knowledge_node(NodeId, _, _),
+    node_active(NodeId),
+    member(MessageType, [get, observe, update, link, unlink, delete, append, query, synthesize]).
+
+% Unknown message types rejected
+rejects_unknown_message(NodeId, MessageType) :-
+    knowledge_node(NodeId, _, _),
+    \+ member(MessageType, [get, observe, update, link, unlink, delete, append, query, synthesize]).
+
+% Protected fields cannot be updated
+protected_field(id).
+protected_field(type).
+protected_field(createdAt).
+
+update_respects_protection(NodeId) :-
+    knowledge_node(NodeId, _, _),
+    forall(
+        (update_operation(NodeId, Properties), member(Field, Properties)),
+        \+ protected_field(Field)
+    ).
+
+% INVARIANT: Update operations respect protected fields
+update_protection_invariant :-
+    forall(knowledge_node(NodeId, _, _), update_respects_protection(NodeId)).
+
+% ============================================================================
+% 10. GRAPH INTEGRATION INVARIANTS
+% ============================================================================
+
+% Node is registered in graph
+registered_in_graph(NodeId, GraphId) :-
+    knowledge_node(NodeId, _, _),
+    graph_contains(GraphId, NodeId).
+
+% Edge exists between nodes
+edge_exists(EdgeId, FromId, ToId, EdgeType) :-
+    has_edge(EdgeId, FromId, ToId, EdgeType).
+
+% Valid edge types for knowledge nodes
+valid_edge_type(depends_on).
+valid_edge_type(requires_knowledge).
+valid_edge_type(produces).
+valid_edge_type(spawned_by).
+valid_edge_type(blocks).
+valid_edge_type(references).
+
+% Link operation creates valid edge
+link_creates_valid_edge(NodeId, ToId, EdgeType) :-
+    link_operation(NodeId, ToId, EdgeType, EdgeId),
+    edge_exists(EdgeId, NodeId, ToId, EdgeType),
+    valid_edge_type(EdgeType).
+
+% INVARIANT: Edges use valid types
+edge_type_invariant :-
+    forall(
+        edge_exists(_, _, _, EdgeType),
+        valid_edge_type(EdgeType)
+    ).
+
+% ============================================================================
+% 11. LIFECYCLE STATE MACHINE
+% ============================================================================
+
+% Lifecycle states
+lifecycle_state(created).
+lifecycle_state(active).
+lifecycle_state(deleted).
+
+% Current state of a node
+node_state(NodeId, State) :-
+    knowledge_node(NodeId, _, _),
+    current_state(NodeId, State),
+    lifecycle_state(State).
+
+% Node is active (can receive messages)
+node_active(NodeId) :-
+    node_state(NodeId, active).
+
+% Valid state transitions
+valid_transition(created, active, register).
+valid_transition(active, deleted, delete).
+
+% Transition is valid
+transition_valid(NodeId, FromState, ToState, Action) :-
+    node_state(NodeId, FromState),
+    valid_transition(FromState, ToState, Action).
+
+% INVARIANT: Only valid transitions occur
+lifecycle_invariant :-
+    forall(
+        state_transition(NodeId, FromState, ToState, Action),
+        valid_transition(FromState, ToState, Action)
+    ).
+
+% ============================================================================
+% 12. VERIFICATION QUERIES
+% ============================================================================
+
+% Query: Verify all invariants hold
+% ?- all_invariants_hold.
+
+% Query: Check version monotonicity
+% ?- version_monotonicity_invariant.
+
+% Query: Check source append-only property
+% ?- source_append_only_invariant.
+
+% Query: Check content accumulation
+% ?- content_accumulation_invariant.
+
+% Query: Check ID immutability
+% ?- id_immutability_invariant.
+
+% Query: Check confidence bounds
+% ?- confidence_invariant.
+
+% Query: Check synthesize deduplication
+% ?- synthesize_deduplication_invariant.
+
+% Query: Find knowledge nodes
+% ?- knowledge_node(NodeId, Title, Version).
+
+% Query: Find nodes with multiple sources
+% ?- findall(NodeId, (knowledge_node(NodeId, _, _), aggregate_all(count, has_source(NodeId, _), Count), Count > 1), Nodes).
+
+% Query: Find connected knowledge nodes
+% ?- edge_exists(_, Node1, Node2, references), knowledge_node(Node1, _, _), knowledge_node(Node2, _, _).
+
+% ============================================================================
+% 13. EXAMPLE FACTS (for testing)
+% ============================================================================
+
+% Nodes
+node_exists(knowledge_1).
+node_exists(knowledge_2).
+node_exists(knowledge_3).
+
+% Types
+has_type(knowledge_1, knowledge).
+has_type(knowledge_2, knowledge).
+has_type(knowledge_3, knowledge).
+
+% Titles
+has_title(knowledge_1, "Actor Model").
+has_title(knowledge_2, "Erlang Processes").
+has_title(knowledge_3, "Message Passing").
+
+% Versions
+has_version(knowledge_1, 1).
+has_version(knowledge_2, 3).
+has_version(knowledge_3, 1).
+
+% Content
+has_content(knowledge_1, "Actors are the fundamental units of computation.").
+has_content(knowledge_2, "Erlang processes are lightweight. They communicate via message passing. Processes are isolated.").
+has_content(knowledge_3, "Message passing is the primary communication mechanism.").
+
+% Sources
+has_source(knowledge_1, "Hewitt 1973").
+has_source(knowledge_2, "Armstrong 2003").
+has_source(knowledge_2, "Virding 1996").
+has_source(knowledge_2, "Cesarini 2009").
+has_source(knowledge_3, "Hewitt 1973").
+
+% States
+current_state(knowledge_1, active).
+current_state(knowledge_2, active).
+current_state(knowledge_3, active).
+
+% Edges
+has_edge(edge_1, knowledge_1, knowledge_2, references).
+has_edge(edge_2, knowledge_2, knowledge_3, references).
+has_edge(edge_3, knowledge_1, knowledge_3, references).
+
+% Graph
+graph_contains(main_graph, knowledge_1).
+graph_contains(main_graph, knowledge_2).
+graph_contains(main_graph, knowledge_3).
+
+% Example operations
+append_operation(knowledge_2, "Process isolation prevents shared state.", 2, 3).
+append_payload(knowledge_2, "Process isolation prevents shared state.", "Cesarini 2009").
+
+query_operation(knowledge_1, "What is an actor?", "Actors are the fundamental units of computation", 0.5, ["Hewitt 1973"]).
+
+synthesize_operation(knowledge_1, [knowledge_2, knowledge_3], "[Source 1]...", ["Hewitt 1973", "Armstrong 2003", "Virding 1996", "Cesarini 2009"]).
+
+% ============================================================================
+% 14. COMPLETENESS CHECKS
+% ============================================================================
+
+% Check: All invariants hold
+all_invariants_hold :-
+    version_monotonicity_invariant,
+    source_append_only_invariant,
+    content_accumulation_invariant,
+    id_immutability_invariant,
+    type_immutability_invariant,
+    confidence_invariant,
+    synthesize_deduplication_invariant,
+    update_protection_invariant,
+    edge_type_invariant,
+    lifecycle_invariant.
+
+% Check: Knowledge node is well-formed
+knowledge_node_well_formed(NodeId) :-
+    knowledge_node(NodeId, Title, Version),
+    Version >= 1,
+    atom_length(Title, TitleLen),
+    TitleLen > 0,
+    id_format_valid(NodeId),
+    node_active(NodeId).
+
+% Check: All knowledge nodes are well-formed
+all_nodes_well_formed :-
+    forall(
+        knowledge_node(NodeId, _, _),
+        knowledge_node_well_formed(NodeId)
+    ).
+
+% ============================================================================
+% END
+% ============================================================================

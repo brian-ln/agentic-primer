@@ -1,0 +1,633 @@
+% ============================================================================
+% Task Actor System Specification - Formal Verification Model
+% ============================================================================
+% This Datalog specification captures the behavioral requirements and
+% invariants of the Task Actor System for programmatic verification.
+
+% ============================================================================
+% 1. CORE ENTITIES
+% ============================================================================
+
+% Tasks exist in the system
+task_exists(TaskID).
+
+% Tasks are actors
+task_is_actor(TaskID) :- task_exists(TaskID), actor_exists(TaskID).
+
+% Graph manages tasks
+graph_manages(GraphID, TaskID) :- task_exists(TaskID), graph_exists(GraphID).
+
+% ============================================================================
+% 2. TASK PROPERTIES SCHEMA
+% ============================================================================
+
+% Required properties for all tasks
+has_property(TaskID, id) :- task_exists(TaskID).
+has_property(TaskID, type) :- task_exists(TaskID).
+has_property(TaskID, created_at) :- task_exists(TaskID).
+has_property(TaskID, goal) :- task_exists(TaskID).
+has_property(TaskID, desired_deliverables) :- task_exists(TaskID).
+has_property(TaskID, objective_success_criteria) :- task_exists(TaskID).
+has_property(TaskID, known_information) :- task_exists(TaskID).
+has_property(TaskID, information_gaps) :- task_exists(TaskID).
+has_property(TaskID, tools_available) :- task_exists(TaskID).
+has_property(TaskID, state) :- task_exists(TaskID).
+
+% Optional properties
+may_have_property(TaskID, subjective_success_criteria) :- task_exists(TaskID).
+may_have_property(TaskID, started_at) :- task_exists(TaskID).
+may_have_property(TaskID, completed_at) :- task_exists(TaskID).
+may_have_property(TaskID, result) :- task_exists(TaskID).
+may_have_property(TaskID, parent_task_id) :- task_exists(TaskID).
+may_have_property(TaskID, labels) :- task_exists(TaskID).
+may_have_property(TaskID, priority) :- task_exists(TaskID).
+
+% Protected (immutable) properties
+protected_property(id).
+protected_property(type).
+protected_property(created_at).
+
+% ============================================================================
+% 3. TASK STATE MACHINE
+% ============================================================================
+
+% Valid task states
+valid_task_state(created).
+valid_task_state(ready).
+valid_task_state(active).
+valid_task_state(blocked).
+valid_task_state(completed).
+valid_task_state(failed).
+
+% Initial state
+initial_state(created).
+
+% Terminal states
+terminal_state(completed).
+terminal_state(failed).
+
+% Task has state
+task_in_state(TaskID, State) :-
+    task_exists(TaskID),
+    has_property(TaskID, state),
+    property_value(TaskID, state, State).
+
+% State is valid
+valid_state(TaskID) :-
+    task_in_state(TaskID, State),
+    valid_task_state(State).
+
+% ============================================================================
+% 4. STATE TRANSITIONS
+% ============================================================================
+
+% Valid transitions
+transition(created, ready, dependencies_met).
+transition(created, active, start).
+transition(ready, active, start).
+transition(active, blocked, block).
+transition(active, completed, complete).
+transition(active, failed, abort).
+transition(blocked, ready, unblock).
+transition(blocked, failed, abort).
+transition(blocked, failed, timeout).
+
+% Transition is valid
+valid_transition(FromState, ToState, Trigger) :-
+    transition(FromState, ToState, Trigger).
+
+% Can transition from state
+can_transition(TaskID, ToState, Trigger) :-
+    task_in_state(TaskID, FromState),
+    valid_transition(FromState, ToState, Trigger).
+
+% Cannot transition from terminal states
+\+ can_transition(TaskID, _, _) :-
+    task_in_state(TaskID, State),
+    terminal_state(State).
+
+% ============================================================================
+% 5. MESSAGE TYPES
+% ============================================================================
+
+% Standard node messages (shared across node types)
+standard_message(get).
+standard_message(observe).
+standard_message(update).
+standard_message(link).
+standard_message(unlink).
+standard_message(delete).
+
+% Task-specific messages
+task_message(start).
+task_message(create_task).
+task_message(eval).
+task_message(complete).
+task_message(block).
+task_message(query_status).
+
+% All accepted messages
+accepts_message(TaskID, MsgType) :-
+    task_exists(TaskID),
+    standard_message(MsgType).
+
+accepts_message(TaskID, MsgType) :-
+    task_exists(TaskID),
+    task_message(MsgType).
+
+% ============================================================================
+% 6. MESSAGE PRECONDITIONS
+% ============================================================================
+
+% start: requires created or ready state
+message_precondition(start, TaskID) :-
+    task_in_state(TaskID, created).
+
+message_precondition(start, TaskID) :-
+    task_in_state(TaskID, ready).
+
+% complete: requires eval passes
+message_precondition(complete, TaskID) :-
+    eval_passes(TaskID).
+
+% update: cannot modify protected properties
+update_allowed(TaskID, PropertyName) :-
+    task_exists(TaskID),
+    \+ protected_property(PropertyName).
+
+% link: requires target exists
+link_allowed(TaskID, ToID, EdgeType) :-
+    task_exists(TaskID),
+    node_exists(ToID),
+    valid_edge_type(EdgeType).
+
+% ============================================================================
+% 7. MESSAGE EFFECTS
+% ============================================================================
+
+% start effects
+after_start(TaskID) :-
+    task_in_state(TaskID, active),
+    has_timestamp(TaskID, started_at).
+
+% complete effects
+after_complete(TaskID) :-
+    task_in_state(TaskID, completed),
+    has_timestamp(TaskID, completed_at),
+    has_result(TaskID).
+
+% block effects
+after_block(TaskID) :-
+    task_in_state(TaskID, blocked),
+    has_block_reason(TaskID).
+
+% create_task effects
+after_create_task(ParentID, ChildID) :-
+    task_exists(ParentID),
+    task_exists(ChildID),
+    has_parent(ChildID, ParentID),
+    has_edge(ChildID, ParentID, spawned_by).
+
+% ============================================================================
+% 8. EDGE TYPES
+% ============================================================================
+
+% Valid edge types for tasks
+valid_edge_type(spawned_by).
+valid_edge_type(depends_on).
+valid_edge_type(requires_knowledge).
+valid_edge_type(produces).
+valid_edge_type(blocks).
+valid_edge_type(references).
+
+% Edge exists
+has_edge(FromID, ToID, EdgeType) :-
+    edge_exists(EdgeID),
+    edge_from(EdgeID, FromID),
+    edge_to(EdgeID, ToID),
+    edge_type(EdgeID, EdgeType).
+
+% Edge cardinalities
+edge_cardinality(spawned_by, many_to_one).
+edge_cardinality(depends_on, many_to_many).
+edge_cardinality(requires_knowledge, many_to_many).
+edge_cardinality(produces, one_to_many).
+edge_cardinality(blocks, many_to_many).
+edge_cardinality(references, many_to_many).
+
+% ============================================================================
+% 9. HIERARCHY
+% ============================================================================
+
+% Parent-child relationship
+has_parent(ChildID, ParentID) :-
+    task_exists(ChildID),
+    task_exists(ParentID),
+    has_edge(ChildID, ParentID, spawned_by).
+
+% Child inherits tools from parent
+inherits_tools(ChildID, ParentID) :-
+    has_parent(ChildID, ParentID).
+
+% Get all children
+is_child_of(ChildID, ParentID) :-
+    has_edge(ChildID, ParentID, spawned_by).
+
+% Recursive descendants
+is_descendant_of(ChildID, AncestorID) :-
+    is_child_of(ChildID, AncestorID).
+
+is_descendant_of(ChildID, AncestorID) :-
+    is_child_of(ChildID, ParentID),
+    is_descendant_of(ParentID, AncestorID).
+
+% ============================================================================
+% 10. PRIORITY LEVELS
+% ============================================================================
+
+% Valid priority levels
+valid_priority(0).  % Critical
+valid_priority(1).  % High
+valid_priority(2).  % Medium
+valid_priority(3).  % Low
+valid_priority(4).  % Backlog
+
+% Priority names
+priority_name(0, critical).
+priority_name(1, high).
+priority_name(2, medium).
+priority_name(3, low).
+priority_name(4, backlog).
+
+% Task has valid priority
+has_valid_priority(TaskID) :-
+    property_value(TaskID, priority, Priority),
+    valid_priority(Priority).
+
+has_valid_priority(TaskID) :-
+    \+ has_property(TaskID, priority).
+
+% ============================================================================
+% 11. SUCCESS CRITERIA EVALUATION
+% ============================================================================
+
+% Objective criterion passes
+criterion_passes(TaskID, CriterionIndex) :-
+    objective_criterion(TaskID, CriterionIndex, _, _, Threshold, Actual),
+    boolean_threshold(Threshold),
+    Actual = Threshold.
+
+criterion_passes(TaskID, CriterionIndex) :-
+    objective_criterion(TaskID, CriterionIndex, _, _, Threshold, Actual),
+    numeric_threshold(Threshold),
+    numeric_value(Actual),
+    Actual >= Threshold.
+
+% All criteria pass
+all_criteria_pass(TaskID) :-
+    task_exists(TaskID),
+    forall(
+        objective_criterion(TaskID, Index, _, _, _, _),
+        criterion_passes(TaskID, Index)
+    ).
+
+% All children completed
+all_children_completed(TaskID) :-
+    task_exists(TaskID),
+    forall(
+        is_child_of(ChildID, TaskID),
+        task_in_state(ChildID, completed)
+    ).
+
+% Eval passes (all criteria + all children)
+eval_passes(TaskID) :-
+    all_criteria_pass(TaskID),
+    all_children_completed(TaskID).
+
+% ============================================================================
+% 12. PROGRESS CALCULATION
+% ============================================================================
+
+% Base progress for leaf tasks
+leaf_progress(TaskID, 0) :-
+    task_in_state(TaskID, created),
+    \+ is_child_of(_, TaskID).
+
+leaf_progress(TaskID, 0.1) :-
+    task_in_state(TaskID, ready),
+    \+ is_child_of(_, TaskID).
+
+leaf_progress(TaskID, 0.1) :-
+    task_in_state(TaskID, blocked),
+    \+ is_child_of(_, TaskID).
+
+leaf_progress(TaskID, 0.5) :-
+    task_in_state(TaskID, active),
+    \+ is_child_of(_, TaskID).
+
+leaf_progress(TaskID, 1) :-
+    task_in_state(TaskID, completed).
+
+% Parent progress (average of children)
+% Note: Recursive aggregation - implementation specific
+parent_progress(TaskID, Progress) :-
+    task_exists(TaskID),
+    is_child_of(_, TaskID),
+    aggregate_child_progress(TaskID, Progress).
+
+% Task progress
+task_progress(TaskID, Progress) :-
+    leaf_progress(TaskID, Progress).
+
+task_progress(TaskID, Progress) :-
+    parent_progress(TaskID, Progress).
+
+% Progress bounds
+valid_progress(Progress) :-
+    Progress >= 0,
+    Progress =< 1.
+
+% ============================================================================
+% 13. BLOCKING AND DEPENDENCIES
+% ============================================================================
+
+% Task is blocked by dependency
+blocked_by_dependency(TaskID, DepID) :-
+    has_edge(TaskID, DepID, depends_on),
+    \+ task_in_state(DepID, completed).
+
+% Has blockers
+has_blockers(TaskID) :-
+    task_in_state(TaskID, blocked).
+
+has_blockers(TaskID) :-
+    blocked_by_dependency(TaskID, _).
+
+% Dependencies satisfied
+dependencies_satisfied(TaskID) :-
+    task_exists(TaskID),
+    \+ blocked_by_dependency(TaskID, _).
+
+% ============================================================================
+% 14. GRAPH INTEGRATION
+% ============================================================================
+
+% Task is registered in graph
+registered_in_graph(TaskID, GraphID) :-
+    graph_manages(GraphID, TaskID),
+    has_address(TaskID, Address),
+    has_string_id(TaskID, StringID).
+
+% Dual registration (System and Graph)
+dual_registration(TaskID) :-
+    registered_in_graph(TaskID, _),
+    actor_exists(TaskID).
+
+% String ID to Address mapping
+id_address_mapping(TaskID, Address) :-
+    task_exists(TaskID),
+    has_address(TaskID, Address),
+    has_string_id(TaskID, StringID),
+    graph_maps(StringID, Address).
+
+% ============================================================================
+% 15. INVARIANTS
+% ============================================================================
+
+% INVARIANT: Task ID matches pattern
+task_id_invariant :-
+    forall(
+        task_exists(TaskID),
+        id_matches_pattern(TaskID, "task_[0-9]+")
+    ).
+
+% INVARIANT: Task ID is unique
+task_uniqueness_invariant :-
+    forall(
+        (task_exists(T1), task_exists(T2), T1 \= T2),
+        id_of(T1) \= id_of(T2)
+    ).
+
+% INVARIANT: Task has valid state
+task_state_invariant :-
+    forall(
+        task_exists(TaskID),
+        valid_state(TaskID)
+    ).
+
+% INVARIANT: State transitions follow FSM
+transition_invariant :-
+    forall(
+        (task_exists(TaskID), state_changed(TaskID, From, To, Trigger)),
+        valid_transition(From, To, Trigger)
+    ).
+
+% INVARIANT: Hierarchy consistency
+hierarchy_invariant :-
+    forall(
+        (task_exists(TaskID), has_property(TaskID, parent_task_id)),
+        has_edge(TaskID, parent_task_id_of(TaskID), spawned_by)
+    ).
+
+% INVARIANT: Progress bounds
+progress_invariant :-
+    forall(
+        (task_exists(TaskID), task_progress(TaskID, Progress)),
+        valid_progress(Progress)
+    ).
+
+% INVARIANT: Completed tasks have progress 1
+completion_progress_invariant :-
+    forall(
+        (task_exists(TaskID), task_in_state(TaskID, completed)),
+        task_progress(TaskID, 1)
+    ).
+
+% INVARIANT: Created tasks have progress 0
+creation_progress_invariant :-
+    forall(
+        (task_exists(TaskID), task_in_state(TaskID, created)),
+        task_progress(TaskID, 0)
+    ).
+
+% INVARIANT: Completed tasks have required fields
+completion_fields_invariant :-
+    forall(
+        (task_exists(TaskID), task_in_state(TaskID, completed)),
+        (has_timestamp(TaskID, completed_at), has_result(TaskID))
+    ).
+
+% INVARIANT: Dual registration
+dual_registration_invariant :-
+    forall(
+        task_exists(TaskID),
+        dual_registration(TaskID)
+    ).
+
+% ============================================================================
+% 16. VERIFICATION QUERIES
+% ============================================================================
+
+% Query: Verify all invariants hold
+% ?- all_invariants_hold.
+all_invariants_hold :-
+    task_id_invariant,
+    task_uniqueness_invariant,
+    task_state_invariant,
+    transition_invariant,
+    hierarchy_invariant,
+    progress_invariant,
+    completion_progress_invariant,
+    creation_progress_invariant,
+    completion_fields_invariant,
+    dual_registration_invariant.
+
+% Query: Find tasks in specific state
+% ?- task_in_state(TaskID, active).
+
+% Query: Find child tasks
+% ?- is_child_of(ChildID, ParentID).
+
+% Query: Find blocked tasks
+% ?- has_blockers(TaskID).
+
+% Query: Find tasks with dependencies
+% ?- blocked_by_dependency(TaskID, DepID).
+
+% Query: Check if task can be completed
+% ?- eval_passes(TaskID).
+
+% Query: Get task progress
+% ?- task_progress(TaskID, Progress).
+
+% ============================================================================
+% 17. EXAMPLE FACTS (for testing)
+% ============================================================================
+
+% Graph
+graph_exists("main_graph").
+
+% Tasks
+task_exists("task_1").
+task_exists("task_2").
+task_exists("task_3").
+
+% Properties
+property_value("task_1", state, active).
+property_value("task_2", state, completed).
+property_value("task_3", state, created).
+property_value("task_1", priority, 1).
+property_value("task_2", priority, 2).
+
+% Hierarchy
+has_edge("task_2", "task_1", spawned_by).
+has_edge("task_3", "task_1", spawned_by).
+
+% Dependencies
+has_edge("task_3", "task_2", depends_on).
+
+% Criteria
+objective_criterion("task_1", 0, "Tests pass", "boolean", true, true).
+objective_criterion("task_2", 0, "Coverage", "percentage", 80, 85).
+
+% Registration
+graph_manages("main_graph", "task_1").
+graph_manages("main_graph", "task_2").
+graph_manages("main_graph", "task_3").
+
+actor_exists("task_1").
+actor_exists("task_2").
+actor_exists("task_3").
+
+% ============================================================================
+% 18. STATE-SPECIFIC MESSAGE ACCEPTANCE
+% ============================================================================
+
+% Messages accepted in created state
+state_accepts(created, get).
+state_accepts(created, observe).
+state_accepts(created, update).
+state_accepts(created, link).
+state_accepts(created, unlink).
+state_accepts(created, delete).
+state_accepts(created, start).
+state_accepts(created, create_task).
+state_accepts(created, eval).
+state_accepts(created, query_status).
+
+% Messages accepted in ready state
+state_accepts(ready, get).
+state_accepts(ready, observe).
+state_accepts(ready, update).
+state_accepts(ready, link).
+state_accepts(ready, unlink).
+state_accepts(ready, delete).
+state_accepts(ready, start).
+state_accepts(ready, create_task).
+state_accepts(ready, eval).
+state_accepts(ready, query_status).
+
+% Messages accepted in active state
+state_accepts(active, get).
+state_accepts(active, observe).
+state_accepts(active, update).
+state_accepts(active, link).
+state_accepts(active, unlink).
+state_accepts(active, delete).
+state_accepts(active, create_task).
+state_accepts(active, eval).
+state_accepts(active, complete).
+state_accepts(active, block).
+state_accepts(active, query_status).
+
+% Messages accepted in blocked state
+state_accepts(blocked, get).
+state_accepts(blocked, observe).
+state_accepts(blocked, update).
+state_accepts(blocked, link).
+state_accepts(blocked, unlink).
+state_accepts(blocked, delete).
+state_accepts(blocked, eval).
+state_accepts(blocked, query_status).
+
+% Messages accepted in completed state (terminal - read-only)
+state_accepts(completed, get).
+state_accepts(completed, observe).
+state_accepts(completed, query_status).
+
+% Messages accepted in failed state (terminal - read-only)
+state_accepts(failed, get).
+state_accepts(failed, observe).
+state_accepts(failed, query_status).
+
+% Task can receive message
+can_receive_message(TaskID, MsgType) :-
+    task_in_state(TaskID, State),
+    state_accepts(State, MsgType).
+
+% ============================================================================
+% 19. WELL-FORMEDNESS CHECKS
+% ============================================================================
+
+% Task is well-formed
+task_well_formed(TaskID) :-
+    task_exists(TaskID),
+    has_property(TaskID, id),
+    has_property(TaskID, type),
+    has_property(TaskID, goal),
+    has_property(TaskID, state),
+    valid_state(TaskID),
+    has_valid_priority(TaskID),
+    dual_registration(TaskID).
+
+% Graph is well-formed
+graph_well_formed(GraphID) :-
+    graph_exists(GraphID),
+    forall(
+        graph_manages(GraphID, TaskID),
+        task_well_formed(TaskID)
+    ).
+
+% ============================================================================
+% END
+% ============================================================================

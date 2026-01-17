@@ -1,0 +1,759 @@
+% ============================================================================
+% Combined System Specification - Formal Verification Model
+% ============================================================================
+% This Datalog specification captures the cross-system integration requirements
+% and invariants for the complete Task/Knowledge Management System.
+%
+% Systems integrated:
+%   - Actor System (foundation layer)
+%   - Graph System (coordination layer)
+%   - Task System (domain layer)
+%   - Knowledge System (domain layer)
+%   - Task CLI (interface layer)
+
+% ============================================================================
+% 1. SYSTEM COMPOSITION
+% ============================================================================
+
+% Subsystems exist
+subsystem_exists(actor_system).
+subsystem_exists(graph_system).
+subsystem_exists(task_system).
+subsystem_exists(knowledge_system).
+subsystem_exists(task_cli).
+
+% Subsystem layers
+subsystem_layer(actor_system, foundation).
+subsystem_layer(graph_system, coordination).
+subsystem_layer(task_system, domain).
+subsystem_layer(knowledge_system, domain).
+subsystem_layer(task_cli, interface).
+
+% Layer ordering (lower layer supports upper layer)
+layer_order(foundation, 1).
+layer_order(coordination, 2).
+layer_order(domain, 3).
+layer_order(interface, 4).
+
+layer_supports(Lower, Upper) :-
+    layer_order(Lower, LO),
+    layer_order(Upper, UO),
+    LO < UO.
+
+% Subsystem dependencies
+depends_on(graph_system, actor_system).
+depends_on(task_system, graph_system).
+depends_on(task_system, actor_system).
+depends_on(knowledge_system, graph_system).
+depends_on(knowledge_system, actor_system).
+depends_on(task_cli, graph_system).
+depends_on(task_cli, task_system).
+
+% INVARIANT: Dependencies follow layer ordering
+dependency_layer_invariant :-
+    forall(
+        (depends_on(Upper, Lower),
+         subsystem_layer(Upper, UL),
+         subsystem_layer(Lower, LL)),
+        layer_supports(LL, UL)
+    ).
+
+% ============================================================================
+% 2. GRAPH-ACTOR INTEGRATION
+% ============================================================================
+
+% Graph owns actor system
+graph_owns_system(GraphID, SystemID) :-
+    graph_exists(GraphID),
+    actor_system_exists(SystemID),
+    created_by(SystemID, GraphID).
+
+% System accessible via getSystem()
+system_accessible(GraphID, SystemID) :-
+    graph_owns_system(GraphID, SystemID).
+
+% All actors registered through owned system
+actor_registered_through_graph(GraphID, ActorAddr) :-
+    graph_owns_system(GraphID, SystemID),
+    registered_in_system(ActorAddr, SystemID).
+
+% INVARIANT: Graph-Actor ownership
+graph_actor_invariant :-
+    forall(
+        graph_exists(GraphID),
+        (graph_owns_system(GraphID, SystemID),
+         system_accessible(GraphID, SystemID))
+    ).
+
+% ============================================================================
+% 3. DUAL REGISTRATION
+% ============================================================================
+
+% Node is registered in graph
+registered_in_graph(NodeID, GraphID) :-
+    graph_exists(GraphID),
+    node_exists(NodeID),
+    graph_has_node(GraphID, NodeID),
+    graph_has_properties(GraphID, NodeID),
+    graph_has_address(GraphID, NodeID).
+
+% Node's actor is registered in system
+registered_in_system(NodeID, SystemID) :-
+    graph_owns_system(GraphID, SystemID),
+    registered_in_graph(NodeID, GraphID),
+    graph_has_address(GraphID, NodeID, Addr),
+    system_has_actor(SystemID, Addr).
+
+% Dual registration: both graph and system
+dual_registered(NodeID, GraphID, SystemID) :-
+    registered_in_graph(NodeID, GraphID),
+    registered_in_system(NodeID, SystemID).
+
+% INVARIANT: All created nodes are dual-registered
+dual_registration_invariant :-
+    forall(
+        (node_created_by_factory(NodeID), graph_exists(GraphID)),
+        dual_registered(NodeID, GraphID, _)
+    ).
+
+% ============================================================================
+% 4. ID-ADDRESS MAPPING
+% ============================================================================
+
+% Graph provides ID to Address mapping
+id_maps_to_address(GraphID, NodeID, Addr) :-
+    registered_in_graph(NodeID, GraphID),
+    graph_address_map(GraphID, NodeID, Addr).
+
+% Mapping is bidirectional (can look up by ID)
+can_resolve_id(GraphID, NodeID) :-
+    id_maps_to_address(GraphID, NodeID, _).
+
+% Mapping is consistent
+mapping_consistent(GraphID, NodeID) :-
+    id_maps_to_address(GraphID, NodeID, Addr1),
+    graph_node_lookup(GraphID, NodeID, Addr2),
+    Addr1 = Addr2.
+
+% INVARIANT: ID-Address mapping consistency
+id_address_invariant :-
+    forall(
+        (registered_in_graph(NodeID, GraphID)),
+        (can_resolve_id(GraphID, NodeID),
+         mapping_consistent(GraphID, NodeID))
+    ).
+
+% ============================================================================
+% 5. MESSAGE ROUTING
+% ============================================================================
+
+% Graph.send routes to correct actor
+graph_send_routes(GraphID, NodeID, Message, Response) :-
+    id_maps_to_address(GraphID, NodeID, Addr),
+    address_send(Addr, Message, Response).
+
+% Address.send is equivalent to Graph.send
+routing_equivalent(GraphID, NodeID, Message) :-
+    id_maps_to_address(GraphID, NodeID, Addr),
+    graph_send(GraphID, NodeID, Message, R1),
+    address_send(Addr, Message, R2),
+    R1 = R2.
+
+% INVARIANT: Routing equivalence
+routing_invariant :-
+    forall(
+        (registered_in_graph(NodeID, GraphID), is_message(Message)),
+        routing_equivalent(GraphID, NodeID, Message)
+    ).
+
+% ============================================================================
+% 6. EDGE SEMANTICS
+% ============================================================================
+
+% Edge types
+edge_type(spawned_by).
+edge_type(depends_on).
+edge_type(requires_knowledge).
+edge_type(produces).
+edge_type(blocks).
+edge_type(references).
+
+% Edge type constraints
+edge_from_type(spawned_by, task).
+edge_to_type(spawned_by, task).
+
+edge_from_type(depends_on, task).
+edge_to_type(depends_on, task).
+
+edge_from_type(requires_knowledge, task).
+edge_to_type(requires_knowledge, knowledge).
+
+edge_from_type(produces, task).
+edge_to_type(produces, artifact).
+edge_to_type(produces, knowledge).
+
+edge_from_type(blocks, task).
+edge_to_type(blocks, task).
+
+% References can connect any types
+edge_from_type(references, _).
+edge_to_type(references, _).
+
+% Edge respects type constraints
+edge_valid_types(EdgeID) :-
+    edge_exists(EdgeID),
+    edge_from(EdgeID, FromID),
+    edge_to(EdgeID, ToID),
+    edge_type_of(EdgeID, Type),
+    node_type(FromID, FromType),
+    node_type(ToID, ToType),
+    edge_from_type(Type, FromType),
+    edge_to_type(Type, ToType).
+
+% ============================================================================
+% 7. TASK HIERARCHY
+% ============================================================================
+
+% Parent-child relationship via spawned_by edge
+is_child_of(ChildID, ParentID) :-
+    task_exists(ChildID),
+    task_exists(ParentID),
+    edge_exists(EdgeID),
+    edge_from(EdgeID, ChildID),
+    edge_to(EdgeID, ParentID),
+    edge_type_of(EdgeID, spawned_by).
+
+% Task has parent ID property
+has_parent_property(ChildID, ParentID) :-
+    task_exists(ChildID),
+    task_property(ChildID, parent_task_id, ParentID).
+
+% Hierarchy consistent: property matches edge
+hierarchy_consistent(ChildID) :-
+    task_exists(ChildID),
+    (has_parent_property(ChildID, ParentID) ->
+        is_child_of(ChildID, ParentID)
+    ; true).
+
+% INVARIANT: Task hierarchy consistency
+hierarchy_invariant :-
+    forall(
+        (task_exists(ChildID), has_parent_property(ChildID, ParentID)),
+        is_child_of(ChildID, ParentID)
+    ).
+
+% ============================================================================
+% 8. TASK DEPENDENCIES
+% ============================================================================
+
+% Task depends on another task
+depends_on_task(TaskID, DepID) :-
+    task_exists(TaskID),
+    task_exists(DepID),
+    edge_exists(EdgeID),
+    edge_from(EdgeID, TaskID),
+    edge_to(EdgeID, DepID),
+    edge_type_of(EdgeID, depends_on).
+
+% Dependency is satisfied (dependency completed)
+dependency_satisfied(TaskID, DepID) :-
+    depends_on_task(TaskID, DepID),
+    task_state(DepID, completed).
+
+% All dependencies satisfied
+all_dependencies_satisfied(TaskID) :-
+    task_exists(TaskID),
+    forall(
+        depends_on_task(TaskID, DepID),
+        dependency_satisfied(TaskID, DepID)
+    ).
+
+% Task is ready (can be started)
+task_ready(TaskID) :-
+    task_exists(TaskID),
+    task_state(TaskID, State),
+    \+ member(State, [completed, failed, blocked]),
+    all_dependencies_satisfied(TaskID).
+
+% INVARIANT: Ready tasks have no incomplete dependencies
+ready_invariant :-
+    forall(
+        task_ready(TaskID),
+        all_dependencies_satisfied(TaskID)
+    ).
+
+% ============================================================================
+% 9. KNOWLEDGE REQUIREMENTS
+% ============================================================================
+
+% Task requires knowledge
+requires_knowledge(TaskID, KnowledgeID) :-
+    task_exists(TaskID),
+    knowledge_exists(KnowledgeID),
+    edge_exists(EdgeID),
+    edge_from(EdgeID, TaskID),
+    edge_to(EdgeID, KnowledgeID),
+    edge_type_of(EdgeID, requires_knowledge).
+
+% Knowledge is available (node exists)
+knowledge_available(TaskID, KnowledgeID) :-
+    requires_knowledge(TaskID, KnowledgeID),
+    knowledge_exists(KnowledgeID),
+    registered_in_graph(KnowledgeID, _).
+
+% All required knowledge available
+all_knowledge_available(TaskID) :-
+    task_exists(TaskID),
+    forall(
+        requires_knowledge(TaskID, KnowledgeID),
+        knowledge_available(TaskID, KnowledgeID)
+    ).
+
+% ============================================================================
+% 10. CLI-GRAPH INTERFACE
+% ============================================================================
+
+% CLI operations
+cli_operation(init).
+cli_operation(add).
+cli_operation(update).
+cli_operation(delete).
+cli_operation(list).
+cli_operation(ready).
+cli_operation(search).
+cli_operation(show).
+cli_operation(status).
+cli_operation(eval).
+cli_operation(graph).
+
+% Operations that modify state
+modifies_state(init).
+modifies_state(add).
+modifies_state(update).
+modifies_state(delete).
+
+% Operations that require file
+requires_file(add).
+requires_file(update).
+requires_file(delete).
+requires_file(list).
+requires_file(ready).
+requires_file(search).
+requires_file(show).
+requires_file(status).
+requires_file(eval).
+requires_file(graph).
+
+% CLI operation goes through graph
+cli_uses_graph(Operation, GraphOperation) :-
+    cli_operation(Operation),
+    cli_to_graph_map(Operation, GraphOperation).
+
+% Mapping from CLI to Graph operations
+cli_to_graph_map(add, [register_node, add_edge]).
+cli_to_graph_map(update, [send]).
+cli_to_graph_map(delete, [remove_node]).
+cli_to_graph_map(list, [get_node_ids, get_node_properties]).
+cli_to_graph_map(show, [send]).
+cli_to_graph_map(status, [send]).
+cli_to_graph_map(eval, [send]).
+cli_to_graph_map(graph, [get_edges_from]).
+
+% INVARIANT: CLI operations go through Graph
+cli_graph_invariant :-
+    forall(
+        (cli_operation(Op), Op \= init, requires_file(Op)),
+        cli_uses_graph(Op, _)
+    ).
+
+% ============================================================================
+% 11. SERIALIZATION ROUND-TRIP
+% ============================================================================
+
+% Graph can be dumped
+graph_dumpable(GraphID) :-
+    graph_exists(GraphID).
+
+% Dump produces nodes and edges
+dump_result(GraphID, Nodes, Edges) :-
+    graph_dumpable(GraphID),
+    findall(Props, graph_node_properties(GraphID, _, Props), Nodes),
+    findall(Edge, graph_edge(GraphID, Edge), Edges).
+
+% Graph can be restored from dump
+restorable(Nodes, Edges) :-
+    is_list(Nodes),
+    is_list(Edges).
+
+% Restored graph has same nodes
+restoration_preserves_nodes(GraphID, Nodes) :-
+    dump_result(GraphID, Nodes, _),
+    forall(
+        member(Props, Nodes),
+        graph_node_properties(GraphID, Props.id, Props)
+    ).
+
+% Restored graph has same edges
+restoration_preserves_edges(GraphID, Edges) :-
+    dump_result(GraphID, _, Edges),
+    forall(
+        member(Edge, Edges),
+        graph_edge(GraphID, Edge)
+    ).
+
+% INVARIANT: Serialization round-trip
+serialization_invariant :-
+    forall(
+        (graph_exists(GraphID), dump_result(GraphID, Nodes, Edges)),
+        (restoration_preserves_nodes(GraphID, Nodes),
+         restoration_preserves_edges(GraphID, Edges))
+    ).
+
+% ============================================================================
+% 12. NODE TYPE CONSISTENCY
+% ============================================================================
+
+% Valid node types
+valid_node_type(task).
+valid_node_type(knowledge).
+valid_node_type(artifact).
+valid_node_type(pattern).
+
+% Node has valid type
+node_has_valid_type(NodeID) :-
+    node_exists(NodeID),
+    node_type(NodeID, Type),
+    valid_node_type(Type).
+
+% Task nodes
+is_task_node(NodeID) :-
+    node_type(NodeID, task).
+
+% Knowledge nodes
+is_knowledge_node(NodeID) :-
+    node_type(NodeID, knowledge).
+
+% INVARIANT: All nodes have valid types
+node_type_invariant :-
+    forall(
+        node_exists(NodeID),
+        node_has_valid_type(NodeID)
+    ).
+
+% ============================================================================
+% 13. STATE MACHINE INTEGRATION
+% ============================================================================
+
+% Task states
+task_state_valid(created).
+task_state_valid(ready).
+task_state_valid(active).
+task_state_valid(blocked).
+task_state_valid(completed).
+task_state_valid(failed).
+
+% Valid state transitions
+valid_transition(created, ready, dependencies_met).
+valid_transition(created, active, start).
+valid_transition(created, blocked, block).
+valid_transition(ready, active, start).
+valid_transition(ready, blocked, block).
+valid_transition(active, blocked, block).
+valid_transition(active, completed, complete).
+valid_transition(active, failed, abort).
+valid_transition(blocked, ready, unblock).
+valid_transition(blocked, failed, abort).
+
+% Task has valid state
+task_has_valid_state(TaskID) :-
+    task_exists(TaskID),
+    task_state(TaskID, State),
+    task_state_valid(State).
+
+% State transition was valid
+transition_valid(TaskID, FromState, ToState, Action) :-
+    task_exists(TaskID),
+    valid_transition(FromState, ToState, Action).
+
+% INVARIANT: All task states are valid
+task_state_invariant :-
+    forall(
+        task_exists(TaskID),
+        task_has_valid_state(TaskID)
+    ).
+
+% ============================================================================
+% 14. KNOWLEDGE VERSION TRACKING
+% ============================================================================
+
+% Knowledge has version
+knowledge_version(KnowledgeID, Version) :-
+    knowledge_exists(KnowledgeID),
+    knowledge_property(KnowledgeID, version, Version).
+
+% Version is positive
+version_positive(KnowledgeID) :-
+    knowledge_version(KnowledgeID, Version),
+    Version >= 1.
+
+% Version increases on append
+version_increases(KnowledgeID, OldVersion, NewVersion) :-
+    append_operation(KnowledgeID, OldVersion, NewVersion),
+    NewVersion > OldVersion.
+
+% INVARIANT: Knowledge version monotonicity
+version_monotonicity_invariant :-
+    forall(
+        knowledge_exists(KnowledgeID),
+        version_positive(KnowledgeID)
+    ).
+
+% ============================================================================
+% 15. CROSS-SYSTEM CONSISTENCY
+% ============================================================================
+
+% Graph and Task state consistency
+graph_task_consistent(GraphID, TaskID) :-
+    registered_in_graph(TaskID, GraphID),
+    graph_node_properties(GraphID, TaskID, Props),
+    task_state(TaskID, State),
+    Props.state = State.
+
+% Graph and Knowledge consistency
+graph_knowledge_consistent(GraphID, KnowledgeID) :-
+    registered_in_graph(KnowledgeID, GraphID),
+    graph_node_properties(GraphID, KnowledgeID, Props),
+    knowledge_version(KnowledgeID, Version),
+    Props.version = Version.
+
+% INVARIANT: Cross-system consistency
+cross_system_invariant :-
+    forall(
+        (task_exists(TaskID), registered_in_graph(TaskID, GraphID)),
+        graph_task_consistent(GraphID, TaskID)
+    ),
+    forall(
+        (knowledge_exists(KnowledgeID), registered_in_graph(KnowledgeID, GraphID)),
+        graph_knowledge_consistent(GraphID, KnowledgeID)
+    ).
+
+% ============================================================================
+% 16. CASCADE OPERATIONS
+% ============================================================================
+
+% Node removal cascades to edges
+cascade_on_remove(NodeID) :-
+    node_removed(NodeID),
+    \+ edge_from(_, NodeID),
+    \+ edge_to(_, NodeID).
+
+% INVARIANT: Removal cascades edges
+cascade_invariant :-
+    forall(
+        node_removed(NodeID),
+        cascade_on_remove(NodeID)
+    ).
+
+% ============================================================================
+% 17. VERIFICATION QUERIES
+% ============================================================================
+
+% Query: Verify system composition
+% ?- dependency_layer_invariant.
+
+% Query: Verify graph-actor integration
+% ?- graph_actor_invariant.
+
+% Query: Verify dual registration
+% ?- dual_registration_invariant.
+
+% Query: Verify ID-address mapping
+% ?- id_address_invariant.
+
+% Query: Verify message routing
+% ?- routing_invariant.
+
+% Query: Verify task hierarchy
+% ?- hierarchy_invariant.
+
+% Query: Verify ready task dependencies
+% ?- ready_invariant.
+
+% Query: Verify CLI-graph interface
+% ?- cli_graph_invariant.
+
+% Query: Verify serialization round-trip
+% ?- serialization_invariant.
+
+% Query: Verify node types
+% ?- node_type_invariant.
+
+% Query: Verify task states
+% ?- task_state_invariant.
+
+% Query: Verify knowledge versions
+% ?- version_monotonicity_invariant.
+
+% Query: Verify cross-system consistency
+% ?- cross_system_invariant.
+
+% Query: Verify cascade operations
+% ?- cascade_invariant.
+
+% ============================================================================
+% 18. ALL INVARIANTS
+% ============================================================================
+
+% All integration invariants hold
+all_invariants_hold :-
+    dependency_layer_invariant,
+    graph_actor_invariant,
+    dual_registration_invariant,
+    id_address_invariant,
+    routing_invariant,
+    hierarchy_invariant,
+    ready_invariant,
+    cli_graph_invariant,
+    serialization_invariant,
+    node_type_invariant,
+    task_state_invariant,
+    version_monotonicity_invariant,
+    cross_system_invariant,
+    cascade_invariant.
+
+% System is well-formed
+system_well_formed :-
+    all_invariants_hold,
+    forall(subsystem_exists(S), subsystem_layer(S, _)),
+    forall((depends_on(A, B)), (subsystem_exists(A), subsystem_exists(B))).
+
+% ============================================================================
+% 19. EXAMPLE FACTS (for testing)
+% ============================================================================
+
+% Graph
+graph_exists("main_graph").
+
+% System
+actor_system_exists("main_system").
+created_by("main_system", "main_graph").
+
+% Nodes
+node_exists("task_1").
+node_exists("task_2").
+node_exists("task_3").
+node_exists("knowledge_1").
+
+node_type("task_1", task).
+node_type("task_2", task).
+node_type("task_3", task).
+node_type("knowledge_1", knowledge).
+
+% Task properties
+task_exists("task_1").
+task_exists("task_2").
+task_exists("task_3").
+task_state("task_1", active).
+task_state("task_2", created).
+task_state("task_3", completed).
+task_property("task_2", parent_task_id, "task_1").
+
+% Knowledge properties
+knowledge_exists("knowledge_1").
+knowledge_property("knowledge_1", version, 2).
+
+% Registration
+graph_has_node("main_graph", "task_1").
+graph_has_node("main_graph", "task_2").
+graph_has_node("main_graph", "task_3").
+graph_has_node("main_graph", "knowledge_1").
+graph_has_properties("main_graph", "task_1").
+graph_has_properties("main_graph", "task_2").
+graph_has_properties("main_graph", "task_3").
+graph_has_properties("main_graph", "knowledge_1").
+graph_has_address("main_graph", "task_1").
+graph_has_address("main_graph", "task_2").
+graph_has_address("main_graph", "task_3").
+graph_has_address("main_graph", "knowledge_1").
+
+% Edges
+edge_exists("edge_1").
+edge_from("edge_1", "task_2").
+edge_to("edge_1", "task_1").
+edge_type_of("edge_1", spawned_by).
+
+edge_exists("edge_2").
+edge_from("edge_2", "task_2").
+edge_to("edge_2", "task_3").
+edge_type_of("edge_2", depends_on).
+
+edge_exists("edge_3").
+edge_from("edge_3", "task_1").
+edge_to("edge_3", "knowledge_1").
+edge_type_of("edge_3", requires_knowledge).
+
+% File
+file_exists("tasks.json").
+
+% ============================================================================
+% 20. COMPLETENESS CHECKS
+% ============================================================================
+
+% Check: All subsystems exist
+all_subsystems_exist :-
+    subsystem_exists(actor_system),
+    subsystem_exists(graph_system),
+    subsystem_exists(task_system),
+    subsystem_exists(knowledge_system),
+    subsystem_exists(task_cli).
+
+% Check: All layers assigned
+all_layers_assigned :-
+    forall(
+        subsystem_exists(S),
+        subsystem_layer(S, _)
+    ).
+
+% Check: All edge types defined
+all_edge_types_defined :-
+    edge_type(spawned_by),
+    edge_type(depends_on),
+    edge_type(requires_knowledge),
+    edge_type(produces),
+    edge_type(blocks),
+    edge_type(references).
+
+% Check: All task states defined
+all_task_states_defined :-
+    task_state_valid(created),
+    task_state_valid(ready),
+    task_state_valid(active),
+    task_state_valid(blocked),
+    task_state_valid(completed),
+    task_state_valid(failed).
+
+% Check: All CLI operations defined
+all_cli_operations_defined :-
+    cli_operation(init),
+    cli_operation(add),
+    cli_operation(update),
+    cli_operation(delete),
+    cli_operation(list),
+    cli_operation(ready),
+    cli_operation(search),
+    cli_operation(show),
+    cli_operation(status),
+    cli_operation(eval),
+    cli_operation(graph).
+
+% Specification is complete
+specification_complete :-
+    all_subsystems_exist,
+    all_layers_assigned,
+    all_edge_types_defined,
+    all_task_states_defined,
+    all_cli_operations_defined.
+
+% ============================================================================
+% END
+% ============================================================================
