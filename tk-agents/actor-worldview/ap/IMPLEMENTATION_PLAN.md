@@ -7,22 +7,33 @@ This plan follows a phased approach to building the **Self-Evolving Actor Graph*
 ## Phase 1: The Actor Kernel (The "Big Bang")
 **Goal:** Establish the fundamental message-passing runtime and local addressing.
 
-### Task 1.1: Minimal Actor Runtime
+### Task 1.1: Minimal Actor Runtime [COMPLETED]
 - **Outcome:** A Bun/TS base class and registry that can spawn actors and route messages.
+- **Refinement:** Integrated **SERDE** (via `structuredClone` for memory isolation) and **Transports** (pluggable envelopes for boundaries).
 - **Objective Success Criteria:** 
-    - `system.send(id, msg)` reaches the target actor.
-    - Registry successfully maps `seag://` URIs to in-memory references.
+    - ✅ `system.send(id, msg)` reaches the target actor.
+    - ✅ Registry successfully maps `seag://` URIs to in-memory references.
+    - ✅ **SERDE Isolation:** Mutating the sender's object does not affect the receiver's copy.
 - **Subjective Success Criteria:** 
-    - The API feels "ergonomic" and requires minimal boilerplate.
-- **Harness:** `tests/harness/phase1_kernel.ts`
-- **Research:** Optimal UUID vs. Human-readable ID strategies for the local registry.
+    - ✅ The API feels "ergonomic" and requires minimal boilerplate.
+- **Harness:** `tests/harness/phase1_kernel.test.ts`
+- **Research:** Investigated `structuredClone` vs. shared memory for local optimization.
 
-### Task 1.2: Root Supervisor & Self-Healing
+### Task 1.2: Root Supervisor & Self-Healing [COMPLETED]
 - **Outcome:** The `RootSupervisor` from `ap/SYSTEM.model.lisp` is operational.
 - **Objective Success Criteria:** 
-    - Killing a "Permanent" actor triggers an automatic restart.
+    - ✅ Killing a "Permanent" actor triggers an automatic restart.
+    - ✅ **Fault Isolation:** Errors in a child actor's `receive` are caught and reported without crashing the event loop.
 - **Subjective Success Criteria:** 
-    - The system feels resilient; "Let it crash" doesn't lead to system death.
+    - ✅ The system feels resilient; "Let it crash" doesn't lead to system death.
+- **Harness:** `tests/harness/phase1_kernel.test.ts`
+
+### Task 1.3: Observability & Loop Avoidance [IN PROGRESS]
+- **Outcome:** Messages carry `trace_id` and `hop_count`.
+- **Objective Success Criteria:** 
+    - Circular messages are dropped after 100 hops.
+    - A `trace_id` can be used to follow a message across 3+ actors.
+- **Harness:** `tests/harness/phase1_stability.test.ts`
 
 ---
 

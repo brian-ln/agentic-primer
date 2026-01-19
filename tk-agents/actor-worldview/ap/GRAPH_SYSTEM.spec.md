@@ -1,10 +1,24 @@
-# Specification: SEAG Protocol
-
 ## Actor Addressing
 Nodes and edges follow the hierarchical-graph hybrid addressing:
-- `seag.nodes.<id>`
-- `seag.edges.<id>`
-- `seag.subsystems.<name>.<id>`
+- `seag://<system>/<id>`
+
+## Messaging & SERDE (Serialization/Deserialization)
+
+### Local Isolation (In-Memory)
+To preserve actor isolation in the same process, all messages must be **Isolated via Structured Clone**. This prevents shared mutable state between actors.
+
+### Boundary Envelopes (Cross-System)
+When a message leaves a physical runtime, it is wrapped in an **Envelope**:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `to` | Address | Logical target URI. |
+| `from` | Address | Logical sender URI. |
+| `data` | Bytes/String | The serialized payload. |
+| `ts` | Timestamp | Monotonic send time. |
+
+### Serializers
+Transports must use a `Serializer` that handles the conversion between the `Message` object and the `Envelope.data`. The default format is **JSON**, but high-performance boundaries may use **MessagePack** or **WASM-optimized binary**.
 
 ## Protocol: Graph Operations
 

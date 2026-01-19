@@ -3,7 +3,7 @@
 
 (system SEAG-Lifecycle
   (actors
-    ;; The Root Supervisor: The first actor in any Physical Runtime
+    ;; RootSupervisor: The "Guardian" actor that restarts failed children.
     (actor RootSupervisor
       (state (children map) (status enum 'booting 'running 'degraded))
       (behavior
@@ -25,10 +25,20 @@
 
         (on child-crashed (child_id reason)
           (log-error child_id reason)
-          (match (get-restart-policy child_id)
-            ('permanent (spawn-new-instance child_id))
-            ('transient (ignore))
-            ('virtual (wait-for-next-reference child_id))))))
+          ;; Trigger Autonomous Troubleshooting Loop (Tier 2)
+          (let ((diag (spawn DiagnosisAgent child_id reason)))
+            (subscribe diag 'resolution-failed 
+              (lambda (msg) (escalate-to-human child_id msg)))))))
+
+    ;; DiagnosisAgent: Autonomous Troubleshooter (Tier 2)
+    (actor DiagnosisAgent
+      (state (target_id address) (error any))
+      (behavior
+        (on start ()
+          (let ((diagnosis (analyze-system-state target_id error)))
+            (match diagnosis
+              ('recoverable (perform-repair target_id))
+              ('irrecoverable (emit-signal 'resolution-failed error)))))))
 
     ;; Router Actor: The dynamic registry
     (actor RouterActor

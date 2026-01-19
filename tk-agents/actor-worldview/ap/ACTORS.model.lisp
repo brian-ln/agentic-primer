@@ -4,6 +4,11 @@
 (system SEAG
   (protocols
     (protocol BaseNode
+      (properties
+        (isolation (enum 'cloned 'shared)) ; 'cloned' implies structuredClone
+        (address-family (enum 'local 'remote))
+        (max-hops int) ; Defaults to 100 for loop avoidance
+        (trace-id uuid)) ; For observability and causality tracking
       (message inspect () (returns NodeSpec))
       (message watch (filter) (returns SubscriptionID))
       (message unwatch (sub-id) (returns Boolean)))
