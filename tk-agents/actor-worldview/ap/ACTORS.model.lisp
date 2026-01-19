@@ -57,10 +57,12 @@
     ;; The Projector (Maintains the graph view)
     (actor GraphProjector
       (behavior
-        (on event (ev)
-          (match ev
-            ((NodeUpdated id data) (update-index id data))
-            ((EdgeCreated id from to type) (create-edge-index id from to type)))))))
+        (on append (event) (project event))
+        (on link-to (payload) (create-edge payload))
+        (on create-edge (payload) (create-edge payload))
+        (on update-state (payload) (update-node payload))
+        (on query (payload) (run-query payload))))
+  ) ; End actors
 
   (boundaries
     (boundary Web

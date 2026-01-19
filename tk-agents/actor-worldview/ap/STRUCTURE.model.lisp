@@ -8,7 +8,7 @@
       (properties
         (format (enum 'markdown 'html 'json 'typescript)))
       (behavior
-        (on parse (blob_node_id)
+        (on shred (blob_node_id)
           (let ((fragments (call-external-parser format blob_node_id)))
             (for-each f fragments
               (spawn FragmentNode f)

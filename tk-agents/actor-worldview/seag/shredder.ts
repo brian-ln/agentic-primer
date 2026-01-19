@@ -1,42 +1,52 @@
 import { Actor, Message, ActorAddress } from "./kernel";
+import { Actor as ActorModel, Handler, Implements } from "./lib/meta";
 
 /**
  * FragmentNode: Represents a granular piece of a larger document.
  * Follows ap/STRUCTURE.model.lisp
  */
+@ActorModel("FragmentNode")
+@Implements("DataNode") // From model, though protocol not defined yet
 export class FragmentNode extends Actor {
   public content: any;
   public parentId: ActorAddress | null = null;
 
   async receive(msg: Message) {
-    if (msg.type === "INIT_FRAGMENT") {
-      if (this.content === msg.payload.content) return; // No-Op
-      this.content = msg.payload.content;
-      this.parentId = msg.payload.parentId;
-    }
+    if (msg.type === "INIT_FRAGMENT") await this.handleInit(msg);
+    if (msg.type === "GET") await this.handleGetState(msg);
+    if (msg.type === "PATCH") await this.handlePatch(msg);
+  }
 
-    if (msg.type === "GET_STATE") {
-      this.send(msg.sender!, { type: "STATE", payload: this.content });
-    }
+  @Handler("INIT_FRAGMENT")
+  private async handleInit(msg: Message) {
+    if (this.content === msg.payload.content) return; // No-Op
+    this.content = msg.payload.content;
+    this.parentId = msg.payload.parentId;
+  }
 
-    if (msg.type === "PATCH") {
-      const oldContent = JSON.stringify(this.content);
-      // If payload is an object, merge it. Otherwise, replace it.
-      if (typeof msg.payload === 'object' && msg.payload !== null && !Array.isArray(msg.payload)) {
-        this.content = { ...this.content, ...msg.payload };
-      } else {
-        this.content = msg.payload;
-      }
-      
-      if (JSON.stringify(this.content) === oldContent) return; // No-Op
-      
-      // Notify parent of the change
-      if (this.parentId) {
-        this.send(this.parentId, { 
-          type: "FRAGMENT_UPDATED", 
-          payload: { id: this.id, content: this.content } 
-        });
-      }
+  @Handler("GET")
+  private async handleGetState(msg: Message) {
+    this.send(msg.sender!, { type: "STATE", payload: this.content });
+  }
+
+  @Handler("PATCH")
+  private async handlePatch(msg: Message) {
+    const oldContent = JSON.stringify(this.content);
+    // If payload is an object, merge it. Otherwise, replace it.
+    if (typeof msg.payload === 'object' && msg.payload !== null && !Array.isArray(msg.payload)) {
+      this.content = { ...this.content, ...msg.payload };
+    } else {
+      this.content = msg.payload;
+    }
+    
+    if (JSON.stringify(this.content) === oldContent) return; // No-Op
+    
+    // Notify parent of the change
+    if (this.parentId) {
+      this.send(this.parentId, { 
+        type: "FRAGMENT_UPDATED", 
+        payload: { id: this.id, content: this.content } 
+      });
     }
   }
 }
@@ -44,8 +54,10 @@ export class FragmentNode extends Actor {
 /**
  * DocumentParser (The Shredder): Decomposes blobs into actor sub-graphs.
  */
+@ActorModel("DocumentParser")
 export class DocumentParser extends Actor {
   
+  @Handler("SHRED")
   async receive(msg: Message) {
     if (msg.type === "SHRED") {
       const { content, format, docId } = msg.payload;
@@ -79,8 +91,7 @@ export class DocumentParser extends Actor {
       // Establish the graph edge
       this.send("seag://system/projector", {
         type: "LINK_TO",
-        payload: { to: fragId, type: "contains" },
-        sender: docId
+        payload: { from: docId, to: fragId, type: "contains" }
       });
     }
   }
@@ -101,8 +112,7 @@ export class DocumentParser extends Actor {
 
       this.send("seag://system/projector", {
         type: "LINK_TO",
-        payload: { to: fragId, type: "contains" },
-        sender: docId
+        payload: { from: docId, to: fragId, type: "contains" }
       });
     });
   }

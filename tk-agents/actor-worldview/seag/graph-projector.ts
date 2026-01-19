@@ -1,18 +1,34 @@
 import { Actor, Message, Event, ActorAddress } from "./kernel";
+import { Actor as ActorModel, Handler } from "./lib/meta";
 
 /**
  * GraphProjector: Maintains a queryable view of the SEAG graph.
  * This is a "Minimal Viable Index" that mimics Datalog rules.
  * Follows ap/GRAPH_RULES.datalog logic.
  */
+@ActorModel("GraphProjector")
 export class GraphProjector extends Actor {
   private nodes: Map<ActorAddress, any> = new Map();
   private edges: { from: ActorAddress; to: ActorAddress; type: string }[] = [];
 
+  @Handler("APPEND")
+  @Handler("LINK_TO")
+  @Handler("CREATE_EDGE")
+  @Handler("UPDATE_STATE")
+  @Handler("QUERY")
   async receive(msg: Message) {
     if (msg.type === "APPEND") {
       const event: Event = msg.payload;
       this.project(event);
+    }
+
+    if (msg.type === "LINK_TO" || msg.type === "CREATE_EDGE") {
+      const { from, to, type } = msg.payload;
+      this.edges.push({ from: from || msg.sender!, to, type });
+    }
+
+    if (msg.type === "UPDATE_STATE") {
+      this.nodes.set(msg.sender!, msg.payload);
     }
 
     if (msg.type === "QUERY") {

@@ -1,11 +1,16 @@
 import { Actor, Message } from "./kernel";
+import { Actor as ActorModel, Handler } from "./lib/meta";
 
 /**
  * UserProxy: The actor representing the Human user in the SEAG.
  * Follows ap/REPL_AGENT.model.lisp
  */
+@ActorModel("UserProxy")
 export class UserProxy extends Actor {
   
+  @Handler("INPUT")
+  @Handler("OUTPUT")
+  @Handler("SIGNAL")
   async receive(msg: Message) {
     if (msg.type === "INPUT") {
       const text = msg.payload.text;
@@ -27,7 +32,11 @@ export class UserProxy extends Actor {
     if (msg.type === "OUTPUT") {
       // Send result back to the user (via Gateway relay)
       console.log(`[UserProxy] Replying: ${msg.payload.content}`);
-      // In MVP, we just console log, but this would push back to WS
+      this.send("seag://system/gateway-relay", msg);
+    }
+
+    if (msg.type === "SIGNAL") {
+      this.send("seag://system/gateway-relay", msg);
     }
   }
 }

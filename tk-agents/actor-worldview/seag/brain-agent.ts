@@ -69,7 +69,7 @@ export class BrainAgent extends Actor {
 
   @Handler("HANDLE_GET")
   private async handleGet(id: string, replyTo: string) {
-    this.send(id, { type: "GET_STATE", sender: this.id });
+    this.send(id, { type: "GET", sender: this.id });
   }
 
   @Handler("HANDLE_MOUNT")

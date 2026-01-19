@@ -1,3 +1,5 @@
+import { Actor as ActorModel, Handler } from "./lib/meta";
+
 /**
  * SEAG Kernel: Minimal Actor Runtime
  * Follows ap/GRAPH_SYSTEM.spec.md and ap/SYSTEM.model.lisp
@@ -101,7 +103,9 @@ export abstract class Actor {
 /**
  * RootSupervisor: The "Guardian" actor that restarts failed children.
  */
+@ActorModel("RootSupervisor")
 export class RootSupervisor extends Actor {
+  @Handler("CHILD_CRASHED")
   async receive(msg: Message) {
     if (msg.type === "CHILD_CRASHED") {
       const { id, error } = msg.payload;
@@ -128,6 +132,7 @@ class JSONSerializer implements Serializer {
   }
 }
 
+@ActorModel("Kernel")
 export class System {
   private actors: Map<ActorAddress, Actor> = new Map();
   private registry: Map<ActorAddress, ActorMetadata> = new Map();
@@ -206,10 +211,11 @@ export class System {
     }
   }
 
+  @Handler("DISPATCH")
   private dispatchLocal(target: ActorAddress, msg: Message): void {
     const actor = this.actors.get(target);
     if (!actor) {
-      console.warn(`[System] Dead Letter: ${target}`);
+      console.warn(`[System] Dead Letter: ${target} (Type: ${msg.type}, Sender: ${msg.sender})`);
       return;
     }
 
@@ -236,6 +242,7 @@ export class System {
     }, 0);
   }
 
+  @Handler("RECORD_EVENT")
   private recordEvent(source: ActorAddress, msg: Message) {
     const event: Event = {
       id: `ev-${Math.random().toString(36).substring(2, 11)}`,
@@ -249,7 +256,8 @@ export class System {
     this.send(this.eventLogAddress!, {
       type: "APPEND",
       payload: event,
-      traceId: msg.traceId
+      traceId: msg.traceId,
+      sender: "seag://system/kernel"
     });
   }
 

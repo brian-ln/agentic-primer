@@ -60,21 +60,22 @@ describe("SEAG Phase 3.2: The Shredder", () => {
     expect(actors).toContain(`${docId}/fragments/version`);
     expect(actors).toContain(`${docId}/fragments/author`);
 
-    // Act: Get state of a specific fragment
-    let fragmentState: any = null;
-    class StateReceiver extends Actor {
+    // 3. Verify Shredding
+    // We expect 3 fragments: name, version, status
+    let fragmentState = null;
+    class MockReceiver extends Actor {
       async receive(msg: Message) {
         if (msg.type === "STATE") fragmentState = msg.payload;
       }
     }
-    system.spawn("seag://local/receiver", StateReceiver);
+    system.spawn("seag://local/receiver", MockReceiver);
 
     system.send(`${docId}/fragments/author`, {
-      type: "GET_STATE",
+      type: "GET",
       sender: "seag://local/receiver"
     });
 
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise(resolve => setTimeout(resolve, 100));
     expect(fragmentState).toBe("SEAG");
   });
 

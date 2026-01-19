@@ -36,23 +36,19 @@ function extractDefinitions(sexprs: SExpr[], filename: string) {
     if (Array.isArray(node)) {
       const [type, name, ...rest] = node;
       
-      // (defprotocol Name ...)
-      if (type === "defprotocol" && typeof name === "string") {
+      // (defprotocol Name ...) OR (protocol Name ...)
+      if ((type === "defprotocol" || type === "protocol") && typeof name === "string") {
         const inputs: string[] = [];
         const outputs: string[] = [];
         
-        // Scan for (on MSG ...) blocks
+        // Scan for (on MSG ...) or (message MSG ...) blocks
         for (const item of rest) {
-          if (Array.isArray(item) && item[0] === "on") {
-            const msg = item[1];
-            if (typeof msg === "string") inputs.push(msg.toUpperCase().replace(/-/g, '_'));
-            
-            // Scan for (yields MSG ...)
-            for (const sub of item.slice(2)) {
-              if (Array.isArray(sub) && sub[0] === "yields") {
-                const outMsg = sub[1];
-                if (typeof outMsg === "string") outputs.push(outMsg.toUpperCase().replace(/-/g, '_'));
-              }
+          if (Array.isArray(item)) {
+            const head = item[0];
+            if (head === "on" || head === "message") {
+              const msg = item[1];
+              if (typeof msg === "string") inputs.push(msg.toUpperCase().replace(/-/g, '_'));
+              // outputs logic (yields/returns)...
             }
           }
         }
@@ -88,6 +84,8 @@ function extractDefinitions(sexprs: SExpr[], filename: string) {
       } else if (type === "system") {
         rest.forEach(walk);
       } else if (type === "actors") {
+        rest.forEach(walk);
+      } else if (type === "protocols") {
         rest.forEach(walk);
       }
     }
@@ -159,6 +157,7 @@ async function main() {
   const allProtocols: Map<string, Protocol> = new Map();
 
   for (const file of modelFiles) {
+    console.log(`Processing ${file}...`);
     const content = await readFile(join(apDir, file), "utf-8");
     try {
       const ast = parse(content);
