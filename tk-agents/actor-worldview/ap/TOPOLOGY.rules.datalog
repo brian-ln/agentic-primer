@@ -1,0 +1,47 @@
+# Topology & Placement Rules
+
+# Define Runtimes: runtime_id, logical_system, host_info
+:create runtime {
+    id: uuid,
+    system: string,
+    =>
+    capacity: int,
+    latency_to_master: int
+}
+
+# Current Placement: actor_id, runtime_id
+:create placement {
+    actor_id: uuid,
+    =>
+    runtime_id: uuid,
+    status: string # 'running', 'migrating'
+}
+
+# Affinity Rules: Should these two actors be on the same runtime?
+# High affinity if they exchange > 100 messages/sec
+:create affinity {
+    actor_a: uuid,
+    actor_b: uuid,
+    =>
+    score: int
+}
+
+# Routing Logic: Find the physical address for a logical URI
+physical_route(logical_uri, transport, physical_addr) :-
+    actor_at(logical_uri, runtime_id),
+    runtime{id: runtime_id, host_info: physical_addr},
+    default_transport(transport)
+
+# Fusion Recommendation: Identify candidates for co-location
+# (High affinity + different runtimes = fusion candidate)
+fusion_candidate(A, B) :-
+    affinity{actor_a: A, actor_b: B, score: S},
+    placement{actor_id: A, runtime_id: R1},
+    placement{actor_id: B, runtime_id: R2},
+    R1 != R2,
+    S > 100
+
+# Boundary Crossing: Identify when a message will leave the local runtime
+is_remote_message(target_id, current_runtime) :-
+    placement{actor_id: target_id, runtime_id: target_runtime},
+    target_runtime != current_runtime

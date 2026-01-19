@@ -1,0 +1,34 @@
+# SEAG Logic Rules
+# Defines how the graph is traversed and how signals propagate
+
+# Basic Connectivity
+linked(from, to) :- edge{from_node: from, to_node: to}
+
+# Transitive Closure: Is node B reachable from node A?
+reachable(A, B) :- linked(A, B)
+reachable(A, B) :- linked(A, C), reachable(C, B)
+
+# Dependency Resolution: What must be updated if Node A changes?
+# (Follows 'triggers' or 'depends_on' edges)
+affected_by(target, trigger) :- 
+    edge{from_node: trigger, to_node: target, edge_type: 'triggers'}
+affected_by(target, trigger) :- 
+    edge{from_node: trigger, to_node: target, edge_type: 'depends_on'}
+affected_by(target, trigger) :- 
+    affected_by(target, intermediate), 
+    affected_by(intermediate, trigger)
+
+# Signal Propagation: Who needs to be notified?
+# Finds all active subscribers for a node and its parents
+notifiable(node_id, subscriber) :-
+    subscription{node_id: node_id, subscriber: subscriber, active: true}
+notifiable(node_id, subscriber) :-
+    edge{from_node: parent, to_node: node_id, edge_type: 'child_of'},
+    notifiable(parent, subscriber)
+
+# Conflict Detection: Identify nodes that haven't been updated since a dependency changed
+stale_node(node_id) :-
+    affected_by(node_id, dependency),
+    event_ref{node_id: node_id, last_event_id: node_ev},
+    event_ref{node_id: dependency, last_event_id: dep_ev},
+    dep_ev > node_ev

@@ -1,0 +1,43 @@
+# SEAG Schema Specification
+# Defines the relations for the projected graph state
+
+# Nodes: id, type (e.g., 'information', 'algorithmic', 'agent')
+:create node {
+    id: uuid,
+    type: string,
+    created_at: list
+}
+
+# Node Properties: id, key, value (JSON/Blob)
+:create property {
+    node_id: uuid,
+    key: string,
+    =>
+    value: any,
+    updated_at: list
+}
+
+# Edges: id, from_node, to_node, edge_type (e.g., 'references', 'triggers', 'parent_of')
+:create edge {
+    id: uuid,
+    from_node: uuid,
+    to_node: uuid,
+    edge_type: string,
+    =>
+    metadata: any
+}
+
+# Subscriptions: node_id, subscriber_address, signal_filter
+:create subscription {
+    node_id: uuid,
+    subscriber: string,
+    =>
+    filter: any,
+    active: bool
+}
+
+# Event Log Reference (Linking graph state back to the truth)
+:create event_ref {
+    node_id: uuid,
+    last_event_id: uuid
+}
