@@ -21,6 +21,26 @@ describe("SEAG Phase 4.2: The Brain Agent", () => {
     system.spawn("seag://system/brain", BrainAgent);
     system.spawn("seag://system/projector", GraphProjector);
 
+    // Mock System Services
+    class MockFileIO extends Actor {
+      async receive(msg: Message) {
+        if (msg.type === "READ_FILE") {
+          this.send(msg.sender!, { 
+            type: "FILE_CONTENT", 
+            payload: { path: msg.payload.path, data: "{}" } 
+          });
+        }
+      }
+    }
+    system.spawn("seag://system/file-io", MockFileIO);
+
+    class MockParser extends Actor {
+      async receive(msg: Message) {
+        // No-op for test
+      }
+    }
+    system.spawn("seag://system/parser", MockParser);
+
     let lastOutput: string | null = null;
     let isThinking = false;
 
@@ -34,21 +54,21 @@ describe("SEAG Phase 4.2: The Brain Agent", () => {
         }
       }
     }
-    system.spawn("seag://local/mock-user", MockUserProxy);
+    system.spawn("seag://local/user-proxy", MockUserProxy);
 
     // 2. Act: Send THINK command
     system.send("seag://system/brain", {
       type: "THINK",
-      sender: "seag://local/mock-user",
-      payload: { input: "Hello SEAG" }
+      sender: "seag://local/user-proxy",
+      payload: { input: "mount data/demo.json" }
     });
 
     // 3. Wait for thinking and processing
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise(resolve => setTimeout(resolve, 500)); // Increased timeout for file I/O
 
     // Assert
     expect(isThinking).toBe(true);
-    expect(lastOutput).toContain("Hello Human");
+    expect(lastOutput).toContain("Mounted data/demo.json");
   });
 
 });
