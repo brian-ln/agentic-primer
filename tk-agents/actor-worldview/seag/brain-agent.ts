@@ -41,9 +41,25 @@ export class BrainAgent extends Actor {
         return;
       }
 
+      if (input.startsWith("ask ")) {
+        const text = input.slice(4);
+        this.send("seag://system/inference", {
+          type: "PROMPT",
+          payload: { text }
+        });
+        return;
+      }
+
       this.send(msg.sender!, {
         type: "OUTPUT",
         payload: { content: "Unknown command: " + input }
+      });
+    }
+
+    if (msg.type === "RESPONSE") {
+      this.send("seag://local/user-proxy", {
+        type: "OUTPUT",
+        payload: { content: "Gemini: " + msg.payload.text }
       });
     }
 
