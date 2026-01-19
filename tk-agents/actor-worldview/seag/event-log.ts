@@ -19,7 +19,9 @@ export class EventLogActor extends Actor {
       // console.log(`[EventLog] Appending event: ${msg.payload.id || 'unnamed'}`);
       const event: Event = msg.payload;
       await this.persist(event);
-      this.send(msg.sender!, { type: "ACK_APPEND", payload: { id: event.id } });
+      if (msg.sender) {
+        this.send(msg.sender, { type: "ACK_APPEND", payload: { id: event.id } });
+      }
     }
 
     if (msg.type === "REPLAY") {

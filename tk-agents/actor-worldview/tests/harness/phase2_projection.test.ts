@@ -56,4 +56,59 @@ describe("SEAG Phase 2.2: Graph Projection", () => {
     expect(queryResult).toContain("node-a");
   });
 
+  test("Objective 2.2.2: Node State & Link Queries", async () => {
+    const system = new System();
+    system.spawn("seag://system/projector", GraphProjector);
+
+    // 1. Populate State
+    system.send("seag://system/projector", {
+      type: "UPDATE_STATE",
+      sender: "node-x",
+      payload: { status: "active", value: 42 }
+    });
+
+    // 2. Populate Links
+    system.send("seag://system/projector", {
+      type: "LINK_TO",
+      sender: "node-x",
+      payload: { to: "node-y", type: "parent-of" }
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // 3. Setup Receiver
+    let stateResult: any = null;
+    let linkResult: any = null;
+    class QueryReceiver extends Actor {
+      async receive(msg: Message) {
+        if (msg.type === "QUERY_RESULT") {
+          if (Array.isArray(msg.payload)) linkResult = msg.payload;
+          else stateResult = msg.payload;
+        }
+      }
+    }
+    system.spawn("seag://local/receiver", QueryReceiver);
+
+    // 4. Test get_node
+    system.send("seag://system/projector", {
+      type: "QUERY",
+      sender: "seag://local/receiver",
+      payload: { predicate: "get_node", args: { id: "node-x" } }
+    });
+
+    // 5. Test linked
+    system.send("seag://system/projector", {
+      type: "QUERY",
+      sender: "seag://local/receiver",
+      payload: { predicate: "linked", args: { from: "node-x" } }
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // Assertions
+    expect(stateResult).toEqual({ status: "active", value: 42 });
+    expect(linkResult).toHaveLength(1);
+    expect(linkResult[0]).toEqual({ from: "node-x", to: "node-y", type: "parent-of" });
+  });
+
 });

@@ -18,7 +18,9 @@ The Human is represented by a `UserActor`. All interactions are messages:
 The BrainAgent implements an intent-parsing layer for the following commands:
 
 - **`mount <path>`**: Instructs the `FileEffectActor` to read a file and the `DocumentParser` to shred it into the graph.
+- **`watch <path>`**: Establishes two-way sync, allowing the graph to reconcile external disk changes automatically.
 - **`explore <address>`**: Performs a graph query (via `GraphProjector`) to discover reachable nodes.
+- **`get <address>`**: Retrieves the current state of a specific actor.
 - **`set <address> <value>`**: Sends a `PATCH` message to a specific fragment actor, triggering back-propagation to disk.
 
 ## 4. The Short Path Implementation (Bun + TS)

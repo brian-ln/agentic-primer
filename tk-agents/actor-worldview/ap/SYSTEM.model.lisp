@@ -9,43 +9,33 @@
       (behavior
         (on start ()
           (log "SEAG Bootstrap Initiated")
-          ;; 1. Spawn the "Truth"
-          (let ((log_svc (spawn-permanent EventLogActor)))
-            (register 'seag://system/event-log log_svc))
+          ;; 1. Spawn System Services (Permanent)
+          (spawn-permanent 'seag://system/event-log EventLogActor)
+          (spawn-permanent 'seag://system/projector GraphProjector)
+          (spawn-permanent 'seag://system/parser DocumentParser)
+          (spawn-permanent 'seag://system/file-io FileEffectActor)
           
-          ;; 2. Spawn the "Brain"
-          (let ((router (spawn-permanent RouterActor)))
-            (register 'seag://system/router router))
-          
-          ;; 3. Spawn the "Persistence"
-          (let ((pm (spawn-permanent PersistenceManager)))
-            (register 'seag://system/persistence pm))
+          ;; 2. Spawn Local Agents (Transient)
+          (spawn 'seag://local/user-proxy UserProxy)
+          (spawn 'seag://system/brain BrainAgent)
           
           (set-status 'running))
 
         (on child-crashed (child_id reason)
           (log-error child_id reason)
-          ;; Trigger Autonomous Troubleshooting Loop (Tier 2)
-          (let ((diag (spawn DiagnosisAgent child_id reason)))
-            (subscribe diag 'resolution-failed 
-              (lambda (msg) (escalate-to-human child_id msg)))))))
+          ;; Restart permanent actors automatically
+          (if (is-permanent child_id)
+            (spawn-permanent child_id (get-class child_id))))))
 
-    ;; DiagnosisAgent: Autonomous Troubleshooter (Tier 2)
-    (actor DiagnosisAgent
-      (state (target_id address) (error any))
+    ;; System Kernel: The underlying message dispatcher
+    (actor Kernel
       (behavior
-        (on start ()
-          (let ((diagnosis (analyze-system-state target_id error)))
-            (match diagnosis
-              ('recoverable (perform-repair target_id))
-              ('irrecoverable (emit-signal 'resolution-failed error)))))))
-
-    ;; Router Actor: The dynamic registry
-    (actor RouterActor
-      (state (routes map)) ; Logical URI -> Physical Address
-      (behavior
-        (on resolve (uri)
-          (reply (get routes uri)))
-        (on update-route (uri address)
-          (set routes uri address)
-          (emit-signal 'RouteUpdated {uri address}))))))
+        (on dispatch (target msg)
+          (if (actor-exists? target)
+            (deliver target msg)
+            (send 'seag://system/dead-letter-log 'undelivered {target: target, message: msg})))
+        
+        (on record-event (target msg)
+          ;; Every mutator is captured by the EventLog
+          (if (is-mutator? msg)
+            (send 'seag://system/event-log 'append {source: target, type: msg.type, payload: msg.payload})))))))

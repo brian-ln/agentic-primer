@@ -71,4 +71,47 @@ describe("SEAG Phase 4.2: The Brain Agent", () => {
     expect(lastOutput).toContain("Mounted data/demo.json");
   });
 
+  test("Objective 4.2.2: Get/Set Commands", async () => {
+    const system = new System();
+    system.spawn("seag://system/brain", BrainAgent);
+
+    let targetState = "initial";
+    class MockTarget extends Actor {
+      async receive(msg: Message) {
+        if (msg.type === "PATCH") targetState = msg.payload;
+        if (msg.type === "GET") this.send(msg.sender!, { type: "STATE", payload: targetState });
+      }
+    }
+    system.spawn("seag://local/target", MockTarget);
+
+    let lastOutput: string | null = null;
+    class User extends Actor {
+      async receive(msg: Message) {
+        if (msg.type === "OUTPUT") lastOutput = msg.payload.content;
+      }
+    }
+    system.spawn("seag://local/user-proxy", User);
+
+    // 1. SET
+    system.send("seag://system/brain", {
+      type: "THINK",
+      sender: "seag://local/user-proxy",
+      payload: { input: "set seag://local/target updated" }
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(targetState).toBe("updated");
+    expect(lastOutput).toContain("Updated seag://local/target");
+
+    // 2. GET
+    system.send("seag://system/brain", {
+      type: "THINK",
+      sender: "seag://local/user-proxy",
+      payload: { input: "get seag://local/target" }
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(lastOutput).toContain('"updated"');
+  });
+
 });

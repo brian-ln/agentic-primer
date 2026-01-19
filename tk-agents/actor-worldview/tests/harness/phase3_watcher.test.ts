@@ -1,10 +1,12 @@
 import { expect, test, describe, afterAll, beforeAll } from "bun:test";
 import { System, Actor, Message, CapabilityToken } from "../../seag/kernel";
-import { DocumentParser, FragmentNode } from "../../seag/shredder";
+import { DocumentParser } from "../../seag/shredder";
+import { GraphProjector } from "../../seag/graph-projector";
 import { DocumentActor } from "../../seag/document-actor";
 import { FileEffectActor } from "../../seag/file-effect";
 import { rm, writeFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
+import { BrainAgent } from "../../seag/brain-agent";
 
 /**
  * PHASE 3.3 HARNESS: Two-Way Sync (Watcher)
@@ -37,12 +39,16 @@ describe("SEAG Phase 3.3: Two-Way Sync", () => {
 
     // Setup actors
     system.spawn("seag://system/file-io", FileEffectActor);
+    system.spawn("seag://system/projector", GraphProjector);
     system.spawn("seag://system/parser", DocumentParser);
+    system.spawn("seag://system/brain", BrainAgent);
     
-    const docId = "seag://local/watched-doc";
+    // We use active-doc to match BrainAgent's hardcoded target
+    const docId = "seag://local/active-doc";
     system.spawn(docId, DocumentActor);
-    system.send(docId, { 
-      type: "INIT_DOCUMENT", 
+    
+    system.send(docId, {
+      type: "INIT_DOCUMENT",
       payload: { path: TEST_FILE, format: "json" },
       capabilityToken: token
     });
@@ -69,21 +75,21 @@ describe("SEAG Phase 3.3: Two-Way Sync", () => {
     // Wait for FS event -> Actor cycle
     await new Promise(resolve => setTimeout(resolve, 300));
 
-    // 4. Verify fragment actor
-    let fragmentState: any = null;
-    class StateReceiver extends Actor {
+    // 4. Query fragment state
+    let fragmentState = null;
+    class MockReceiver extends Actor {
       async receive(msg: Message) {
         if (msg.type === "STATE") fragmentState = msg.payload;
       }
     }
-    system.spawn("seag://local/receiver", StateReceiver);
+    system.spawn("seag://local/receiver", MockReceiver);
 
     system.send(`${docId}/fragments/status`, {
-      type: "GET_STATE",
+      type: "GET",
       sender: "seag://local/receiver"
     });
 
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     expect(fragmentState).toBe("externally-changed");
   });
