@@ -3,8 +3,11 @@
 // Design: DEAD SIMPLE append-only event log using JSONL format.
 // One event per line. Read and parse for replay.
 // No snapshotting, compression, or complex features (yet).
+//
+// Phase 1 Enhancement: EventBus integration for event-driven automation
 
 import { appendFileSync, readFileSync, existsSync, writeFileSync } from "node:fs";
+import type { EventBus } from "../events/event-bus.ts";
 
 /**
  * Event stored in the log
@@ -42,13 +45,16 @@ export interface Event {
  */
 export class EventLog {
   private filePath: string;
+  private eventBus?: EventBus;
 
   /**
    * Create or open an event log
    * @param filePath Path to JSONL file
+   * @param eventBus Optional EventBus for real-time event emission
    */
-  constructor(filePath: string) {
+  constructor(filePath: string, eventBus?: EventBus) {
     this.filePath = filePath;
+    this.eventBus = eventBus;
 
     // Create file if it doesn't exist
     if (!existsSync(this.filePath)) {
@@ -70,6 +76,23 @@ export class EventLog {
     // Write as single JSON line
     const line = JSON.stringify(event) + "\n";
     appendFileSync(this.filePath, line, "utf-8");
+
+    // Emit event to EventBus if configured
+    if (this.eventBus) {
+      // Fire-and-forget async publish (don't block append)
+      this.eventBus.publish(event).catch((error) => {
+        console.error(`EventBus publish failed for ${event.type}:`, error);
+      });
+    }
+  }
+
+  /**
+   * Set or update the EventBus instance
+   *
+   * @param eventBus EventBus instance to use for event emission
+   */
+  setEventBus(eventBus: EventBus): void {
+    this.eventBus = eventBus;
   }
 
   /**

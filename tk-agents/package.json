@@ -3,6 +3,9 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "orient": "bun src/cli/orient.ts"
+  },
   "devDependencies": {
     "@playwright/test": "^1.57.0",
     "@types/bun": "latest",
@@ -14,12 +17,15 @@
   "dependencies": {
     "@types/react": "^19.2.8",
     "@types/react-dom": "^19.2.3",
+    "@types/uuid": "^11.0.0",
     "mdast-util-to-string": "^4.0.0",
+    "openai": "^4.0.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "remark-parse": "^11.0.0",
     "remark-stringify": "^11.0.0",
     "unified": "^11.0.5",
-    "unist-util-visit": "^5.0.0"
+    "unist-util-visit": "^5.0.0",
+    "uuid": "^13.0.0"
   }
 }

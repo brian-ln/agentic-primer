@@ -92,6 +92,24 @@ export class Graph {
   }
 
   /**
+   * Update node properties
+   */
+  async updateNode(nodeId: string, properties: Partial<NodeProperties>): Promise<void> {
+    const existing = this.nodeProperties.get(nodeId);
+    if (!existing) {
+      throw new Error(`Node not found: ${nodeId}`);
+    }
+    Object.assign(existing, properties);
+  }
+
+  /**
+   * Delete node (alias for removeNode)
+   */
+  async deleteNode(nodeId: string): Promise<void> {
+    this.removeNode(nodeId);
+  }
+
+  /**
    * Get all node IDs
    */
   getNodeIds(): string[] {
@@ -109,10 +127,30 @@ export class Graph {
   }
 
   /**
-   * Remove an edge
+   * Remove an edge by ID
    */
-  removeEdge(edgeId: string): boolean {
-    return this.edges.delete(edgeId);
+  removeEdge(edgeId: string): boolean;
+  /**
+   * Remove an edge by source, target, and type
+   */
+  removeEdge(fromId: string, toId: string, type: EdgeType): boolean;
+  /**
+   * Remove an edge (overloaded)
+   */
+  removeEdge(arg1: string, arg2?: string, arg3?: EdgeType): boolean {
+    if (arg2 === undefined) {
+      // Remove by edge ID
+      return this.edges.delete(arg1);
+    } else {
+      // Remove by fromId, toId, type
+      for (const [edgeId, edge] of this.edges) {
+        if (edge.fromId === arg1 && edge.toId === arg2 && edge.type === arg3) {
+          this.edges.delete(edgeId);
+          return true;
+        }
+      }
+      return false;
+    }
   }
 
   /**
