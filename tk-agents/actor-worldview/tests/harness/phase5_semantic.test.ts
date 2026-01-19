@@ -66,10 +66,14 @@ describe("SEAG Phase 5: Semantic Discovery", () => {
     
     // We override fetch to avoid real network calls during test
     const originalFetch = global.fetch;
-    global.fetch = async () => ({
-      json: async () => ({
-        candidates: [{ content: { parts: [{ text: "Mock Gemini Response" }] } }]
-      })
+    let lastUrl = "";
+    global.fetch = (async (url: string) => {
+      lastUrl = url;
+      return {
+        json: async () => ({
+          candidates: [{ content: { parts: [{ text: "Mock Gemini Response" }] } }]
+        })
+      };
     }) as any;
 
     system.spawn("seag://system/inference", GeminiInferenceActor);
@@ -90,6 +94,7 @@ describe("SEAG Phase 5: Semantic Discovery", () => {
 
     await new Promise(resolve => setTimeout(resolve, 50));
     expect(response).toBe("Mock Gemini Response");
+    expect(lastUrl).toContain("gemini-3-flash-preview");
 
     global.fetch = originalFetch;
   });

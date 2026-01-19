@@ -31,7 +31,8 @@ export class GeminiInferenceActor extends Actor {
     }
 
     const { text, params } = msg.payload;
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.apiKey}`;
+    const model = params?.model || "gemini-3-flash-preview";
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.apiKey}`;
 
     try {
       const response = await fetch(url, {
@@ -39,7 +40,12 @@ export class GeminiInferenceActor extends Actor {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ parts: [{ text }] }],
-          generationConfig: params || { maxOutputTokens: 500 }
+          generationConfig: {
+            temperature: params?.temperature ?? 0.7,
+            maxOutputTokens: params?.maxOutputTokens ?? 1000,
+            topP: params?.topP ?? 0.95,
+            topK: params?.topK ?? 40
+          }
         })
       });
 
