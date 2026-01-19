@@ -1,8 +1,11 @@
 import { Actor, Message, CapabilityToken } from "./kernel";
+import { Actor as ActorModel, Implements, Handler } from "./lib/meta";
 
 /**
  * FileEffectActor: The "Spoon Manager" for the local disk.
  */
+@ActorModel("FileEffectActor")
+@Implements("FileIO")
 export class FileEffectActor extends Actor {
   
   async receive(msg: Message) {
@@ -30,6 +33,7 @@ export class FileEffectActor extends Actor {
     }
   }
 
+  @Handler("WATCH_FILE")
   private async handleWatch(msg: Message) {
     const { watch } = await import("node:fs");
     const { readFile } = await import("node:fs/promises");
@@ -65,6 +69,7 @@ export class FileEffectActor extends Actor {
     }
   }
 
+  @Handler("READ_FILE")
   private async handleRead(msg: Message) {
     const fs = await import("node:fs/promises");
     try {
@@ -75,6 +80,7 @@ export class FileEffectActor extends Actor {
     }
   }
 
+  @Handler("WRITE_FILE")
   private async handleWrite(msg: Message) {
     const fs = await import("node:fs/promises");
     const path = await import("node:path");

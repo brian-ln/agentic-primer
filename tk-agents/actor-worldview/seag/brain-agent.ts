@@ -1,46 +1,127 @@
-import { Actor, Message } from "./kernel";
+import { Actor, Message, CapabilityToken } from "./kernel";
+import { DocumentActor } from "./document-actor";
+import { Actor as ActorModel, Handler } from "./lib/meta";
 
-/**
- * BrainAgent: The central intelligence coordinator of the SEAG.
- * Follows ap/REPL_AGENT.model.lisp
- */
+@ActorModel("BrainAgent")
 export class BrainAgent extends Actor {
   
+  @Handler("THINK")
+  @Handler("QUERY_RESULT")
+  @Handler("FILE_CONTENT")
+  @Handler("STATE")
   async receive(msg: Message) {
     if (msg.type === "THINK") {
-      const input = msg.payload.input;
-      console.log(`[Brain] Thinking about: ${input}`);
+      const input = msg.payload.input as string;
+      
+      if (input.startsWith("mount ")) {
+        await this.handleMount(input.split(" ")[1], msg.sender!);
+        return;
+      }
 
-      // 1. Emit "Thinking" signal
-      this.send(msg.sender!, { 
-        type: "SIGNAL", 
-        payload: { status: "thinking", detail: "Querying knowledge graph..." } 
+      if (input.startsWith("explore ")) {
+        await this.handleExplore(input.split(" ")[1], msg.sender!);
+        return;
+      }
+
+      if (input.startsWith("watch ")) {
+        await this.handleWatch(input.split(" ")[1], msg.sender!);
+        return;
+      }
+
+      if (input.startsWith("get ")) {
+        await this.handleGet(input.split(" ")[1], msg.sender!);
+        return;
+      }
+
+      if (input.startsWith("set ")) {
+        const parts = input.split(" ");
+        const id = parts[1];
+        const value = parts.slice(2).join(" ");
+        await this.handleSet(id, value, msg.sender!);
+        return;
+      }
+
+      this.send(msg.sender!, {
+        type: "OUTPUT",
+        payload: { content: "Unknown command: " + input }
       });
+    }
 
-      // 2. Sense: Query the Graph Projector
-      // (Mocking a graph query for the MVP)
-      this.send("seag://system/projector", {
-        type: "QUERY",
-        payload: { predicate: "get_node", args: { id: "seag://local/managed-doc" } }
+    if (msg.type === "QUERY_RESULT") {
+      this.send("seag://local/user-proxy", {
+        type: "OUTPUT",
+        payload: { content: "Graph: " + JSON.stringify(msg.payload, null, 2) }
       });
+    }
 
-      // For the MVP, we'll simulate a heuristic response
-      setTimeout(() => {
-        const response = this.formulateHeuristicResponse(input);
-        
-        // 3. Act: Reply to the UserProxy
-        this.send(msg.sender!, {
-          type: "OUTPUT",
-          payload: { content: response }
-        });
-      }, 100);
+    if (msg.type === "FILE_CONTENT") {
+      this.send("seag://system/parser", { type: "SHRED", payload: { content: msg.payload.data, format: "json", docId: "seag://local/active-doc" } });
+      this.send("seag://local/user-proxy", { type: "OUTPUT", payload: { content: `Mounted ${msg.payload.path}` } });
+    }
+
+    if (msg.type === "STATE") {
+      this.send("seag://local/user-proxy", {
+        type: "OUTPUT",
+        payload: { content: `Node State: ${JSON.stringify(msg.payload, null, 2)}` }
+      });
     }
   }
 
-  private formulateHeuristicResponse(input: string): string {
-    if (input.toLowerCase().includes("hello")) {
-      return "Hello Human! I am the SEAG Brain. I can see the graph.";
-    }
-    return `I processed your request: "${input}". The graph is evolving.`;
+  @Handler("HANDLE_GET")
+  private async handleGet(id: string, replyTo: string) {
+    this.send(id, { type: "GET_STATE", sender: this.id });
+  }
+
+  @Handler("HANDLE_MOUNT")
+  private async handleMount(path: string, replyTo: string) {
+    this.send(replyTo, { type: "SIGNAL", payload: { status: "thinking", detail: "Mounting " + path } });
+    const ct: CapabilityToken = { resource: "*", action: "*", expiresAt: Date.now() + 10000 };
+    const token = Buffer.from(JSON.stringify(ct)).toString('base64');
+
+    this.system.spawn("seag://local/active-doc", DocumentActor);
+    this.send("seag://local/active-doc", { 
+      type: "INIT_DOCUMENT", 
+      payload: { path, format: "json" },
+      capabilityToken: token
+    });
+
+    this.send("seag://system/file-io", {
+      type: "READ_FILE",
+      payload: { path },
+      capabilityToken: token
+    });
+  }
+
+  @Handler("HANDLE_WATCH")
+  private async handleWatch(path: string, replyTo: string) {
+    this.send(replyTo, { type: "SIGNAL", payload: { status: "thinking", detail: "Watching " + path } });
+    const ct: CapabilityToken = { resource: "*", action: "*", expiresAt: Date.now() + 10000 };
+    const token = Buffer.from(JSON.stringify(ct)).toString('base64');
+
+    this.send("seag://system/file-io", {
+      type: "WATCH_FILE",
+      sender: "seag://local/active-doc",
+      payload: { path },
+      capabilityToken: token
+    });
+
+    this.send(replyTo, { type: "OUTPUT", payload: { content: "Watching " + path } });
+  }
+
+  @Handler("HANDLE_EXPLORE")
+  private async handleExplore(nodeId: string, replyTo: string) {
+    this.send("seag://system/projector", {
+      type: "QUERY",
+      payload: { predicate: "reachable", args: { from: nodeId } }
+    });
+  }
+
+  @Handler("HANDLE_SET")
+  private async handleSet(id: string, val: string, replyTo: string) {
+    this.send(id, {
+      type: "PATCH",
+      payload: val
+    });
+    this.send(replyTo, { type: "OUTPUT", payload: { content: "Updated " + id } });
   }
 }

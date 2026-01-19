@@ -32,14 +32,14 @@
       (implements DataNode)
       (state
         (parent_doc_id address)
-        (fragment_type string) ; e.g., 'h1', 'function_body'
-        (content any)
-        (extent (tuple offset int length int))) ; Optional: for random-access I/O
+        (content any))
       (behavior
-        (on patch (new_content)
-          (update-state content new_content)
-          ;; Signal the parent that a fragment changed
-          (send parent_doc_id 'fragment_updated self))))
+        (on patch (update)
+          (if (and (is-object? content) (is-object? update))
+            (set content (merge content update))
+            (set content update))
+          ;; Signal the parent that a fragment changed for re-assembly
+          (send parent_doc_id 'fragment-updated content))))
 
     ;; Persistence Boundary: The "Spoon" manager
     (actor PersistenceManager
