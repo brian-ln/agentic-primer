@@ -54,6 +54,15 @@
         (on traverse (direction)
           (if (eq direction 'forward) to-node from-node))))
 
+    ;; AI Boundary Actors
+    (actor GeminiInferenceActor
+      (implements Inference)
+      (behavior))
+
+    (actor GeminiEmbeddingActor
+      (implements Embedding)
+      (behavior))
+
     ;; The Projector (Maintains the graph view)
     (actor GraphProjector
       (behavior

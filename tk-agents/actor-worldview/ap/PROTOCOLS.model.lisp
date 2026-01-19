@@ -24,3 +24,15 @@
     (yields CHANGED (state)))
   (on UNWATCH (sub_id)
     (yields UNWATCH_OK ())))
+
+(defprotocol Inference
+  "Interface for Large Language Models."
+  (on PROMPT (text params)
+    (yields RESPONSE (text))
+    (yields ERROR (message))))
+
+(defprotocol Embedding
+  "Interface for Vector Embedding models."
+  (on EMBED (text)
+    (yields VECTOR (floats))
+    (yields ERROR (message))))

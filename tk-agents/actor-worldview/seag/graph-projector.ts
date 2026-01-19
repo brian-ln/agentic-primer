@@ -10,11 +10,13 @@ import { Actor as ActorModel, Handler } from "./lib/meta";
 export class GraphProjector extends Actor {
   private nodes: Map<ActorAddress, any> = new Map();
   private edges: { from: ActorAddress; to: ActorAddress; type: string }[] = [];
+  private vectors: Map<ActorAddress, number[]> = new Map();
 
   @Handler("APPEND")
   @Handler("LINK_TO")
   @Handler("CREATE_EDGE")
   @Handler("UPDATE_STATE")
+  @Handler("SET_VECTOR")
   @Handler("QUERY")
   async receive(msg: Message) {
     if (msg.type === "APPEND") {
@@ -29,6 +31,10 @@ export class GraphProjector extends Actor {
 
     if (msg.type === "UPDATE_STATE") {
       this.nodes.set(msg.sender!, msg.payload);
+    }
+
+    if (msg.type === "SET_VECTOR") {
+      this.vectors.set(msg.sender!, msg.payload.vector);
     }
 
     if (msg.type === "QUERY") {
@@ -60,9 +66,37 @@ export class GraphProjector extends Actor {
       case "get_node":
         return this.nodes.get(args.id);
 
+      case "vector_search":
+        return this.vectorSearch(args.vector, args.limit || 5);
+
       default:
         return [];
     }
+  }
+
+  private vectorSearch(queryVector: number[], limit: number) {
+    const scores: { id: ActorAddress; score: number }[] = [];
+    
+    for (const [id, vector] of this.vectors.entries()) {
+      const score = this.cosineSimilarity(queryVector, vector);
+      scores.push({ id, score });
+    }
+
+    return scores
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
+  }
+
+  private cosineSimilarity(a: number[], b: number[]): number {
+    let dot = 0;
+    let normA = 0;
+    let normB = 0;
+    for (let i = 0; i < a.length; i++) {
+      dot += a[i] * b[i];
+      normA += a[i] * a[i];
+      normB += b[i] * b[i];
+    }
+    return dot / (Math.sqrt(normA) * Math.sqrt(normB));
   }
 
   private calculateReachability(start: ActorAddress): ActorAddress[] {

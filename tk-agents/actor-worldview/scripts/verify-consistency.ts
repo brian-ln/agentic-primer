@@ -36,31 +36,26 @@ function extractDefinitions(sexprs: SExpr[], filename: string) {
     if (Array.isArray(node)) {
       const [type, name, ...rest] = node;
       
-      // (defprotocol Name ...) OR (protocol Name ...)
+      // 1. Detect Definitions
       if ((type === "defprotocol" || type === "protocol") && typeof name === "string") {
         const inputs: string[] = [];
         const outputs: string[] = [];
-        
-        // Scan for (on MSG ...) or (message MSG ...) blocks
         for (const item of rest) {
           if (Array.isArray(item)) {
             const head = item[0];
             if (head === "on" || head === "message") {
               const msg = item[1];
               if (typeof msg === "string") inputs.push(msg.toUpperCase().replace(/-/g, '_'));
-              // outputs logic (yields/returns)...
             }
           }
         }
         protocols.push({ name, inputs, outputs, file: filename });
       }
 
-      // (actor Name ...)
       if (type === "actor" && typeof name === "string") {
         const handlers: string[] = [];
         const impls: string[] = [];
         
-        // Find behavior block
         const behavior = rest.find(item => Array.isArray(item) && item[0] === "behavior");
         if (Array.isArray(behavior)) {
           for (const clause of behavior.slice(1)) {
@@ -73,21 +68,18 @@ function extractDefinitions(sexprs: SExpr[], filename: string) {
           }
         }
 
-        // Find (implements ...)
         const implBlock = rest.find(item => Array.isArray(item) && item[0] === "implements");
         if (Array.isArray(implBlock)) {
-          // (implements Proto1 Proto2)
           implBlock.slice(1).forEach(p => typeof p === "string" && impls.push(p));
         }
 
         models.push({ name, implements: impls, handlers: [...new Set(handlers)], file: filename });
-      } else if (type === "system") {
-        rest.forEach(walk);
-      } else if (type === "actors") {
-        rest.forEach(walk);
-      } else if (type === "protocols") {
-        rest.forEach(walk);
       }
+
+      // 2. Recursive Walk (The Fix: Walk EVERYTHING)
+      node.forEach(child => {
+        if (Array.isArray(child)) walk(child);
+      });
     }
   }
 
@@ -182,6 +174,9 @@ async function main() {
   let warnings = 0;
 
   console.log(`Verifying ${allModels.length} Models & ${allProtocols.size} Protocols against ${impls.length} Implementations...\n`);
+
+  // Debug: print found protocols
+  // console.log("Protocols:", Array.from(allProtocols.keys()));
 
   for (const model of allModels) {
     const impl = impls.find(i => i.modelName === model.name);

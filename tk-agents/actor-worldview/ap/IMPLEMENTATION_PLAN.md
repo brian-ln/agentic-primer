@@ -116,6 +116,24 @@ This plan follows a phased approach to building the **Self-Evolving Actor Graph*
 
 ---
 
+## Phase 5: Semantic Discovery (The "Wisdom" Layer)
+**Goal:** Integrate AI-powered search and reasoning.
+
+### Task 5.1: Inference & Embedding Actors
+- **Outcome:** `GeminiInferenceActor` and `GeminiEmbeddingActor` are operational.
+- **Objective Success Criteria:** 
+    - ✅ `PROMPT` message returns text response from Gemini.
+    - ✅ `EMBED` message returns vector array.
+- **Harness:** `tests/harness/phase5_semantic.test.ts`
+
+### Task 5.2: Semantic Projection
+- **Outcome:** `GraphProjector` supports vector similarity search.
+- **Objective Success Criteria:** 
+    - ✅ `QUERY` with `vector_search` returns nodes sorted by similarity.
+- **Harness:** `tests/harness/phase5_semantic.test.ts`
+
+---
+
 ## 🚀 SEAG MVP STATUS: DELIVERED
 All core architectural layers (Kernel, Memory, World, Thinking) are verified and operational.
 

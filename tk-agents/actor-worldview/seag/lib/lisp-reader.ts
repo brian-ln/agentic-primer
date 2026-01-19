@@ -43,12 +43,12 @@ function lex(input: string): Token[] {
     }
 
     // 3. Delimiters
-    if (char === '(') {
-      tokens.push({ type: "LPAREN", value: "(", pos: i++ });
+    if (char === '(' || char === '{') {
+      tokens.push({ type: "LPAREN", value: char, pos: i++ });
       continue;
     }
-    if (char === ')') {
-      tokens.push({ type: "RPAREN", value: ")", pos: i++ });
+    if (char === ')' || char === '}') {
+      tokens.push({ type: "RPAREN", value: char, pos: i++ });
       continue;
     }
     if (char === "'") {
@@ -84,7 +84,7 @@ function lex(input: string): Token[] {
     let atom = "";
     while (i < input.length) {
       const c = input[i];
-      if (/\s/.test(c) || c === '(' || c === ')' || c === ';' || c === '"') break;
+      if (/\s/.test(c) || c === '(' || c === ')' || c === '{' || c === '}' || c === ';' || c === '"') break;
       atom += c;
       i++;
     }
@@ -105,11 +105,16 @@ function parseExprs(tokens: Token[]): SExpr[] {
 
     if (token.type === "LPAREN") {
       const list: SExpr[] = [];
-      while (current < tokens.length && tokens[current].type !== "RPAREN") {
+      const opener = token.value;
+      const closer = opener === "(" ? ")" : "}";
+      
+      // console.log(`Opener: ${opener}, Closer: ${closer}, Next Token: ${tokens[current]?.value}`);
+
+      while (current < tokens.length && tokens[current].value !== closer) {
         list.push(next());
       }
-      if (current >= tokens.length) throw new Error("Unclosed list");
-      current++; // Consume RPAREN
+      if (current >= tokens.length) throw new Error(`Unclosed list: expected ${closer}`);
+      current++; // Consume closer
       return list;
     }
 
