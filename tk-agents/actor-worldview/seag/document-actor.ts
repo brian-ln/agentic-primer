@@ -29,6 +29,14 @@ export class DocumentActor extends Actor {
       this.fragments.set(msg.payload.id, msg.payload.content);
       await this.persist();
     }
+
+    if (msg.type === "FILE_CHANGED") {
+      // Trigger re-shredding. DocumentParser will reconcile with existing fragment actors.
+      this.send("seag://system/parser", {
+        type: "SHRED",
+        payload: { content: msg.payload.content, format: this.format, docId: this.id }
+      });
+    }
   }
 
   private async persist() {

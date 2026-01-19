@@ -22,8 +22,33 @@ export class FileEffectActor extends Actor {
       case "WRITE_FILE":
         await this.handleWrite(msg);
         break;
+      case "WATCH_FILE":
+        await this.handleWatch(msg);
+        break;
       default:
         console.warn(`[FileEffect] Unknown message type: ${msg.type}`);
+    }
+  }
+
+  private async handleWatch(msg: Message) {
+    const { watch } = await import("node:fs");
+    const { readFile } = await import("node:fs/promises");
+    const path = msg.payload.path;
+    const sender = msg.sender!;
+
+    try {
+      watch(path, async (event) => {
+        if (event === "change") {
+          const content = await readFile(path, "utf-8");
+          this.send(sender, { 
+            type: "FILE_CHANGED", 
+            payload: { path, content } 
+          });
+        }
+      });
+      this.send(sender, { type: "WATCH_OK", payload: { path } });
+    } catch (err: any) {
+      this.send(sender, { type: "ERROR", payload: { message: err.message } });
     }
   }
 

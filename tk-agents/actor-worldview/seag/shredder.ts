@@ -10,6 +10,7 @@ export class FragmentNode extends Actor {
 
   async receive(msg: Message) {
     if (msg.type === "INIT_FRAGMENT") {
+      if (this.content === msg.payload.content) return; // No-Op
       this.content = msg.payload.content;
       this.parentId = msg.payload.parentId;
     }
@@ -19,12 +20,15 @@ export class FragmentNode extends Actor {
     }
 
     if (msg.type === "PATCH") {
+      const oldContent = JSON.stringify(this.content);
       // If payload is an object, merge it. Otherwise, replace it.
       if (typeof msg.payload === 'object' && msg.payload !== null && !Array.isArray(msg.payload)) {
         this.content = { ...this.content, ...msg.payload };
       } else {
         this.content = msg.payload;
       }
+      
+      if (JSON.stringify(this.content) === oldContent) return; // No-Op
       
       // Notify parent of the change
       if (this.parentId) {

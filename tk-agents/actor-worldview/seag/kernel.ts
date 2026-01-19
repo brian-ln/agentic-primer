@@ -154,8 +154,9 @@ export class System {
     policy: RestartPolicy = "transient",
     force: boolean = false
   ): T {
-    if (this.actors.has(id) && !force) {
-      throw new Error(`Actor already exists at address: ${id}`);
+    const existing = this.actors.get(id);
+    if (existing && !force) {
+      return existing as T;
     }
 
     const actor = new ActorClass(id, this);

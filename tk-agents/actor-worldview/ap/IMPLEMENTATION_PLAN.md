@@ -82,6 +82,19 @@ This plan follows a phased approach to building the **Self-Evolving Actor Graph*
 - **Subjective Success Criteria:** 
     - ✅ Granular observation: An actor can watch a single section of a document.
 - **Harness:** `tests/harness/phase3_shredder.test.ts`
+
+### Task 3.3: Two-Way Sync (The Watcher) [COMPLETED]
+- **Outcome:** External disk changes are reflected in the graph.
+- **Objective Success Criteria:** 
+    - ✅ Manually editing the physical file triggers an update in the `FragmentNode` actors.
+    - ✅ **Reconciliation:** Idempotent spawns and no-op checks ensure minimal message propagation.
+- **Subjective Success Criteria:** 
+    - ✅ The graph feels "alive" and synchronized with the environment.
+- **Harness:** `tests/harness/phase3_watcher.test.ts`
+
+---
+
+## Phase 4: The Agentic REPL (The "Thinking" Layer) [IN PROGRESS]
 ...
 ## Research & Learning Backlog
 - [ ] **WASM Actor Hosting:** Can we run the `AlgorithmicNode` in a restricted WASM sandbox?
