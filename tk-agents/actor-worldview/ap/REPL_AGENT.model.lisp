@@ -13,18 +13,22 @@
     ;; The Brain: The Inference & Execution coordinator
     (actor BrainAgent
       (behavior
-        (on think (task)
-          (send self 'signal 'thinking)
-          (let ((history (send InteractionLog 'replay -10)) ; Get last 10 messages
-                (graph_context (send Graph 'query "find relevant knowledge")))
-            (let ((plan (call-inference history graph_context)))
-              (execute-plan plan))))
-        (on execute-plan (plan)
-          (for-each step plan
-            (match step
-              ((search query) (send WebActor 'search query))
-              ((run command) (send ShellActor 'call command))
-              ((reply text) (send UserProxy 'output text)))))))
+        (on think (input)
+          (match (parse-intent input)
+            (('mount path) (send self 'handle-mount path))
+            (('explore addr) (send self 'handle-explore addr))
+            (('set addr val) (send self 'handle-set addr val))
+            (_ (send self 'handle-heuristic input))))
+        
+        (on handle-mount (path)
+          (send FileIO 'read-file path)
+          (send self 'signal 'thinking "Mounting file..."))
+        
+        (on handle-explore (addr)
+          (send GraphProjector 'query 'reachable addr))
+        
+        (on handle-set (addr val)
+          (send addr 'patch val))))
 
     ;; The WebUI Actor (Shadow Actor in the browser)
     (actor WebUIActor

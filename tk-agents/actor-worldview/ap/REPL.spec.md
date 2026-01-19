@@ -2,7 +2,7 @@
 
 ## 1. The Multi-Channel Strategy
 To support Web, Terminal, and SMS simultaneously, we use the **Transport Adapter** pattern.
-- **Frontend:** A "UI Actor" (React component or TTY state) that renders the current conversation graph.
+- **Frontend:** A native "Shadow Actor" (Custom Element / Web Component) that renders the current conversation graph.
 - **Backend:** A "REPL Coordinator" actor that manages the dialogue state.
 
 ## 2. The User-as-Actor Protocol
@@ -10,22 +10,23 @@ The Human is represented by a `UserActor`. All interactions are messages:
 
 | Message | Origin | Destination | Payload |
 |---------|--------|-------------|---------|
-| `input` | UI | UserProxy | `{ text: "...", metadata: {...} }` |
-| `output`| Agent | UI | `{ content: "...", type: "text|image|graph" }` |
-| `signal`| System | UI | `{ status: "thinking|typing|error" }` |
+| `INPUT` | UI | UserProxy | `{ text: "...", metadata: {...} }` |
+| `OUTPUT`| Agent | UI | `{ content: "...", type: "text|image|graph" }` |
+| `SIGNAL`| System | UI | `{ status: "thinking|typing|error", detail: "..." }` |
 
-## 3. The Short Path Implementation (Bun + TS)
+## 3. The REPL Command Set
+The BrainAgent implements an intent-parsing layer for the following commands:
+
+- **`mount <path>`**: Instructs the `FileEffectActor` to read a file and the `DocumentParser` to shred it into the graph.
+- **`explore <address>`**: Performs a graph query (via `GraphProjector`) to discover reachable nodes.
+- **`set <address> <value>`**: Sends a `PATCH` message to a specific fragment actor, triggering back-propagation to disk.
+
+## 4. The Short Path Implementation (Bun + TS)
 1. **The Hub:** A `Bun.serve()` WebSocket server that acts as the `Gateway Actor`.
-2. **The Session:** Every connection spawns a `SessionActor` and a `UserActor`.
+2. **The UI:** Standard HTML5/TS using WebSockets and ES Modules. No external frameworks.
 3. **The Loop:**
    - User types → WebSocket → `Gateway` → `UserActor`.
-   - `UserActor` sends `process` to `AgentActor`.
-   - `AgentActor` queries the `Graph` and `Logs`.
-   - `AgentActor` sends `reply` back to `UserActor`.
-   - `UserActor` pushes `output` to the `Gateway` → WebSocket → Client.
-
-## 4. UI as an Actor
-In the browser, the UI components are actors:
-- **MessageList Actor:** Subscribes to the `InteractionLog` node and re-renders when a new entry is appended.
-- **Input Actor:** Sends `input` messages to the `UserActor`.
-- **SystemStatus Actor:** Watches the `AlgorithmicNode` for `status` signals.
+   - `UserActor` sends `THINK` to `BrainAgent`.
+   - `BrainAgent` queries the `Graph` and `Logs`.
+   - `BrainAgent` sends `OUTPUT` back to `UserActor`.
+   - `UserActor` pushes `OUTPUT` to the `Gateway` → WebSocket → Client.

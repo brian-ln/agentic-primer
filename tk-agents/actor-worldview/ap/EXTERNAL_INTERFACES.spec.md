@@ -8,6 +8,7 @@ Wraps a native OS process (e.g., `bash`, `python`, `gemini-cli`).
 - **Input:** `stdin` stream, environment variables, arguments.
 - **Output:** `stdout` and `stderr` streams, exit code.
 - **Log Integration:** Every line of output is automatically appended to a linked **Log Node** for historical analysis.
+- **Resilience:** When writing files, the effect actor must proactively ensure parent directories exist (`mkdir -p`).
 
 ## 3. The Terminal Node (TTY / Interactive)
 A stateful wrapper for interactive sessions.

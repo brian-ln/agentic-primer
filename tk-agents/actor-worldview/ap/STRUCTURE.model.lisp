@@ -14,6 +14,19 @@
               (spawn FragmentNode f)
               (link blob_node_id f 'contains))))))
 
+    ;; Document Actor: Coordinator for fragments
+    (actor DocumentActor
+      (state
+        (path string)
+        (format enum)
+        (fragments map)) ; frag_id -> content
+      (behavior
+        (on fragment-registered (id content)
+          (set fragments id content))
+        (on fragment-updated (id content)
+          (set fragments id content)
+          (send self 'fold-and-persist))))
+
     ;; Fragment Node: A piece of a larger document
     (actor FragmentNode
       (implements DataNode)
