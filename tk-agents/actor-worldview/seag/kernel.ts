@@ -220,6 +220,7 @@ export class System {
     const mutatorPattern = /^(patch|update|append|link|delete|set|create|add)/i;
     const isMutator = msg.isEvent || mutatorPattern.test(msg.type);
 
+    // Write-Ahead Logic: Log only if it's a mutator AND not already a log command targeting the log actor
     if (isMutator && this.eventLogAddress && target !== this.eventLogAddress) {
       this.recordEvent(target, isolatedMsg);
     }

@@ -59,13 +59,13 @@ describe("SEAG Phase 1: Actor Kernel", () => {
     expect(actorA.lastPayload.reply).toBe("Hello from Pong");
   });
 
-  test("Objective 1.2: Actor Addressing Isolation", () => {
+  test("Objective 1.2: Idempotent Spawning", () => {
     const system = new System();
-    system.spawn("seag://local/test", PingPongActor);
+    const actor1 = system.spawn("seag://local/test", PingPongActor);
+    const actor2 = system.spawn("seag://local/test", PingPongActor);
 
-    expect(() => {
-      system.spawn("seag://local/test", PingPongActor);
-    }).toThrow(); // In kernel, we now allow replacement but we can check uniqueness in logic
+    // Assert: It should return the same instance, not throw or create a second one
+    expect(actor1).toBe(actor2);
   });
 
   test("Objective 1.3: Dead Letter Handling", async () => {

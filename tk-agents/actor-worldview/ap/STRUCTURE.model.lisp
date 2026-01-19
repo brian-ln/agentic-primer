@@ -20,7 +20,8 @@
       (state
         (parent_doc_id address)
         (fragment_type string) ; e.g., 'h1', 'function_body'
-        (content any))
+        (content any)
+        (extent (tuple offset int length int))) ; Optional: for random-access I/O
       (behavior
         (on patch (new_content)
           (update-state content new_content)

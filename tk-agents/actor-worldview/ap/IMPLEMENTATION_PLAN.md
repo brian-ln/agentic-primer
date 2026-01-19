@@ -101,6 +101,7 @@ This plan follows a phased approach to building the **Self-Evolving Actor Graph*
 - [ ] **Actor Fusion Metrics:** At what message volume does fusion become a net performance win?
 - [ ] **Datalog Latency:** How does the query time scale with 10k+ nodes?
 - [ ] **Advanced Mutation Detection:** Evaluate Protocol Registry vs. Schema-Driven detection to replace regex-based mutator detection.
+- [ ] **Rope-based Actor Graphs:** Research using byte offsets and lengths in FragmentNodes to support random-access file updates (avoiding full-file re-writes).
 
 
 ## Execution Strategy (The Harness)
