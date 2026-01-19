@@ -95,7 +95,21 @@ This plan follows a phased approach to building the **Self-Evolving Actor Graph*
 ---
 
 ## Phase 4: The Agentic REPL (The "Thinking" Layer) [IN PROGRESS]
-...
+### Task 4.1: Gateway & UserProxy [COMPLETED]
+- **Outcome:** A WebSocket gateway that bridges the Browser to the internal `UserProxy`.
+- **Objective Success Criteria:** 
+    - ✅ Messages sent from the browser console are captured in the `InteractionLog`.
+    - ✅ **Full Causality:** WebSocket -> Gateway -> UserProxy -> Log chain verified.
+- **Harness:** `tests/harness/phase4_gateway.test.ts`
+
+### Task 4.2: The Brain (Inference Actor) [IN PROGRESS]
+- **Outcome:** A `BrainAgent` that uses the Graph and Log to formulate a response.
+- **Objective Success Criteria:** 
+    - Agent can successfully perform a "Search -> Synthesize -> Reply" loop.
+- **Subjective Success Criteria:** 
+    - The agent's "Thinking" signal feels responsive and informative.
+- **Harness:** `tests/harness/phase4_brain.test.ts`
+
 ## Research & Learning Backlog
 - [ ] **WASM Actor Hosting:** Can we run the `AlgorithmicNode` in a restricted WASM sandbox?
 - [ ] **Actor Fusion Metrics:** At what message volume does fusion become a net performance win?
