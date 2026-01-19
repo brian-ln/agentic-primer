@@ -12,7 +12,18 @@ export interface Message {
   payload?: any;
   traceId?: string;
   hops?: number;
-  isEvent?: boolean; // If true, this message itself is a fact to be logged
+  isEvent?: boolean;
+  capabilityToken?: string; // CT for restricted actions (ap/SECURITY.spec.md)
+}
+
+/**
+ * CapabilityToken: Simple representation for the MVP.
+ * In production, this would be a signed JWT or Macaroon.
+ */
+export interface CapabilityToken {
+  resource: string;
+  action: string;
+  expiresAt: number;
 }
 
 /**

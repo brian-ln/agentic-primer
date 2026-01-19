@@ -61,7 +61,27 @@ This plan follows a phased approach to building the **Self-Evolving Actor Graph*
 
 ---
 
-## Phase 3: The Virtual World (The "Spoon" manager)
+## Phase 3: The Virtual World (The "Spoon" manager) [COMPLETED]
+**Goal:** Abstract the filesystem and web behind Effect Actors.
+
+### Task 3.1: File & Web Effect Actors [COMPLETED]
+- **Outcome:** `FileEffectActor` and `WebEffectActor` handle I/O.
+- **Objective Success Criteria:** 
+    - ✅ A domain actor can "read" a file by sending a message, without using `fs` directly.
+    - ✅ **Security Hardening:** Security `Capability Tokens` are checked before I/O occurs.
+- **Subjective Success Criteria:** 
+    - ✅ The "No Filesystem" abstraction feels transparent.
+- **Harness:** `tests/harness/phase3_world.test.ts`
+
+### Task 3.2: Structural Destructuring (Shredder) [COMPLETED]
+- **Outcome:** A `DocumentParser` that breaks Markdown/TS into graph nodes.
+- **Objective Success Criteria:** 
+    - ✅ **Decomposition:** A single file is represented as multiple `FragmentNode` actors.
+    - ✅ **Live Linking:** The fragments are linked to the parent document in the graph.
+    - ✅ **Back-Propagation:** Updating a fragment actor automatically re-assembles the document and updates the physical file.
+- **Subjective Success Criteria:** 
+    - ✅ Granular observation: An actor can watch a single section of a document.
+- **Harness:** `tests/harness/phase3_shredder.test.ts`
 ...
 ## Research & Learning Backlog
 - [ ] **WASM Actor Hosting:** Can we run the `AlgorithmicNode` in a restricted WASM sandbox?
