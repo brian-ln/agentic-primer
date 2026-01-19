@@ -12,6 +12,19 @@ export interface Message {
   payload?: any;
   traceId?: string;
   hops?: number;
+  isEvent?: boolean; // If true, this message itself is a fact to be logged
+}
+
+/**
+ * Event: A recorded fact in the SEAG history.
+ */
+export interface Event {
+  id: string;
+  type: string;
+  source: ActorAddress;
+  traceId: string;
+  payload: any;
+  timestamp: number;
 }
 
 export interface ActorMetadata {
@@ -110,6 +123,7 @@ export class System {
   private transports: Map<string, Transport> = new Map();
   private serializer: Serializer = new JSONSerializer();
   private supervisorAddress: ActorAddress | null = null;
+  private eventLogAddress: ActorAddress | null = null;
 
   constructor(serializer?: Serializer) {
     if (serializer) this.serializer = serializer;
@@ -117,6 +131,10 @@ export class System {
 
   setSupervisor(address: ActorAddress) {
     this.supervisorAddress = address;
+  }
+
+  setEventLog(address: ActorAddress) {
+    this.eventLogAddress = address;
   }
 
   spawn<T extends Actor>(
@@ -143,7 +161,6 @@ export class System {
     this.transports.set(prefix, transport);
     transport.onMessage((env) => {
       const msg = this.serializer.deserialize(env.data);
-      // Re-inject wire headers into the message object
       msg.traceId = env.traceId;
       msg.hops = env.hops;
       this.receiveExternal(env.to, { ...msg, sender: env.from });
@@ -151,11 +168,9 @@ export class System {
   }
 
   send(target: ActorAddress, msg: Message): void {
-    // Initialize or increment observability metadata
     msg.traceId = msg.traceId || `trace-${Math.random().toString(36).substring(2, 11)}`;
     msg.hops = (msg.hops || 0) + 1;
 
-    // Loop Avoidance: Drop messages that exceed the safety threshold
     if (msg.hops > 100) {
       console.error(`[System] Cyclic Dead Letter: Message ${msg.type} exceeded 100 hops. Trace: ${msg.traceId}`);
       return;
@@ -188,15 +203,41 @@ export class System {
 
     const isolatedMsg = structuredClone(msg);
 
+    // Write-Ahead Logic: Automatically detect mutators (state-changing messages)
+    // Pattern: patch*, update*, append*, link*, delete*, set*, or explicit isEvent
+    const mutatorPattern = /^(patch|update|append|link|delete|set|create|add)/i;
+    const isMutator = msg.isEvent || mutatorPattern.test(msg.type);
+
+    if (isMutator && this.eventLogAddress && target !== this.eventLogAddress) {
+      this.recordEvent(target, isolatedMsg);
+    }
+
     setTimeout(async () => {
       try {
-        actor.currentMessage = isolatedMsg; // Set context
+        actor.currentMessage = isolatedMsg;
         await actor.receive(isolatedMsg);
-        actor.currentMessage = null; // Clear context
+        actor.currentMessage = null;
       } catch (err: any) {
         this.handleError(target, err);
       }
     }, 0);
+  }
+
+  private recordEvent(source: ActorAddress, msg: Message) {
+    const event: Event = {
+      id: `ev-${Math.random().toString(36).substring(2, 11)}`,
+      type: msg.type,
+      source,
+      traceId: msg.traceId!,
+      payload: msg.payload,
+      timestamp: Date.now()
+    };
+
+    this.send(this.eventLogAddress!, {
+      type: "APPEND",
+      payload: event,
+      traceId: msg.traceId
+    });
   }
 
   private handleError(target: ActorAddress, err: Error) {
