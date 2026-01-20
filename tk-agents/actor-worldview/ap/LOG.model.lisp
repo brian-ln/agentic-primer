@@ -3,7 +3,7 @@
 (system LogSystem
   (actors
     ;; The Log Actor: Manages the immutable sequence
-    (actor LogNode
+    (actor EventLogActor
       (implements BaseNode)
       (state
         (entries list)

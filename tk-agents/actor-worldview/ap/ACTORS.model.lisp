@@ -95,6 +95,12 @@
       (implements Embedding)
       (behavior))
 
+    (actor GeminiDiscoveryActor
+      (description "Programmatically retrieves available Gemini model IDs.")
+      (behavior
+        (on refresh-models () (http-get models))
+        (on get-latest-model (type) (find-best-match type))))
+
     ;; The Router (Virtual Stable Identity)
     (actor InferenceRouter
       (implements Inference)

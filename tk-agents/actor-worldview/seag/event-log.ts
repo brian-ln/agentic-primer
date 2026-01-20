@@ -1,9 +1,12 @@
 import { Actor, Message, Event } from "./kernel";
+import { Actor as ActorModel, Implements } from "./lib/meta";
 
 /**
  * EventLogActor: Durable Event Storage
  * Follows ap/LOG_SYSTEM.spec.md
  */
+@ActorModel("EventLogActor")
+@Implements("BaseNode")
 export class EventLogActor extends Actor {
   private logPath: string = "data/events.jsonl";
 

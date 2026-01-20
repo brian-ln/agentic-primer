@@ -23,10 +23,10 @@ export class TopicNode extends Actor {
       const content = msg.payload;
       for (const sub of this.subscribers) {
         if (this.matchFilter(sub.filter, content)) {
-          this.send(sub.id, { 
-            type: "NOTIFY", 
+          this.send(sub.id, {
+            type: "NOTIFY",
             payload: content,
-            sender: this.id 
+            sender: this.id
           });
         }
       }
@@ -42,7 +42,16 @@ export class TopicNode extends Actor {
 }
 
 /**
+ * TraceTopic: Specialized topic for system tracing.
+ * Follows ap/MESSAGING.model.lisp
+ */
+@ActorModel("TraceTopic")
+@Implements("TopicNode") // Inherits PubSub
+export class TraceTopic extends TopicNode {}
+
+/**
  * QueueNode: Implements reliable work distribution (Load Balancing).
+
  * Follows ap/MESSAGING.model.lisp
  */
 @ActorModel("QueueNode")

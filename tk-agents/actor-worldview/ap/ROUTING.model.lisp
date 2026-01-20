@@ -3,7 +3,7 @@
 (system Distribution
   (actors
     ;; The Gateway: The boundary of a Physical Runtime
-    (actor Gateway
+    (actor GatewayRelay
       (state
         (local_registry map) ; UUID -> Local Actor Ref
         (remote_registry map) ; Logical System -> Remote Gateway URI
