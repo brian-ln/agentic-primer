@@ -1,6 +1,16 @@
 ;; System Lifecycle & Bootstrap Model
 ;; Defines how the SEAG "Big Bang" occurs
 
+(defprotocol Observable
+  "Interface for actors that emit state changes."
+  (on WATCH (filter)
+    (seq
+      (one WATCH_OK (sub_id))
+      (any CHANGED (state))))
+  
+  (on UNWATCH (sub_id)
+    (one UNWATCH_OK ())))
+
 (system SEAG-Lifecycle
   (actors
     ;; RootSupervisor: The "Guardian" actor that restarts failed children.

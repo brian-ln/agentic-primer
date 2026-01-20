@@ -1,6 +1,31 @@
 ;; SEAG Actor Model Definitions
 ;; Using Lisp-style S-expressions for formal modeling
 
+(defprotocol Inference
+  "Interface for Large Language Models."
+  (on PROMPT (text params)
+    (or
+      (one RESPONSE (text))
+      (one ERROR (message)))))
+
+(defprotocol Embedding
+  "Interface for Vector Embedding models."
+  (on EMBED (text)
+    (or
+      (one VECTOR (floats))
+      (one ERROR (message)))))
+
+(defprotocol ModelRegistry
+  "Interface for managing and discovering model providers."
+  (on REGISTER_PROVIDER (model_id actor_address type)
+    (one REGISTER_OK ()))
+  (on GET_PROVIDER (model_id)
+    (or
+      (one PROVIDER_INFO (actor_address type))
+      (one ERROR (message))))
+  (on LIST_MODELS (type)
+    (one MODEL_LIST (models))))
+
 (system SEAG
   (protocols
     (protocol BaseNode

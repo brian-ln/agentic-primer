@@ -6,6 +6,7 @@ import { Actor as ActorModel, Handler } from "./lib/meta";
  * Follows ap/MESSAGING.model.lisp
  */
 @ActorModel("TopicNode")
+@Implements("PubSub")
 export class TopicNode extends Actor {
   private subscribers: Set<{ id: ActorAddress; filter: string }> = new Set();
 
@@ -45,6 +46,7 @@ export class TopicNode extends Actor {
  * Follows ap/MESSAGING.model.lisp
  */
 @ActorModel("QueueNode")
+@Implements("WorkQueue")
 export class QueueNode extends Actor {
   private backlog: Message[] = [];
   private pending: Map<string, { worker: ActorAddress; expiresAt: number; msg: Message }> = new Map();

@@ -320,27 +320,11 @@ Then optimize implementation:
 
 **See [archive/](./archive/) for historical documents.**
 
----
-
-## Status
-
-**Consolidation:** ✅ COMPLETE (2026-01-18)
-
-**Deliverables:**
-- WORLDVIEW.md (authoritative philosophy, ~20KB)
-- INDEX.md (complete navigation, ~10KB)
-- 15 active documents (organized by category)
-- 18 archived documents (preserved for history)
-- Updated README.md (this file)
-- CONSOLIDATION_REPORT.md (what was done)
-
-**Next Steps:**
-- Apply framework to Primer design
-- Implement effect actors (CozoDB, event log, file watchers)
-- Profile hot paths
-- Optimize selectively based on fitness function
-
----
+## Backlog & Future Goals
+- [ ] **Advanced Capability Management**: Design a system for extending authorization and context across actor interactions (e.g., delegated capabilities).
+- [ ] **Kafka-style Durable Topics**: Implement replayable streams by backing TopicNodes with an append-only log.
+- [ ] **Actor Fusion Engine**: Automatically optimize topology by fusing high-frequency actor pairs.
+- [ ] **Dynamic Transport Layer**: Support for LibP2P or WebRTC actor communication.
 
 ## References
 
