@@ -3,83 +3,87 @@ import { Actor as ActorModel, Implements, Handler } from "./lib/meta";
 
 /**
  * GeminiInferenceActor: Bridges to Google Gemini.
+ * Relies on CredentialProviderActor for authentication.
  */
 @ActorModel("GeminiInferenceActor")
 @Implements("Inference")
 export class GeminiInferenceActor extends Actor {
-  private apiKey: string | undefined;
+  private credential: { type: "bearer" | "api_key"; value: string } | null = null;
   private defaultModel: string = "models/gemini-3-pro-preview";
+  private useVertex: boolean = false;
+  private pendingPrompts: Message[] = [];
 
   async onStart() {
-    this.apiKey = process.env.GEMINI_API_KEY;
+    this.useVertex = process.env.GOOGLE_GENAI_USE_VERTEXAI === "true";
+    const serviceId = this.useVertex ? "google-vertex-ai" : "google-ai-studio";
+    this.send("seag://system/credentials", {
+      type: "GET_CREDENTIALS",
+      sender: this.id,
+      payload: { service_id: serviceId }
+    });
   }
 
+  @Handler("CREDENTIALS")
+  @Handler("PROMPT")
   async receive(msg: Message) {
+    if (msg.type === "CREDENTIALS") {
+      this.credential = { type: msg.payload.credential_type, value: msg.payload.credential };
+      console.log(`[GeminiInference] Credentials received. Processing ${this.pendingPrompts.length} pending prompts.`);
+      // Process any buffered prompts
+      while (this.pendingPrompts.length > 0) {
+        const prompt = this.pendingPrompts.shift()!;
+        await this.handlePrompt(prompt);
+      }
+      return;
+    }
+
     if (msg.type === "PROMPT") {
+      if (!this.credential) {
+        this.pendingPrompts.push(msg);
+        return;
+      }
       await this.handlePrompt(msg);
     }
   }
 
-  @Handler("PROMPT")
+  @Handler("HANDLE_PROMPT")
   private async handlePrompt(msg: Message) {
+    if (!this.credential) {
+      this.send(msg.sender!, { type: "ERROR", payload: { message: "No credentials loaded" } });
+      return;
+    }
+
     const { text, params } = msg.payload;
     let model = params?.model || this.defaultModel;
     if (!model.startsWith("models/")) model = `models/${model}`;
+
+    let url = `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent`;
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
     
-    if (!this.apiKey) {
-       this.send(msg.sender!, { type: "ERROR", payload: { message: "GEMINI_API_KEY missing" } });
-       return;
+    if (this.credential.type === "api_key") {
+      url += `?key=${this.credential.value}`;
+    } else {
+      headers["Authorization"] = `Bearer ${this.credential.value}`;
     }
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${this.apiKey}`;
-
     try {
-      console.log(`[GeminiInference] Calling ${model}...`);
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
-
       const response = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: [{ parts: [{ text }] }] }),
-        signal: controller.signal
+        headers,
+        body: JSON.stringify({ contents: [{ parts: [{ text }] }] })
       });
-      clearTimeout(timeoutId);
-
-      console.log(`[GeminiInference] Fetch status: ${response.status}`);
-      const rawData = await response.text();
-      console.log(`[GeminiInference] RAW RESPONSE: ${rawData}`);
 
       if (!response.ok) {
-        throw new Error(`Gemini API Error (${response.status}): ${rawData}`);
+        const err = await response.json();
+        throw new Error(`Gemini Error: ${err.error?.message || response.statusText}`);
       }
 
-      const data = JSON.parse(rawData);
+      const data = await response.json();
+      const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response content";
       
-      // Robust extraction: Join all text parts from the first candidate
-      const candidate = data.candidates?.[0];
-      const parts = candidate?.content?.parts || [];
-      const replyText = parts
-        .map((p: any) => p.text || "")
-        .join("") || "No text in response";
-      
-      console.log(`[GeminiInference] Extracted reply: ${replyText.slice(0, 50)}...`);
-
-      this.send(msg.sender!, { 
-        type: "RESPONSE", 
-        payload: { 
-          text: replyText,
-          raw: data // Send back metadata for debugging
-        } 
-      });
-
+      this.send(msg.sender!, { type: "RESPONSE", payload: { text: replyText } });
     } catch (err: any) {
-      console.error("[GeminiInference] Error:", err.message);
-      this.send(msg.sender!, { 
-        type: "ERROR", 
-        payload: { message: err.message } 
-      });
+      this.send(msg.sender!, { type: "ERROR", payload: { message: err.message } });
     }
   }
 }

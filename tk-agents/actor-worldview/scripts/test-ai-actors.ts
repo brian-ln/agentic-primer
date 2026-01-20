@@ -1,6 +1,7 @@
 import { System, Actor, Message } from "../seag/kernel";
 import { GeminiInferenceActor } from "../seag/inference-actor";
 import { GeminiEmbeddingActor } from "../seag/embedding-actor";
+import { CredentialProviderActor } from "../seag/credential-provider";
 import { readFileSync, existsSync } from "fs";
 
 async function main() {
@@ -15,11 +16,24 @@ async function main() {
     });
   }
 
-  const system = new System();
-  console.log(`API Key present: ${!!process.env.GEMINI_API_KEY}`);
   
+
+  const system = new System();
+
+  console.log(`API Key present: ${!!process.env.GEMINI_API_KEY}`);
+
+  
+
   // 1. Setup Actors
+
+  system.spawn("seag://system/credentials", CredentialProviderActor);
+
+  await new Promise(resolve => setTimeout(resolve, 50)); // Allow it to start
+
+  
+
   system.spawn("seag://system/inference", GeminiInferenceActor);
+
   system.spawn("seag://system/embedder", GeminiEmbeddingActor);
 
   // Give actors time to run onStart()
