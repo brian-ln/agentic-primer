@@ -204,30 +204,16 @@ const REPL = `<!DOCTYPE html>
         traceLog.scrollTop = traceLog.scrollHeight;
       }
 
-      ws.onmessage = (ev) => {
-        const msg = JSON.parse(ev.data);
-        
-        if (msg.type === "SIGNAL") {
-          // Check if it's a structured trace event
-          if (msg.payload.sender && msg.payload.target) {
-            appendTrace(msg.payload);
-          } else {
-            // Legacy/Normal signal
-            const detail = msg.payload.detail || JSON.stringify(msg.payload);
-            append("Think: " + detail, "thinking");
-          }
-        }
-        
-        if (msg.type === "OUTPUT") {
-          append("Brain: " + msg.payload.content, "output");
-        }
-      };
-
-
       input.onkeydown = (ev) => {
         if (ev.key === 'Enter') {
           const text = input.value;
           if (!text) return;
+          
+          if (!ws || ws.readyState !== WebSocket.OPEN) {
+            append("Error: Not connected to server.", "output");
+            return;
+          }
+
           append("You: " + text, "");
           ws.send(JSON.stringify({ type: "INPUT", payload: { text } }));
           input.value = '';

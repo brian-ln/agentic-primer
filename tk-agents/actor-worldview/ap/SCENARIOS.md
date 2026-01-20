@@ -46,3 +46,48 @@ These scenarios demonstrate the practical power of the **Self-Evolving Actor Gra
 2.  **Validation:** Run `cat data/events.jsonl` in your terminal.
     - *Observation:* You will see every `THINK`, `APPEND`, and `WRITE_FILE` event, including the `traceId` that links them.
     - *Potential:* In the next version, the Brain will be able to "replay" these to explain why a decision was made.
+
+---
+
+## Scenario 5: Debugging with On-Demand Tracing
+**Goal:** Understand why a complex AI request is failing or taking too long.
+
+1.  **Action:** User types `trace ask What is the status of my document?` in the REPL.
+2.  **Internal Flow:**
+    -   **BrainAgent** receives `THINK` with input.
+    -   Brain detects `trace` prefix, strips it, and sends `PROMPT` to `InferenceRouter` with `meta: { trace: true }`.
+    -   **Kernel** intercepts the send, generates a `TraceEvent`, and publishes it to `seag://system/topic/trace`.
+    -   **GatewayRelay** (subscribed to the topic) receives the event and sends a `SIGNAL` to the browser via WebSocket.
+    -   **InferenceRouter** receives `PROMPT`, looks up the model, and delegates to `VertexInferenceActor`. Since the incoming message was traced, this delegation also carries the trace flag.
+    -   **Kernel** emits a second `TraceEvent` for the Router -> Vertex hop.
+3.  **Visualization:**
+    -   The REPL UI splits the screen.
+    -   The Right Pane populates with a real-time list of actor-to-actor message spans.
+    -   User sees: `brain → inference [PROMPT]` followed by `inference → vertex [PROMPT]`.
+4.  **Outcome:** User identifies that the message reached the Vertex actor but stalled there, pinpointing the external API as the bottleneck.
+
+---
+
+## Scenario 6: Transient Recovery (Auto-Reconnect)
+**Goal:** Prove the UI recovers automatically from a server restart.
+
+1.  **Action:** Open the REPL. See the green "Connected" dot.
+2.  **Action:** In the terminal, run `./seag restart`.
+3.  **Observation:** 
+    - The REPL dot turns red ("Disconnected").
+    - After 5 seconds (auto-retry), the dot turns green again ("Connected").
+    - The chat history remains visible.
+4.  **Outcome:** Continuity of operation without manual page refreshing.
+
+---
+
+## Scenario 7: Offline Inference (Chrome Edge AI)
+**Goal:** Use the built-in browser AI for local processing.
+
+1.  **Action:** Type `trace ask:chrome Tell me a story.` in the REPL.
+2.  **Internal Flow:**
+    - **BrainAgent** routes to `ChromeInferenceActor`.
+    - **ChromeInferenceActor** sends a request to the browser via the Gateway.
+    - **Browser JS** detects the request and calls `window.ai.createTextSession()`.
+3.  **Observation:** The response appears in the REPL, marked as "(Local Chrome AI)".
+4.  **Outcome:** Leveraging edge compute for low-latency or offline-capable reasoning.

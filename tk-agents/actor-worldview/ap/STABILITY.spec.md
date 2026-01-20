@@ -45,20 +45,62 @@ The system must be transparent without overhead.
 - **The Inspect Protocol:** Any actor can be `inspected` for its mailbox size and average processing time.
 
 ### 3.1 On-Demand Tracing (The "Colored Token")
+
 To debug complex interactions without enabling global logging, we support **Per-Request Tracing**.
 
+
+
 1.  **The Token:** The `Message` protocol supports a `meta.trace` boolean flag.
+
 2.  **Propagation:**
+
     -   If an actor receives a message with `meta.trace = true`, any message it sends *as a result* of processing that input MUST also carry `meta.trace = true`.
-    -   This creates a "Colored Path" through the graph.
-3. **Emission:**
-    -   When the Kernel dispatches a traced message, it `PUBLISH`es a `TRACE_SPAN` event to the system topic: `seag://system/topic/trace`.
-    -   The span includes: `sender`, `target`, `message_type`, `timestamp`.
-4.  **Visualization & Logging:**
-    -   The `Gateway` subscribes to `seag://system/topic/trace` to stream events to the UI.
-    -   A `FileLogger` actor can subscribe to persist traces to disk.
+
+3.  **Emission Protocol (Structured Pub/Sub):**
+
+    -   When the Kernel dispatches a traced message, it MUST `PUBLISH` a `TraceEvent` to `seag://system/topic/trace`.
+
+    -   **Schema (TraceEvent):**
+
+        ```typescript
+
+        interface TraceEvent {
+
+          traceId: string;      // Logical request ID
+
+          sender: string;       // URI of the sender
+
+          target: string;       // URI of the receiver
+
+          messageType: string;  // e.g., 'PROMPT', 'THINK'
+
+          timestamp: number;    // Epoch ms
+
+        }
+
+        ```
+
+    -   **Loop Prevention:** The `PUBLISH` message itself MUST NOT carry the `trace` flag.
+
+4.  **Sinks:**
+
+    -   The `Gateway` subscribes to the trace topic to provide real-time UI visualization.
+
+    -   Other actors (Loggers, Analyzers) can subscribe to this topic for offline processing.
 
 ## 4. Resource Quotas
 Actors represent "Work." Work requires "Budget."
 - **Memory Quota:** Actors that exceed their allocated state size are passivated (virtualized to disk).
 - **Compute Quota:** Algorithmic nodes (Inference/Agents) must have a `max_execution_time`.
+
+## 5. Client Resilience (The "Always-On" UI)
+Edge runtimes (Browsers, CLI Shells) must treat the connection to the Actor System as transient but self-healing.
+
+### 5.1 Auto-Reconnection
+- **Detection:** Clients MUST monitor the WebSocket/Transport state.
+- **Backoff:** Upon disconnection, clients MUST implement an exponential backoff strategy to reconnect.
+- **State Preservation:** The UI MUST preserve the interaction history across reconnections to maintain user context.
+
+### 5.2 Local Fallback (Edge Capabilities)
+- When the server is unreachable, or by explicit request, the client MAY utilize local capabilities (e.g., `window.ai` in Chrome) to fulfill `Inference` requests locally.
+- These results MUST be synchronized back to the server's `InteractionLog` once connectivity is restored.
