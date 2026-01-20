@@ -91,3 +91,19 @@ These scenarios demonstrate the practical power of the **Self-Evolving Actor Gra
     - **Browser JS** detects the request and calls `window.ai.createTextSession()`.
 3.  **Observation:** The response appears in the REPL, marked as "(Local Chrome AI)".
 4.  **Outcome:** Leveraging edge compute for low-latency or offline-capable reasoning.
+
+---
+
+## Scenario 8: Streaming Inference (Real-Time Tokens)
+**Goal:** Observe the AI "thinking" in real-time rather than waiting for a block response.
+
+1.  **Action:** Type `trace ask Write a poem about rust.` in the REPL.
+2.  **Internal Flow:**
+    -   **VertexInferenceActor** calls `streamGenerateContent`.
+    -   **Response:**
+        -   `RESPONSE_START` emitted immediately.
+        -   `RESPONSE_CHUNK` ("The") -> **Gateway** -> **REPL** (UI updates "The").
+        -   `RESPONSE_CHUNK` (" gears") -> **Gateway** -> **REPL** (UI updates "The gears").
+        -   `RESPONSE_DONE` (Full Text).
+3.  **Observation:** The Trace Log fills with `RESPONSE_CHUNK` events, and the Chat UI updates incrementally.
+4.  **Outcome:** Perceived latency drops to <500ms (TTFB) vs 5s (Total Duration).

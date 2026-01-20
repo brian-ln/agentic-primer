@@ -6,7 +6,11 @@
   (on PROMPT (text params)
     "Params may include 'model' and optional 'provider' (e.g. 'vertex', 'studio')."
     (or
-      (one RESPONSE (text))
+      (one RESPONSE (text))       ; Legacy/Simple
+      (seq                        ; Streaming
+        (one RESPONSE_START ())
+        (any RESPONSE_CHUNK (delta))
+        (one RESPONSE_DONE (full_text)))
       (one ERROR (message)))))
 
 (defprotocol Embedding
