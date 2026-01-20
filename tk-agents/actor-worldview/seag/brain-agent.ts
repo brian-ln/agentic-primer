@@ -88,6 +88,26 @@ export class BrainAgent extends Actor {
         return;
       }
 
+      if (input.startsWith("enqueue ")) {
+        const parts = input.split(" ");
+        const queue = parts[1];
+        const task = parts.slice(2).join(" ");
+        this.send(queue, {
+          type: "ENQUEUE",
+          payload: { task }
+        });
+        return;
+      }
+
+      if (input.startsWith("register-worker ")) {
+        const queue = input.split(" ")[1];
+        this.send(queue, {
+          type: "REGISTER_WORKER",
+          payload: { worker_id: this.id }
+        });
+        return;
+      }
+
       this.send(msg.sender!, {
         type: "OUTPUT",
         payload: { content: "Unknown command: " + input }
@@ -98,6 +118,18 @@ export class BrainAgent extends Actor {
       this.send("seag://local/user-proxy", {
         type: "OUTPUT",
         payload: { content: `🔔 Topic ${msg.sender}: ${msg.payload.text}` }
+      });
+    }
+
+    if (msg.type === "DO_WORK") {
+      this.send("seag://local/user-proxy", {
+        type: "OUTPUT",
+        payload: { content: `🛠️ Worker (Brain) processing task: ${msg.payload.task}` }
+      });
+      // Auto-ACK
+      this.send(msg.sender!, {
+        type: "ACK",
+        payload: { msg_id: msg.id }
       });
     }
 
