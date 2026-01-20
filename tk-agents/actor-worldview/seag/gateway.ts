@@ -102,26 +102,63 @@ const REPL = `<!DOCTYPE html>
 
     <script>
       const scheme = (location.protocol === 'https:' ? 'wss:' : 'ws:');
-      const ws = new WebSocket(scheme + '//' + location.host + '/ws');
+      const wsUrl = scheme + '//' + location.host + '/ws';
+      
       const log = document.getElementById('log');
       const traceLog = document.getElementById('trace-log');
       const input = document.getElementById('input');
       const statusInd = document.getElementById('status');
       const statusText = document.getElementById('status-text');
 
-      ws.onopen = () => {
-        statusInd.classList.add('connected');
-        statusText.textContent = "Connected";
-        statusText.style.color = "#4caf50";
-        append("System connected.", "thinking");
-      };
+      let ws;
+      let retryDelay = 1000;
+      const MAX_DELAY = 60000;
 
-      ws.onclose = () => {
-        statusInd.classList.remove('connected');
-        statusText.textContent = "Disconnected";
-        statusText.style.color = "#f44336";
-        append("System disconnected.", "thinking");
-      };
+      function connect() {
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          statusInd.classList.add('connected');
+          statusText.textContent = "Connected";
+          statusText.style.color = "#4caf50";
+          append("System connected.", "thinking");
+          retryDelay = 1000; // Reset backoff on success
+        };
+
+        ws.onclose = () => {
+          statusInd.classList.remove('connected');
+          statusText.textContent = "Disconnected (Retrying in " + (retryDelay/1000) + "s...)";
+          statusText.style.color = "#f44336";
+          append("System disconnected.", "thinking");
+          
+          setTimeout(() => {
+            retryDelay = Math.min(retryDelay * 2, MAX_DELAY);
+            connect();
+          }, retryDelay);
+        };
+
+        ws.onmessage = (ev) => {
+          const msg = JSON.parse(ev.data);
+          
+          if (msg.type === "SIGNAL") {
+            // Check if it's a structured trace event
+            if (msg.payload.sender && msg.payload.target) {
+              appendTrace(msg.payload);
+            } else {
+              // Legacy/Normal signal
+              const detail = msg.payload.detail || JSON.stringify(msg.payload);
+              append("Think: " + detail, "thinking");
+            }
+          }
+          
+          if (msg.type === "OUTPUT") {
+            append("Brain: " + msg.payload.content, "output");
+          }
+        };
+      }
+
+      // Initial connection
+      connect();
 
       function append(text, className) {
         const div = document.createElement('div');
