@@ -2,13 +2,13 @@ import { Actor, Message } from "./kernel";
 import { Actor as ActorModel, Implements, Handler } from "./lib/meta";
 
 /**
- * GeminiEmbeddingActor: Bridges to Google Text Embedding 004.
- * Follows ap/PROTOCOLS.model.lisp (Embedding)
+ * GeminiEmbeddingActor: Bridges to Google Text Embedding.
  */
 @ActorModel("GeminiEmbeddingActor")
 @Implements("Embedding")
 export class GeminiEmbeddingActor extends Actor {
   private apiKey: string | undefined;
+  private defaultModel: string = "models/text-embedding-004";
 
   async onStart() {
     this.apiKey = process.env.GEMINI_API_KEY;
@@ -22,38 +22,43 @@ export class GeminiEmbeddingActor extends Actor {
 
   @Handler("EMBED")
   private async handleEmbed(msg: Message) {
+    const { text } = msg.payload;
+    let model = this.defaultModel;
+    
     if (!this.apiKey) {
-      this.send(msg.sender!, { type: "ERROR", payload: { message: "API Key not configured" } });
+      this.send(msg.sender!, { type: "ERROR", payload: { message: "GEMINI_API_KEY missing" } });
       return;
     }
 
-    const { text } = msg.payload;
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${this.apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/${model}:embedContent?key=${this.apiKey}`;
 
     try {
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "models/text-embedding-004",
           content: { parts: [{ text }] }
         })
       });
 
-      const data = await response.json();
-      
-      if (data.error) {
-        throw new Error(data.error.message);
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(`Embedding Error: ${err.error?.message || response.statusText}`);
       }
 
-      const vector = data.embedding?.values || [];
-      
+      const data = await response.json();
+      const vector = data.embedding?.values;
+
+      if (!vector) throw new Error("No vector in response");
+
       this.send(msg.sender!, { 
         type: "VECTOR", 
-        payload: { floats: vector } 
+        payload: { floats: vector },
+        traceId: msg.traceId
       });
 
     } catch (err: any) {
+      console.error("[GeminiEmbedding] Error:", err.message);
       this.send(msg.sender!, { 
         type: "ERROR", 
         payload: { message: err.message } 
