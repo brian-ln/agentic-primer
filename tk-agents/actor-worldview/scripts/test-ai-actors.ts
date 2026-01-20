@@ -1,6 +1,6 @@
 import { System, Actor, Message } from "../seag/kernel";
-import { GeminiInference } from "../seag/inference";
-import { GeminiEmbedding } from "../seag/embedding";
+import { GeminiInference } from "../seag/ai/inference";
+import { GeminiEmbedding } from "../seag/ai/embedding";
 import { CredentialProviderActor } from "../seag/credential-provider";
 import { readFileSync, existsSync } from "fs";
 
