@@ -21,6 +21,14 @@ export interface Message {
   };
 }
 
+export interface TraceEvent {
+  traceId: string;
+  sender: string;
+  target: string;
+  messageType: string;
+  timestamp: number;
+}
+
 /**
  * CapabilityToken: Simple representation for the MVP.
  * In production, this would be a signed JWT or Macaroon.
@@ -245,13 +253,17 @@ export class System {
     // On-Demand Tracing Emission
     if (msg.meta?.trace) {
       // Publish to the system trace topic
-      // We do NOT set meta.trace on this message to avoid loops.
+      const traceEvent: TraceEvent = {
+        traceId: msg.traceId || "unknown",
+        sender: msg.sender || "seag://system/anonymous",
+        target,
+        messageType: msg.type,
+        timestamp: Date.now()
+      };
+
       const traceMsg: Message = {
         type: "PUBLISH",
-        payload: {
-          status: "trace",
-          detail: `${msg.sender} -> ${target} [${msg.type}]`
-        },
+        payload: traceEvent,
         sender: "seag://system/kernel",
         traceId: msg.traceId
       };

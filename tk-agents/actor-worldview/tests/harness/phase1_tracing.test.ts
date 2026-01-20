@@ -20,11 +20,11 @@ describe("SEAG Phase 1: On-Demand Tracing", () => {
     system.spawn("seag://local/c", ChainActor);
 
     // 2. Mock the Trace Topic to capture trace spans
-    const traces: Message[] = [];
+    const traces: any[] = [];
     class MockTopic extends Actor {
       async receive(msg: Message) {
-        if (msg.type === "PUBLISH" && msg.payload.status === "trace") {
-          traces.push(msg);
+        if (msg.type === "PUBLISH" && msg.payload.messageType) {
+          traces.push(msg.payload);
         }
       }
     }
@@ -40,21 +40,14 @@ describe("SEAG Phase 1: On-Demand Tracing", () => {
     await new Promise(resolve => setTimeout(resolve, 50));
 
     // 4. Verify Traces
-    // Expect:
-    // 1. Kernel dispatching PING to A (Traced) -> Emits trace
-    // 2. A sending PING to B (Inherits Trace) -> Kernel dispatching to B -> Emits trace
-    
-    // Note: The first send ("seag://local/a") is external, so we might not see a dispatch trace 
-    // unless the system logs external sends or dispatchLocal handles it.
-    // dispatchLocal handles it.
-    
-    // Expected Traces:
-    // 1. seag://system/anonymous -> seag://local/a [PING]
-    // 2. seag://local/a -> seag://local/b [PING]
-    
     expect(traces.length).toBeGreaterThanOrEqual(2);
-    expect(traces[0].payload.detail).toContain("seag://local/a");
-    expect(traces[1].payload.detail).toContain("seag://local/b");
+    expect(traces[0].sender).toContain("seag://system/anonymous");
+    expect(traces[0].target).toContain("seag://local/a");
+    expect(traces[0].messageType).toBe("PING");
+    
+    expect(traces[1].sender).toContain("seag://local/a");
+    expect(traces[1].target).toContain("seag://local/b");
+    expect(traces[1].messageType).toBe("PING");
   });
 
   test("Objective 1.7: No Trace Leakage", async () => {

@@ -104,50 +104,37 @@ const REPL = `<!DOCTYPE html>
         log.scrollTop = log.scrollHeight;
       }
 
-      function appendTrace(text) {
+      function appendTrace(event) {
         const div = document.createElement('div');
         div.className = "trace-item";
         
-        // Parse format: "SENDER -> TARGET [TYPE]"
-        const time = new Date().toLocaleTimeString().split(' ')[0];
-        
-        // Regex to parse the trace string
-        // Format: "SENDER -> TARGET [TYPE]"
-        const match = text.trim().match(/(.*?) -> (.*?) \[(.*?)\]/);
+        const time = new Date(event.timestamp).toLocaleTimeString().split(' ')[0];
         
         const timeSpan = document.createElement('span');
         timeSpan.className = "time";
         timeSpan.textContent = time;
         div.appendChild(timeSpan);
 
-        if (match) {
-          const [_, sender, target, type] = match;
-          
-          const sSpan = document.createElement('span');
-          sSpan.className = "trace-sender";
-          sSpan.textContent = sender.replace('seag://system/', '').replace('seag://local/', ''); 
-          
-          const aSpan = document.createElement('span');
-          aSpan.className = "trace-arrow";
-          aSpan.textContent = "→";
-          
-          const tSpan = document.createElement('span');
-          tSpan.className = "trace-target";
-          tSpan.textContent = target.replace('seag://system/', '').replace('seag://local/', '');
-          
-          const tySpan = document.createElement('span');
-          tySpan.className = "trace-type";
-          tySpan.textContent = type;
-          
-          div.appendChild(sSpan);
-          div.appendChild(aSpan);
-          div.appendChild(tSpan);
-          div.appendChild(tySpan);
-        } else {
-          // Fallback for non-matching strings
-          div.appendChild(document.createTextNode(text));
-          console.warn("Trace parse failed for:", text);
-        }
+        const sSpan = document.createElement('span');
+        sSpan.className = "trace-sender";
+        sSpan.textContent = event.sender.replace('seag://system/', '').replace('seag://local/', ''); 
+        
+        const aSpan = document.createElement('span');
+        aSpan.className = "trace-arrow";
+        aSpan.textContent = "→";
+        
+        const tSpan = document.createElement('span');
+        tSpan.className = "trace-target";
+        tSpan.textContent = event.target.replace('seag://system/', '').replace('seag://local/', '');
+        
+        const tySpan = document.createElement('span');
+        tySpan.className = "trace-type";
+        tySpan.textContent = "[" + event.messageType + "]";
+        
+        div.appendChild(sSpan);
+        div.appendChild(aSpan);
+        div.appendChild(tSpan);
+        div.appendChild(tySpan);
         
         traceLog.appendChild(div);
         traceLog.scrollTop = traceLog.scrollHeight;
@@ -157,11 +144,13 @@ const REPL = `<!DOCTYPE html>
         const msg = JSON.parse(ev.data);
         
         if (msg.type === "SIGNAL") {
-          // Check if it's a trace signal
-          if (msg.payload.status === "trace") {
-            appendTrace(msg.payload.detail);
+          // Check if it's a structured trace event
+          if (msg.payload.sender && msg.payload.target) {
+            appendTrace(msg.payload);
           } else {
-            append("Think: " + msg.payload.detail, "thinking");
+            // Legacy/Normal signal
+            const detail = msg.payload.detail || JSON.stringify(msg.payload);
+            append("Think: " + detail, "thinking");
           }
         }
         
@@ -169,6 +158,7 @@ const REPL = `<!DOCTYPE html>
           append("Brain: " + msg.payload.content, "output");
         }
       };
+
 
       input.onkeydown = (ev) => {
         if (ev.key === 'Enter') {
