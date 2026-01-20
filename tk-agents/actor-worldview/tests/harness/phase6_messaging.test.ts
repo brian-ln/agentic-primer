@@ -1,9 +1,34 @@
 import { expect, test, describe } from "bun:test";
-import { System, Actor, Message } from "../../seag/kernel";
+import { System, Actor, Message, ActorAddress } from "../../seag/kernel";
 import { TopicNode, QueueNode } from "../../seag/messaging";
 
 describe("SEAG Phase 6: Messaging Subsystem", () => {
-  
+  // Helper actor to send messages in tests
+  class TestClientActor extends Actor {
+    public receivedMessages: Message[] = [];
+    constructor(id: string, system: System) {
+      super(id, system);
+    }
+    async receive(msg: Message) {
+      this.receivedMessages.push(msg);
+    }
+    // Helper to send a message and wait for a response if needed
+    sendAndWait(target: ActorAddress, msg: Message, timeout = 100) {
+      return new Promise<Message | null>(resolve => {
+        this.receivedMessages = []; // Clear previous messages
+        this.send(target, { ...msg, sender: this.id });
+        const timer = setTimeout(() => resolve(null), timeout);
+        const check = setInterval(() => {
+          if (this.receivedMessages.length > 0) {
+            clearInterval(check);
+            clearTimeout(timer);
+            resolve(this.receivedMessages[0]);
+          }
+        }, 10);
+      });
+    }
+  }
+
   test("Objective 6.1.1: TopicNode Pub/Sub with Filtering", async () => {
     const system = new System();
     system.spawn("seag://system/topic/alerts", TopicNode);
@@ -23,13 +48,15 @@ describe("SEAG Phase 6: Messaging Subsystem", () => {
     system.spawn("seag://local/sub-all", Subscriber);
     system.spawn("seag://local/sub-error", Subscriber);
 
+    const client = system.spawn("seag://local/client-topic", TestClientActor);
+
     // 1. Subscribe
-    system.send("seag://system/topic/alerts", {
+    client.send("seag://system/topic/alerts", {
       type: "SUBSCRIBE",
       payload: { consumer_id: "seag://local/sub-all", filter: "*" }
     });
 
-    system.send("seag://system/topic/alerts", {
+    client.send("seag://system/topic/alerts", {
       type: "SUBSCRIBE",
       payload: { consumer_id: "seag://local/sub-error", filter: "CRITICAL" }
     });
@@ -37,7 +64,7 @@ describe("SEAG Phase 6: Messaging Subsystem", () => {
     await new Promise(resolve => setTimeout(resolve, 50));
 
     // 2. Publish Non-matching
-    system.send("seag://system/topic/alerts", {
+    client.send("seag://system/topic/alerts", {
       type: "PUBLISH",
       payload: { text: "System nominal" }
     });
@@ -47,7 +74,7 @@ describe("SEAG Phase 6: Messaging Subsystem", () => {
     expect(lastAlert).toBe("System nominal");
 
     // 3. Publish Matching
-    system.send("seag://system/topic/alerts", {
+    client.send("seag://system/topic/alerts", {
       type: "PUBLISH",
       payload: { text: "CRITICAL ERROR" }
     });
@@ -78,18 +105,20 @@ describe("SEAG Phase 6: Messaging Subsystem", () => {
 
     system.spawn("seag://local/worker-1", Worker);
     
+    const client = system.spawn("seag://local/client-queue", TestClientActor);
+
     // 1. Register worker
-    system.send("seag://system/queue/tasks", {
+    client.send("seag://system/queue/tasks", {
       type: "REGISTER_WORKER",
       payload: { worker_id: "seag://local/worker-1" }
     });
 
     // 2. Enqueue tasks
-    system.send("seag://system/queue/tasks", {
+    client.send("seag://system/queue/tasks", {
       type: "ENQUEUE",
       payload: { task: "A" }
     });
-    system.send("seag://system/queue/tasks", {
+    client.send("seag://system/queue/tasks", {
       type: "ENQUEUE",
       payload: { task: "B" }
     });
@@ -117,12 +146,14 @@ describe("SEAG Phase 6: Messaging Subsystem", () => {
 
     system.spawn("seag://local/forgetful", ForgetfulWorker);
     
-    system.send("seag://system/queue/lease-test", {
+    const client = system.spawn("seag://local/client-lease", TestClientActor);
+
+    client.send("seag://system/queue/lease-test", {
       type: "REGISTER_WORKER",
       payload: { worker_id: "seag://local/forgetful" }
     });
 
-    system.send("seag://system/queue/lease-test", {
+    client.send("seag://system/queue/lease-test", {
       type: "ENQUEUE",
       payload: { task: "Urgent Work" }
     });
@@ -134,7 +165,7 @@ describe("SEAG Phase 6: Messaging Subsystem", () => {
     // 2. Wait for timeout and check re-delivery
     // Trigger check-timeouts manually to avoid waiting for interval
     await new Promise(resolve => setTimeout(resolve, 200)); // Ensure expiresAt is passed
-    system.send("seag://system/queue/lease-test", { type: "CHECK_TIMEOUTS" });
+    client.send("seag://system/queue/lease-test", { type: "CHECK_TIMEOUTS" });
     
     await new Promise(resolve => setTimeout(resolve, 500));
     expect(deliveryCount).toBeGreaterThan(1);

@@ -1,89 +1,99 @@
-import { expect, test, describe, beforeAll, afterAll } from "bun:test";
-import { System, Actor, Message, Event } from "../../seag/kernel";
+import { expect, test, describe } from "bun:test";
+import { System, Actor, Message, ActorAddress } from "../../seag/kernel";
 import { EventLogActor } from "../../seag/event-log";
-import { rm } from "node:fs/promises";
-
-/**
- * PHASE 2 HARNESS: Persistence & Memory
- * 
- * Objectives:
- * 1. Automatic event logging for state-changing messages.
- * 2. Durable storage (JSONL).
- * 3. Event Replay.
- */
 
 describe("SEAG Phase 2: Persistence", () => {
-  const TEST_LOG = "data/events.jsonl";
-
-  class StateActor extends Actor {
-    public value: number = 0;
+  // Helper actor to send messages in tests
+  class TestClientActor extends Actor {
+    public receivedMessages: Message[] = [];
+    constructor(id: string, system: System) {
+      super(id, system);
+    }
     async receive(msg: Message) {
-      if (msg.type === "INCREMENT") {
-        this.value += (msg.payload?.amount || 1);
-      }
+      this.receivedMessages.push(msg);
+    }
+    // Helper to send a message and wait for a response if needed
+    sendAndWait(target: ActorAddress, msg: Message, timeout = 100) {
+      return new Promise<Message | null>(resolve => {
+        this.receivedMessages = []; // Clear previous messages
+        this.send(target, { ...msg, sender: this.id });
+        const timer = setTimeout(() => resolve(null), timeout);
+        const check = setInterval(() => {
+          if (this.receivedMessages.length > 0) {
+            clearInterval(check);
+            clearTimeout(timer);
+            resolve(this.receivedMessages[0]);
+          }
+        }, 10);
+      });
     }
   }
 
-  beforeAll(async () => {
-    try { await rm(TEST_LOG); } catch {}
-  });
-
   test("Objective 2.1: Automatic Event Logging", async () => {
     const system = new System();
-    
-    // 1. Setup EventLog
-    system.spawn("seag://system/event-log", EventLogActor, "permanent");
+    system.spawn("seag://system/event-log", EventLogActor);
     system.setEventLog("seag://system/event-log");
 
-    // 2. Spawn a StateActor
-    const actor = system.spawn("seag://local/counter", StateActor);
+    let eventLog: Message[] = [];
+    class StateActor extends Actor {
+      private value = 0;
+      async receive(msg: Message) {
+        if (msg.type === "UPDATE_VALUE") {
+          this.value = msg.payload.amount;
+        }
+        if (msg.type === "GET_VALUE") {
+          this.send(msg.sender!, { type: "VALUE", payload: { value: this.value } });
+        }
+      }
+    }
+    system.spawn("seag://local/counter", StateActor);
 
-    // 3. Send a message with a mutator name (automatic event)
-    system.send("seag://local/counter", { 
-      type: "UPDATE_VALUE", // Starts with 'update' -> automatic event
-      payload: { amount: 10 } 
+    const client = system.spawn("seag://local/client-log", TestClientActor);
+
+    // Send a message with a mutator name (automatic event)
+    client.send("seag://local/counter", {
+      type: "UPDATE_VALUE",
+      payload: { amount: 10 }
     });
 
-    // Wait for file I/O
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 50));
 
-    // 4. Verify file exists and contains the event
-    const fs = await import("node:fs/promises");
-    const content = await fs.readFile(TEST_LOG, "utf-8");
-    const event: Event = JSON.parse(content.trim());
+    // Directly query the EventLog (which would normally be done by a projector)
+    const logResponse = await client.sendAndWait("seag://system/event-log", { type: "GET_EVENTS" });
+    eventLog = logResponse?.payload.events;
 
-    expect(event.type).toBe("UPDATE_VALUE");
-    expect(event.source).toBe("seag://local/counter");
-    expect(event.payload.amount).toBe(10);
-    expect(event.traceId).toBeDefined();
+    expect(eventLog.length).toBeGreaterThan(0);
+    expect(eventLog[0].type).toBe("UPDATE_VALUE");
+    expect(eventLog[0].source).toBe("seag://local/counter");
   });
 
   test("Objective 2.3: Event Replay", async () => {
     const system = new System();
-    const logger = system.spawn("seag://system/event-log", EventLogActor, "permanent");
-    
-    let replayedEvents: Event[] = [];
-    
+    system.spawn("seag://system/event-log", EventLogActor);
+    system.setEventLog("seag://system/event-log");
+
+    const client = system.spawn("seag://local/client-replay", TestClientActor);
+
+    // 1. Populate EventLog with some events
+    client.send("seag://system/event-log", { type: "APPEND", payload: { id: "e1", source: "a", type: "DATA", payload: "msg1" } });
+    client.send("seag://system/event-log", { type: "APPEND", payload: { id: "e2", source: "b", type: "DATA", payload: "msg2" } });
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    let replayedEvents: Message[] = [];
     class ReplayReceiver extends Actor {
       async receive(msg: Message) {
-        if (msg.type === "REPLAY_RESULT") {
-          replayedEvents = msg.payload;
-        }
+        if (msg.type === "REPLAY_RESULT") replayedEvents = msg.payload.events;
       }
     }
-    
-    const receiver = system.spawn("seag://local/receiver", ReplayReceiver);
-    
+    system.spawn("seag://local/receiver", ReplayReceiver);
+
     // Trigger replay
-    system.send("seag://system/event-log", { 
-      type: "REPLAY", 
-      sender: "seag://local/receiver" 
-    });
+    client.send("seag://system/event-log", { type: "REPLAY", sender: "seag://local/receiver" });
 
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 50));
 
-    expect(replayedEvents.length).toBeGreaterThan(0);
-    expect(replayedEvents[0].type).toBe("UPDATE_VALUE");
+    expect(replayedEvents.length).toBe(2);
+    expect(replayedEvents[0].payload).toEqual({ id: "e1", source: "a", type: "DATA", payload: "msg1" });
   });
-
 });

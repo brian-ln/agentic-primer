@@ -2,7 +2,8 @@ import { System, RootSupervisor } from "./kernel";
 import { EventLogActor } from "./event-log";
 import { GraphProjector } from "./graph-projector";
 import { FileEffectActor } from "./file-effect";
-import { DocumentParser } from "./shredder";
+import { DocumentParser, FragmentNode } from "./shredder";
+import { Document } from "./document";
 import { UserProxy } from "./user-proxy";
 import { BrainAgent } from "./brain-agent";
 import { GeminiInference } from "./ai/inference";
@@ -42,6 +43,9 @@ async function bootstrap() {
       is_default: true
     }
   });
+
+  // Document System
+  system.spawn("seag://local/active-doc", Document);
 
   // Messaging default hubs
   system.spawn("seag://system/topic/main", TopicNode, "permanent");
