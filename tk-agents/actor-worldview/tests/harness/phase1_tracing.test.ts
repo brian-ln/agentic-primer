@@ -19,16 +19,16 @@ describe("SEAG Phase 1: On-Demand Tracing", () => {
     system.spawn("seag://local/b", ChainActor);
     system.spawn("seag://local/c", ChainActor);
 
-    // 2. Mock the Gateway Relay to capture trace spans
+    // 2. Mock the Trace Topic to capture trace spans
     const traces: Message[] = [];
-    class MockGateway extends Actor {
+    class MockTopic extends Actor {
       async receive(msg: Message) {
-        if (msg.type === "SIGNAL" && msg.payload.status === "trace") {
+        if (msg.type === "PUBLISH" && msg.payload.status === "trace") {
           traces.push(msg);
         }
       }
     }
-    system.spawn("seag://system/gateway-relay", MockGateway);
+    system.spawn("seag://system/topic/trace", MockTopic);
 
     // 3. Send a TRACED message to A
     system.send("seag://local/a", {

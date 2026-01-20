@@ -72,6 +72,7 @@ async function bootstrap() {
 
   // Messaging default hubs
   system.spawn("seag://system/topic/main", TopicNode, "permanent");
+  system.spawn("seag://system/topic/trace", TopicNode, "permanent");
   system.spawn("seag://system/queue/main", QueueNode, "permanent");
 
   system.spawn("seag://local/user-proxy", UserProxy);

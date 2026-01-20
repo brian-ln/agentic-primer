@@ -30,10 +30,12 @@ This plan follows a phased approach to building the **Self-Evolving Actor Graph*
 
 ### Task 1.3: Observability & Loop Avoidance [COMPLETED]
 - **Outcome:** Messages carry `trace_id` and `hop_count`.
+- **Refinement:** Added **On-Demand Tracing** (`meta.trace`) for per-request waterfall visualization.
 - **Objective Success Criteria:** 
     - ✅ Circular messages are dropped after 100 hops.
     - ✅ A `trace_id` can be used to follow a message across 3+ actors.
-- **Harness:** `tests/harness/phase1_stability.test.ts`
+    - ✅ `trace <command>` triggers a visual trace log in the REPL.
+- **Harness:** `tests/harness/phase1_stability.test.ts`, `tests/harness/phase1_tracing.test.ts`
 
 ---
 

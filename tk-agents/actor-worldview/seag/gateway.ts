@@ -17,10 +17,29 @@ export class GatewayRelay extends SystemActor {
   // We need to pass the 'ws' socket to it.
   public ws: any;
 
+  async onStart() {
+    this.send("seag://system/topic/trace", {
+      type: "SUBSCRIBE",
+      payload: { consumer_id: this.id }
+    });
+  }
+
   @Handler("OUTPUT")
   @Handler("SIGNAL")
+  @Handler("NOTIFY")
   async receive(msg: Message) {
-    if (this.ws && (msg.type === "OUTPUT" || msg.type === "SIGNAL")) {
+    if (!this.ws) return;
+
+    if (msg.type === "NOTIFY") {
+      // Re-wrap notification (trace) as a SIGNAL for the client
+      this.ws.send(JSON.stringify({
+        type: "SIGNAL",
+        payload: msg.payload
+      }));
+      return;
+    }
+
+    if (msg.type === "OUTPUT" || msg.type === "SIGNAL") {
       try {
         if (DEBUG) console.log('GatewayRelay: sending message back to client', msg.type, msg.payload);
         this.ws.send(JSON.stringify(msg));

@@ -51,11 +51,12 @@ To debug complex interactions without enabling global logging, we support **Per-
 2.  **Propagation:**
     -   If an actor receives a message with `meta.trace = true`, any message it sends *as a result* of processing that input MUST also carry `meta.trace = true`.
     -   This creates a "Colored Path" through the graph.
-3.  **Emission:**
-    -   When the Kernel dispatches a traced message, it emits a `TRACE_SPAN` event to the `InteractionLog`.
+3. **Emission:**
+    -   When the Kernel dispatches a traced message, it `PUBLISH`es a `TRACE_SPAN` event to the system topic: `seag://system/topic/trace`.
     -   The span includes: `sender`, `target`, `message_type`, `timestamp`.
-4.  **Visualization:**
-    -   The `UserProxy` or `Gateway` subscribes to these spans to render a waterfall view for the user.
+4.  **Visualization & Logging:**
+    -   The `Gateway` subscribes to `seag://system/topic/trace` to stream events to the UI.
+    -   A `FileLogger` actor can subscribe to persist traces to disk.
 
 ## 4. Resource Quotas
 Actors represent "Work." Work requires "Budget."

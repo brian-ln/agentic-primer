@@ -244,10 +244,10 @@ export class System {
   private dispatchLocal(target: ActorAddress, msg: Message): void {
     // On-Demand Tracing Emission
     if (msg.meta?.trace) {
-      // Send directly to gateway-relay for visualization (bypass normal routing for speed/safety)
+      // Publish to the system trace topic
       // We do NOT set meta.trace on this message to avoid loops.
       const traceMsg: Message = {
-        type: "SIGNAL",
+        type: "PUBLISH",
         payload: {
           status: "trace",
           detail: `${msg.sender} -> ${target} [${msg.type}]`
@@ -255,9 +255,7 @@ export class System {
         sender: "seag://system/kernel",
         traceId: msg.traceId
       };
-      // We manually push to the gateway's mailbox if it exists, or use send() with check
-      // Using public send() is safer but we must ensure no trace flag.
-      this.send("seag://system/gateway-relay", traceMsg);
+      this.send("seag://system/topic/trace", traceMsg);
     }
 
     const actor = this.actors.get(target);
