@@ -20,6 +20,12 @@
 
 (system Messaging
   (actors
+    ;; Trace Hub: Dedicated topic for on-demand request tracing
+    (actor TraceTopic
+      (implements TopicNode)
+      (address "seag://system/topic/trace")
+      (description "Aggregates and broadcasts TraceEvent objects."))
+
     ;; Topic Actor: The Pub/Sub Hub
     (actor TopicNode
       (implements PubSub)
