@@ -11,7 +11,7 @@ import { Gateway } from "./gateway";
 
 async function bootstrap() {
   const system = new System();
-  console.log("SEAG Bootstrapping");
+  console.log(`SEAG Bootstrapping at ${new Date().toISOString()}`);
   system.spawn("seag://system/supervisor", RootSupervisor);
   system.setSupervisor("seag://system/supervisor");
   system.spawn("seag://system/event-log", EventLogActor, "permanent");
@@ -23,9 +23,15 @@ async function bootstrap() {
   system.spawn("seag://system/embedder", GeminiEmbeddingActor, "permanent");
   system.spawn("seag://local/user-proxy", UserProxy);
   system.spawn("seag://system/brain", BrainAgent);
+  
   const gateway = new Gateway(system);
   gateway.start(3000);
-  console.log("SEAG MVP is Online: http://localhost:3000");
+  console.log(`SEAG MVP is Online: http://localhost:3000`);
+
+  // Keep alive heartbeat to prevent process from exiting
+  setInterval(() => {
+    // heartbeat
+  }, 1000 * 60); 
 }
 
 bootstrap();

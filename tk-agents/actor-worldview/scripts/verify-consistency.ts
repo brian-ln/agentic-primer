@@ -40,12 +40,38 @@ function extractDefinitions(sexprs: SExpr[], filename: string) {
       if ((type === "defprotocol" || type === "protocol") && typeof name === "string") {
         const inputs: string[] = [];
         const outputs: string[] = [];
+        // Scan for (on MSG ...) or (message MSG ...) blocks
         for (const item of rest) {
           if (Array.isArray(item)) {
             const head = item[0];
             if (head === "on" || head === "message") {
               const msg = item[1];
               if (typeof msg === "string") inputs.push(msg.toUpperCase().replace(/-/g, '_'));
+              
+              // Helper to recurse into logic flow
+              const scanYields = (node: any) => {
+                if (!Array.isArray(node)) return;
+                const type = node[0];
+                // Quantifiers
+                if (["seq", "or", "any", "some", "opt", "one"].includes(type)) {
+                  node.slice(1).forEach(scanYields);
+                }
+                // Legacy support or direct yield (if used)
+                if (type === "yields") {
+                  if (typeof node[1] === "string") outputs.push(node[1].toUpperCase().replace(/-/g, '_'));
+                }
+                // New syntax: (one MSG) implies MSG is the output type
+                if (type === "one" || type === "any" || type === "some" || type === "opt") {
+                   // node[1] might be the message name directly: (one MSG (args))
+                   const candidate = node[1];
+                   if (typeof candidate === "string" && /^[A-Z]/.test(candidate)) {
+                      outputs.push(candidate.toUpperCase().replace(/-/g, '_'));
+                   }
+                }
+              };
+
+              // Scan the body of the handler
+              item.slice(2).forEach(scanYields);
             }
           }
         }
