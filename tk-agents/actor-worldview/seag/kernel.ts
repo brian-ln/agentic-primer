@@ -16,6 +16,9 @@ export interface Message {
   hops?: number;
   isEvent?: boolean;
   capabilityToken?: string; // CT for restricted actions (ap/SECURITY.spec.md)
+  meta?: {
+    trace?: boolean; // On-Demand Tracing flag
+  };
 }
 
 /**
@@ -93,6 +96,11 @@ export abstract class Actor {
     if (this.currentMessage) {
       msg.traceId = msg.traceId || this.currentMessage.traceId;
       msg.hops = msg.hops || this.currentMessage.hops;
+      
+      // Propagate On-Demand Tracing
+      if (this.currentMessage.meta?.trace) {
+        msg.meta = { ...msg.meta, trace: true };
+      }
     }
     this.system.send(target, { ...msg, sender: this.id });
   }
@@ -234,6 +242,24 @@ export class System {
 
   @Handler("DISPATCH")
   private dispatchLocal(target: ActorAddress, msg: Message): void {
+    // On-Demand Tracing Emission
+    if (msg.meta?.trace) {
+      // Send directly to gateway-relay for visualization (bypass normal routing for speed/safety)
+      // We do NOT set meta.trace on this message to avoid loops.
+      const traceMsg: Message = {
+        type: "SIGNAL",
+        payload: {
+          status: "trace",
+          detail: `${msg.sender} -> ${target} [${msg.type}]`
+        },
+        sender: "seag://system/kernel",
+        traceId: msg.traceId
+      };
+      // We manually push to the gateway's mailbox if it exists, or use send() with check
+      // Using public send() is safer but we must ensure no trace flag.
+      this.send("seag://system/gateway-relay", traceMsg);
+    }
+
     const actor = this.actors.get(target);
     if (!actor) {
       console.warn(`[System] Dead Letter: ${target} (Type: ${msg.type}, Sender: ${msg.sender})`);

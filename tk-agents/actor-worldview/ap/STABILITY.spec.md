@@ -44,6 +44,19 @@ The system must be transparent without overhead.
 - **Health Signals:** Every actor periodically emits a `heartbeat` signal to its supervisor.
 - **The Inspect Protocol:** Any actor can be `inspected` for its mailbox size and average processing time.
 
+### 3.1 On-Demand Tracing (The "Colored Token")
+To debug complex interactions without enabling global logging, we support **Per-Request Tracing**.
+
+1.  **The Token:** The `Message` protocol supports a `meta.trace` boolean flag.
+2.  **Propagation:**
+    -   If an actor receives a message with `meta.trace = true`, any message it sends *as a result* of processing that input MUST also carry `meta.trace = true`.
+    -   This creates a "Colored Path" through the graph.
+3.  **Emission:**
+    -   When the Kernel dispatches a traced message, it emits a `TRACE_SPAN` event to the `InteractionLog`.
+    -   The span includes: `sender`, `target`, `message_type`, `timestamp`.
+4.  **Visualization:**
+    -   The `UserProxy` or `Gateway` subscribes to these spans to render a waterfall view for the user.
+
 ## 4. Resource Quotas
 Actors represent "Work." Work requires "Budget."
 - **Memory Quota:** Actors that exceed their allocated state size are passivated (virtualized to disk).

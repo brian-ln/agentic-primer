@@ -13,6 +13,16 @@ export class BrainAgent extends Actor {
     if (msg.type === "THINK") {
       const input = msg.payload.input as string;
       console.log(`[BrainAgent] Thinking about: ${input}`);
+
+      if (input.startsWith("trace ")) {
+        const rest = input.slice(6);
+        this.send(this.id, {
+          type: "THINK",
+          payload: { input: rest },
+          meta: { trace: true }
+        });
+        return;
+      }
       
       if (input.startsWith("mount ")) {
         await this.handleMount(input.split(" ")[1], msg.sender!);
