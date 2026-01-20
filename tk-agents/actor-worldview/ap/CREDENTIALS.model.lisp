@@ -8,6 +8,13 @@
       (one CREDENTIALS (credential_type credential)) ; e.g., 'bearer', 'api_key'
       (one ERROR (message)))))
 
+(defprotocol CredentialClient
+  "For actors that depend on secrets to operate."
+  (on BOOTSTRAP ()
+    (one GET_CREDENTIALS (service_id)) ; Actor asks for what it needs
+    (yields CREDENTIALS (creds))      ; Provider replies
+    (yields INITIALIZED ())))        ; Actor signals it is ready
+
 (system Credentials
   (actors
     (actor CredentialProviderActor

@@ -82,10 +82,14 @@
     ;; AI Boundary Actors
     (actor GeminiInferenceActor
       (implements Inference)
+      (implements CredentialClient)
+      (needs-credentials (list "google-ai-studio" "google-vertex-ai"))
       (behavior))
 
     (actor GeminiEmbeddingActor
       (implements Embedding)
+      (implements CredentialClient)
+      (needs-credentials (list "google-ai-studio" "google-vertex-ai"))
       (behavior))
 
     ;; The Router (Virtual Stable Identity)

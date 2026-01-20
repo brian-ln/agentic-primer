@@ -5,8 +5,8 @@ import { FileEffectActor } from "./file-effect";
 import { DocumentParser } from "./shredder";
 import { UserProxy } from "./user-proxy";
 import { BrainAgent } from "./brain-agent";
-import { GeminiInferenceActor } from "./inference-actor";
-import { GeminiEmbeddingActor } from "./embedding-actor";
+import { GeminiInference } from "./inference";
+import { GeminiEmbedding } from "./embedding";
 import { InferenceRouter } from "./inference-router";
 import { PersistenceManager } from "./persistence-manager";
 import { CredentialProviderActor } from "./credential-provider";
@@ -27,8 +27,8 @@ async function bootstrap() {
   system.spawn("seag://system/credentials", CredentialProviderActor, "permanent");
   
   // Concrete providers
-  system.spawn("seag://system/inference/gemini", GeminiInferenceActor, "permanent");
-  system.spawn("seag://system/embedder", GeminiEmbeddingActor, "permanent");
+  system.spawn("seag://system/inference/gemini", GeminiInference, "permanent");
+  system.spawn("seag://system/embedder", GeminiEmbedding, "permanent");
   
   // Stable Router
   system.spawn("seag://system/inference", InferenceRouter, "permanent");

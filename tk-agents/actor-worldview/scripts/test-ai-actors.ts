@@ -1,6 +1,6 @@
 import { System, Actor, Message } from "../seag/kernel";
-import { GeminiInferenceActor } from "../seag/inference-actor";
-import { GeminiEmbeddingActor } from "../seag/embedding-actor";
+import { GeminiInference } from "../seag/inference";
+import { GeminiEmbedding } from "../seag/embedding";
 import { CredentialProviderActor } from "../seag/credential-provider";
 import { readFileSync, existsSync } from "fs";
 
@@ -24,17 +24,31 @@ async function main() {
 
   
 
-  // 1. Setup Actors
-
-  system.spawn("seag://system/credentials", CredentialProviderActor);
-
-  await new Promise(resolve => setTimeout(resolve, 50)); // Allow it to start
+    // 1. Setup Actors
 
   
 
-  system.spawn("seag://system/inference", GeminiInferenceActor);
+    system.spawn("seag://system/credentials", CredentialProviderActor);
 
-  system.spawn("seag://system/embedder", GeminiEmbeddingActor);
+  
+
+    await new Promise(resolve => setTimeout(resolve, 50)); // Allow it to start
+
+  
+
+    
+
+  
+
+    system.spawn("seag://system/inference", GeminiInference);
+
+  
+
+    system.spawn("seag://system/embedder", GeminiEmbedding);
+
+  
+
+  
 
   // Give actors time to run onStart()
   await new Promise(resolve => setTimeout(resolve, 100));
