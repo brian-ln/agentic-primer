@@ -1,6 +1,6 @@
 # Actor Worldview - Complete File Index
 
-**Date:** 2026-01-18
+**Date:** 2026-01-19
 **Version:** 2.0 Consolidated
 **Purpose:** Complete navigation guide to all actor worldview documentation
 
@@ -272,6 +272,41 @@
 
 **Note:** All content preserved for historical reference and archaeology
 
+### 🛠️ Implementations
+
+#### seag/
+**Purpose:** The "Short Path" MVP implementation of the Actor Worldview.
+
+**Core Files:**
+- `main.ts` - System bootstrap and root supervisor.
+- `kernel.ts` - Minimal actor runtime with Dead Letter handling.
+- `gateway.ts` - WebSocket REPL gateway with HTML/TS frontend.
+- `brain-agent.ts` - Command intent parser and coordinator.
+- `user-proxy.ts` - The Human-in-the-loop actor.
+- `shredder.ts` - Document destructuring (JSON/Lines).
+- `graph-projector.ts` - In-memory reachability index.
+- `event-log.ts` - Durable event storage (events.jsonl).
+- `file-effect.ts` - The disk "Spoon Manager".
+
+**Use when:** Running the interactive REPL or exploring the reference implementation.
+
+---
+
+### 📝 Design Specifications (ap/)
+**Purpose:** Formal models and specifications for the SEAG system.
+
+**Key Files:**
+- `CONCEPT.md` - High-level architectural vision.
+- `SCENARIOS.md` - Interactive walkthrough scenarios.
+- `SYSTEM.model.lisp` - Lifecycle and bootstrap model.
+- `REPL_AGENT.model.lisp` - Brain and UserProxy interaction model.
+- `STRUCTURE.model.lisp` - Document shredding and re-assembly model.
+- `GRAPH_SYSTEM.spec.md` - Kernel and messaging specification.
+- `REPL.spec.md` - Interactive interface specification.
+- `LOG_SYSTEM.spec.md` - Event log and durability specification.
+
+**Use when:** Designing new features or verifying implementation against the model.
+
 ---
 
 ## Reading Paths
@@ -406,7 +441,7 @@ When structure changes:
 
 ---
 
-**Last Updated:** 2026-01-18
+**Last Updated:** 2026-01-19
 **Version:** 2.0 Consolidated
 **Maintained by:** Actor worldview consolidation effort
 

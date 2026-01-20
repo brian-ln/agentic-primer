@@ -23,15 +23,13 @@ describe("SEAG Phase 5: Semantic Discovery", () => {
     // Node A: High values in first dimensions
     system.send("seag://system/projector", {
       type: "SET_VECTOR",
-      sender: "node-apple",
-      payload: { vector: [1.0, 0.1, 0.0] }
+      payload: { id: "node-apple", vector: [1.0, 0.1, 0.0] }
     });
 
     // Node B: High values in last dimensions
     system.send("seag://system/projector", {
       type: "SET_VECTOR",
-      sender: "node-banana",
-      payload: { vector: [0.0, 0.1, 1.0] }
+      payload: { id: "node-banana", vector: [0.0, 0.1, 1.0] }
     });
 
     await new Promise(resolve => setTimeout(resolve, 50));
@@ -61,27 +59,19 @@ describe("SEAG Phase 5: Semantic Discovery", () => {
     expect(results[0].score).toBeGreaterThan(0.9);
   });
 
-  test("Objective 5.1.2: Inference Actor Protocol (Mocked API)", async () => {
+  test("Objective 5.1.2: Inference Actor Protocol (REAL API)", async () => {
     const system = new System();
+    console.log("VERTEX MODE:", process.env.GOOGLE_GENAI_USE_VERTEXAI);
+    console.log("PROJECT:", process.env.GOOGLE_CLOUD_PROJECT);
     
-    // We override fetch to avoid real network calls during test
-    const originalFetch = global.fetch;
-    let lastUrl = "";
-    global.fetch = (async (url: string) => {
-      lastUrl = url;
-      return {
-        json: async () => ({
-          candidates: [{ content: { parts: [{ text: "Mock Gemini Response" }] } }]
-        })
-      };
-    }) as any;
-
     system.spawn("seag://system/inference", GeminiInferenceActor);
+    await new Promise(resolve => setTimeout(resolve, 50)); // Wait for onStart
 
     let response: string | null = null;
     class MockUser extends Actor {
       async receive(msg: Message) {
         if (msg.type === "RESPONSE") response = msg.payload.text;
+        if (msg.type === "ERROR") console.error("API Error:", msg.payload);
       }
     }
     system.spawn("seag://local/user", MockUser);
@@ -89,14 +79,17 @@ describe("SEAG Phase 5: Semantic Discovery", () => {
     system.send("seag://system/inference", {
       type: "PROMPT",
       sender: "seag://local/user",
-      payload: { text: "What is SEAG?" }
+      payload: { 
+        text: "Say 'Hello from Gemini 3 Pro'",
+        params: { model: "gemini-3-pro-preview" }
+      }
     });
 
-    await new Promise(resolve => setTimeout(resolve, 50));
-    expect(response).toBe("Mock Gemini Response");
-    expect(lastUrl).toContain("gemini-3-flash-preview");
-
-    global.fetch = originalFetch;
-  });
+    // Wait longer for real network call
+    await new Promise(resolve => setTimeout(resolve, 15000));
+    
+    expect(response).not.toBeNull();
+    expect(response?.toLowerCase()).toContain("hello");
+  }, 20000);
 
 });

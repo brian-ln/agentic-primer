@@ -50,6 +50,22 @@ export class BrainAgent extends Actor {
         return;
       }
 
+      if (input.startsWith("search ")) {
+        const text = input.slice(7);
+        this.send("seag://system/embedder", {
+          type: "EMBED",
+          payload: { text }
+        });
+        return;
+      }
+
+      if (input.startsWith("embed ")) {
+        const id = input.slice(6);
+        // 1. Get the content
+        this.send(id, { type: "GET", sender: this.id });
+        return;
+      }
+
       this.send(msg.sender!, {
         type: "OUTPUT",
         payload: { content: "Unknown command: " + input }
@@ -63,10 +79,32 @@ export class BrainAgent extends Actor {
       });
     }
 
+    if (msg.type === "VECTOR") {
+      // If we have a current context (the node we were embedding), store it
+      const targetId = msg.traceId?.startsWith("embed-") ? msg.traceId.slice(6) : null;
+      
+      if (targetId) {
+        this.send("seag://system/projector", {
+          type: "SET_VECTOR",
+          payload: { id: targetId, vector: msg.payload.floats }
+        });
+        this.send("seag://local/user-proxy", { type: "OUTPUT", payload: { content: `Embedded and Indexed: ${targetId}` } });
+      } else {
+        // This was likely a search query vector
+        this.send("seag://system/projector", {
+          type: "QUERY",
+          payload: { 
+            predicate: "vector_search", 
+            args: { vector: msg.payload.floats, limit: 3 } 
+          }
+        });
+      }
+    }
+
     if (msg.type === "QUERY_RESULT") {
       this.send("seag://local/user-proxy", {
         type: "OUTPUT",
-        payload: { content: "Graph: " + JSON.stringify(msg.payload, null, 2) }
+        payload: { content: "Search Results: " + JSON.stringify(msg.payload, null, 2) }
       });
     }
 
@@ -76,9 +114,11 @@ export class BrainAgent extends Actor {
     }
 
     if (msg.type === "STATE") {
-      this.send("seag://local/user-proxy", {
-        type: "OUTPUT",
-        payload: { content: `Node State: ${JSON.stringify(msg.payload, null, 2)}` }
+      // If this came from an 'embed' command, send to embedder
+      this.send("seag://system/embedder", {
+        type: "EMBED",
+        payload: { text: typeof msg.payload === 'string' ? msg.payload : JSON.stringify(msg.payload) },
+        traceId: `embed-${msg.sender}` // Correlation
       });
     }
   }

@@ -59,6 +59,7 @@ export class DocumentParser extends Actor {
   
   @Handler("SHRED")
   async receive(msg: Message) {
+    console.log(`[DocumentParser] Received: ${msg.type} (Trace: ${msg.traceId})`);
     if (msg.type === "SHRED") {
       const { content, format, docId } = msg.payload;
       
@@ -66,6 +67,17 @@ export class DocumentParser extends Actor {
         await this.shredJson(content, docId);
       } else {
         await this.shredLines(content, docId);
+      }
+    }
+
+    if (msg.type === "VECTOR") {
+      const targetId = msg.traceId?.startsWith("shred-") ? msg.traceId.slice(6) : null;
+      if (targetId) {
+        console.log(`[DocumentParser] Received vector for ${targetId}`);
+        this.send("seag://system/projector", {
+          type: "SET_VECTOR",
+          payload: { id: targetId, vector: msg.payload.floats }
+        });
       }
     }
   }
@@ -93,6 +105,14 @@ export class DocumentParser extends Actor {
         type: "LINK_TO",
         payload: { from: docId, to: fragId, type: "contains" }
       });
+
+      // AI: Request embedding
+      console.log(`[DocumentParser] Requesting embedding for ${fragId}`);
+      this.send("seag://system/embedder", {
+        type: "EMBED",
+        payload: { text: typeof value === 'string' ? value : JSON.stringify(value) },
+        traceId: `shred-${fragId}`
+      });
     }
   }
 
@@ -113,6 +133,14 @@ export class DocumentParser extends Actor {
       this.send("seag://system/projector", {
         type: "LINK_TO",
         payload: { from: docId, to: fragId, type: "contains" }
+      });
+
+      // AI: Request embedding
+      console.log(`[DocumentParser] Requesting embedding for ${fragId}`);
+      this.send("seag://system/embedder", {
+        type: "EMBED",
+        payload: { text: line },
+        traceId: `shred-${fragId}`
       });
     });
   }

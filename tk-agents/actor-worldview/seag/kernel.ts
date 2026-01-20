@@ -97,6 +97,7 @@ export abstract class Actor {
     this.system.send(target, { ...msg, sender: this.id });
   }
 
+  @Handler("START")
   async onStart(): Promise<void> {}
 }
 
@@ -105,6 +106,11 @@ export abstract class Actor {
  */
 @ActorModel("RootSupervisor")
 export class RootSupervisor extends Actor {
+  @Handler("START")
+  async onStart() {
+    console.log("[RootSupervisor] Started");
+  }
+
   @Handler("CHILD_CRASHED")
   async receive(msg: Message) {
     if (msg.type === "CHILD_CRASHED") {
@@ -137,6 +143,8 @@ export class System {
   private actors: Map<ActorAddress, Actor> = new Map();
   private registry: Map<ActorAddress, ActorMetadata> = new Map();
   private transports: Map<string, Transport> = new Map();
+  private mailboxes: Map<ActorAddress, Message[]> = new Map();
+  private processing: Map<ActorAddress, boolean> = new Map();
   private serializer: Serializer = new JSONSerializer();
   private supervisorAddress: ActorAddress | null = null;
   private eventLogAddress: ActorAddress | null = null;
@@ -169,8 +177,12 @@ export class System {
     
     this.actors.set(id, actor);
     this.registry.set(id, { id, ActorClass, policy });
+    this.mailboxes.set(id, []);
+    this.processing.set(id, false);
 
-    Promise.resolve().then(() => actor.onStart());
+    Promise.resolve().then(() => actor.onStart()).catch(err => {
+      console.error(`[System] Failed to start actor ${id}:`, err);
+    });
     return actor;
   }
 
@@ -221,25 +233,42 @@ export class System {
 
     const isolatedMsg = structuredClone(msg);
 
-    // Write-Ahead Logic: Automatically detect mutators (state-changing messages)
-    // Pattern: patch*, update*, append*, link*, delete*, set*, or explicit isEvent
+    // Queue the message
+    const mailbox = this.mailboxes.get(target)!;
+    mailbox.push(isolatedMsg);
+
+    // Write-Ahead Logic
     const mutatorPattern = /^(patch|update|append|link|delete|set|create|add)/i;
     const isMutator = msg.isEvent || mutatorPattern.test(msg.type);
-
-    // Write-Ahead Logic: Log only if it's a mutator AND not already a log command targeting the log actor
     if (isMutator && this.eventLogAddress && target !== this.eventLogAddress) {
       this.recordEvent(target, isolatedMsg);
     }
 
-    setTimeout(async () => {
+    this.processMailbox(target);
+  }
+
+  private async processMailbox(target: ActorAddress) {
+    if (this.processing.get(target)) return;
+    
+    const actor = this.actors.get(target)!;
+    const mailbox = this.mailboxes.get(target)!;
+
+    if (mailbox.length === 0) return;
+
+    this.processing.set(target, true);
+
+    while (mailbox.length > 0) {
+      const msg = mailbox.shift()!;
       try {
-        actor.currentMessage = isolatedMsg;
-        await actor.receive(isolatedMsg);
+        actor.currentMessage = msg;
+        await actor.receive(msg);
         actor.currentMessage = null;
       } catch (err: any) {
         this.handleError(target, err);
       }
-    }, 0);
+    }
+
+    this.processing.set(target, false);
   }
 
   @Handler("RECORD_EVENT")

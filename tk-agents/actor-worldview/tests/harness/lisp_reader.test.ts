@@ -26,6 +26,11 @@ describe("Lisp Reader", () => {
     expect(ast).toEqual([["print", "hello world"]]);
   });
 
+  test("handles curly braces as lists", () => {
+    const ast = parse("{a b {c}}");
+    expect(ast).toEqual([["a", "b", ["c"]]]);
+  });
+
   test("handles mixed nesting", () => {
     const code = `
       (system SEAG

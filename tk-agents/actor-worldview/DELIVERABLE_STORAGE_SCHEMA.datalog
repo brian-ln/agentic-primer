@@ -1,0 +1,313 @@
+# Content Storage Schema - Datalog Specification
+
+# Graph-based content storage for agent artifacts
+# Three-layer architecture: Content Layer → Blob Storage Layer → Implementation
+# Index-based model: metadata in graph, content via BlobActor abstraction
+
+---
+
+## Node Relations
+
+# Content - Agent artifact documents (metadata only, content via BlobActor)
+:create content {
+  id: String,
+  => content_type: String,
+  => title: String,
+  => filename: String,
+  => blob_id: String,      # Reference to BlobActor (abstracts storage)
+  => size: Int,
+  => hash: String,
+  => created_at: String,
+  updated_at: String?,
+  description: String?,
+  tags: [String]?,         # Manual tags for discovery
+  embeddings: [Float]?,    # Vector embeddings for semantic search
+  section_count: Int?,
+  heading_count: Int?,
+  word_count: Int?
+}
+
+# Section - Index metadata for on-demand content reading
+:create section {
+  id: String,
+  => heading: String,
+  => depth: Int,
+  => anchor: String,
+  => byte_offset: Int,      # Start position in blob (for slice reading)
+  => byte_length: Int,      # Section length (for slice reading)
+  line_start: Int?,         # Optional: line number (for display)
+  line_end: Int?,           # Optional: line number (for display)
+  content_summary: String?, # First 200 chars (cached)
+  tags: [String]?,          # Section-specific tags
+  embeddings: [Float]?,     # Section-specific embeddings
+  word_count: Int?,
+  code_block_count: Int?
+  # Tree structure via parent_section edges, not embedded
+}
+
+# Blob - Storage abstraction (hides WHERE and HOW from content layer)
+:create blob {
+  id: String,
+  => storage_ref: String,    # Generic reference (path, S3 key, DB ID, etc.)
+  => storage_type: String,   # "filesystem" | "s3" | "database" | "memory"
+  => size: Int,
+  => hash: String,
+  => mime_type: String,
+  => created_at: String,
+  updated_at: String?,
+  cache_policy: String?,     # "hot" | "warm" | "cold" (system-managed)
+  last_accessed: String?     # For cache management
+}
+
+---
+
+## Edge Relations
+
+# Agent created content
+:create created_content {
+  from_id: String,  # agent_id
+  => to_id: String,    # content_id
+  => created_at: String,
+  purpose: String?
+}
+
+# Task has content
+:create has_content {
+  from_id: String,  # task_id
+  => to_id: String,    # content_id
+  => linked_at: String,
+  phase: String?
+}
+
+# Deliverable stored in blob
+:create stored_in_blob {
+  from_id: String,  # content_id
+  => to_id: String,    # blob_id
+  => format: String
+}
+
+# Deliverable contains section
+:create contains_section {
+  from_id: String,  # content_id
+  => to_id: String,    # section_id
+  => order: Int
+}
+
+# Section has parent section (hierarchy)
+:create parent_section {
+  from_id: String,  # child_section_id
+  => to_id: String,    # parent_section_id
+  => depth: Int
+}
+
+---
+
+## Indexes
+
+# Fast lookups
+::index create content:by_type { content_type }
+::index create content:by_created { created_at }
+::index create section:by_depth { depth }
+::index create created_content:by_agent { from_id }
+::index create has_content:by_task { from_id }
+
+---
+
+## Sample Queries
+
+# Q1: Get all contents for an agent
+?[content_id, title, type, created_at] :=
+  *created_content{ from_id: $agent_id, to_id: content_id, created_at },
+  *content{ id: content_id, title, content_type: type }
+
+:order created_at desc
+
+# Q2: Get all contents for a task (with agent info)
+?[content_id, title, agent_id, created_at] :=
+  *has_content{ from_id: $task_id, to_id: content_id },
+  *content{ id: content_id, title },
+  *created_content{ from_id: agent_id, to_id: content_id, created_at }
+
+:order created_at desc
+
+# Q3: Find contents by type
+?[content_id, title, agent_id, task_id] :=
+  *content{ id: content_id, title, content_type: $type },
+  *created_content{ from_id: agent_id, to_id: content_id },
+  *has_content{ from_id: task_id, to_id: content_id }
+
+# Q4: Get section hierarchy for content
+?[section_id, heading, depth, parent_id, order] :=
+  *contains_section{ from_id: $content_id, to_id: section_id, order },
+  *section{ id: section_id, heading, depth },
+  *parent_section{ from_id: section_id, to_id: parent_id }
+
+:order depth, order
+
+# Q5: Get top-level sections (no parent)
+?[section_id, heading, depth, order] :=
+  *contains_section{ from_id: $content_id, to_id: section_id, order },
+  *section{ id: section_id, heading, depth },
+  not *parent_section{ from_id: section_id }
+
+:order order
+
+# Q6: Find orphaned contents (no task link)
+?[content_id, title, agent_id] :=
+  *content{ id: content_id, title },
+  *created_content{ from_id: agent_id, to_id: content_id },
+  not *has_content{ to_id: content_id }
+
+# Q7: Get content with content reference
+?[content_id, title, blob_id, blob_path] :=
+  *content{ id: content_id, title, blob_id },
+  *blob{ id: blob_id, path: blob_path }
+
+# Q8: Search sections by heading text
+?[content_id, section_id, heading, depth] :=
+  *section{ id: section_id, heading, depth },
+  *contains_section{ from_id: content_id, to_id: section_id },
+  heading ~ $search_pattern
+
+# Q9: Count contents by type
+?[content_type, count] :=
+  *content{ content_type },
+  count = count(content_type)
+
+# Q10: Recent contents (last N)
+?[content_id, title, created_at] :=
+  *content{ id: content_id, title, created_at }
+
+:order created_at desc
+:limit $n
+
+---
+
+## Migration Queries
+
+# M1: List all existing files to migrate
+?[filename] :=
+  filename in ["ACTOR_POC_COMPLETION_REPORT.md", "BLOB_STORAGE_DESIGN.md", ...]
+
+# M2: Check for duplicate contents
+?[content_id, title, count] :=
+  *content{ id: content_id, title },
+  count = count(content_id)
+
+:having count > 1
+
+# M3: Validate blob references
+?[content_id, blob_id, exists] :=
+  *content{ id: content_id, blob_id },
+  *blob{ id: blob_id },
+  exists = true
+
+# M4: Find missing blob references
+?[content_id, blob_id] :=
+  *content{ id: content_id, blob_id },
+  not *blob{ id: blob_id }
+
+---
+
+## Validation Rules
+
+# V1: Every content must have blob reference
+!content_without_blob() :=
+  *content{ id: content_id, blob_id },
+  not *blob{ id: blob_id }
+
+# V2: Every content must have creator agent
+!content_without_agent() :=
+  *content{ id: content_id },
+  not *created_content{ to_id: content_id }
+
+# V3: Sections must belong to content
+!orphaned_section() :=
+  *section{ id: section_id },
+  not *contains_section{ to_id: section_id }
+
+# V4: Section parent must exist
+!invalid_parent_section() :=
+  *parent_section{ from_id: child_id, to_id: parent_id },
+  not *section{ id: parent_id }
+
+---
+
+## Materialized Views (Performance Optimization)
+
+# MV1: Deliverable summary
+::stored content_summary {
+  content_id: String,
+  => title: String,
+  => type: String,
+  => size: Int,
+  => created_at: String,
+  agent_id: String,
+  task_id: String?
+}
+
+?[content_id, title, type, size, created_at, agent_id, task_id] :=
+  *content{ id: content_id, title, content_type: type, size, created_at },
+  *created_content{ from_id: agent_id, to_id: content_id },
+  *has_content{ from_id: task_id, to_id: content_id }
+
+:replace content_summary { content_id, title, type, size, created_at, agent_id, task_id }
+
+# MV2: Section tree (flattened hierarchy)
+::stored section_tree {
+  content_id: String,
+  section_id: String,
+  => heading: String,
+  => depth: Int,
+  => path: [String],  # Ancestor headings
+  order: Int
+}
+
+# (Recursive query for path - implementation in CozoDB)
+
+---
+
+## Event Sourcing (Optional - Phase 3)
+
+# Track content lifecycle events
+:create content_event {
+  event_id: String,
+  => content_id: String,
+  => event_type: String,  # created, updated, deleted, exported
+  => timestamp: String,
+  => actor: String,  # agent_id or user_id
+  metadata: Json?
+}
+
+# Event queries
+?[content_id, event_type, timestamp, actor] :=
+  *content_event{ content_id, event_type, timestamp, actor }
+
+:order timestamp desc
+
+---
+
+## Notes
+
+# Schema Design Principles:
+# 1. Explicit relationships via edges (not embedded arrays)
+# 2. Actor model compliance (nodes are actors, edges are relationships)
+# 3. Queryable (rich Datalog queries)
+# 4. Hierarchical (section parent-child via parent_section edge)
+# 5. Versioned (optional event sourcing for audit trail)
+
+# Integration Points:
+# - BlobActor: Stores raw content (text/markdown)
+# - MarkdownGraph: Parses sections and builds hierarchy
+# - AgentActor: Creates contents via created_content edge
+# - TaskActor: Links contents via has_content edge
+
+# Performance:
+# - Indexes on frequently queried fields
+# - Materialized views for complex aggregations
+# - Lazy loading of blob content (not in content node)
+
+# Migration:
+# - Phase 1: Hybrid (filesystem + graph)
+# - Phase 2: Graph primary (blob storage directory)
+# - Phase 3: Pure graph (in-memory or CozoDB blobs)

@@ -34,7 +34,8 @@ export class GraphProjector extends Actor {
     }
 
     if (msg.type === "SET_VECTOR") {
-      this.vectors.set(msg.sender!, msg.payload.vector);
+      console.log(`[GraphProjector] Indexed vector for ${msg.payload.id}`);
+      this.vectors.set(msg.payload.id, msg.payload.vector);
     }
 
     if (msg.type === "QUERY") {
@@ -75,11 +76,15 @@ export class GraphProjector extends Actor {
   }
 
   private vectorSearch(queryVector: number[], limit: number) {
-    const scores: { id: ActorAddress; score: number }[] = [];
+    const scores: { id: ActorAddress; score: number; state?: any }[] = [];
     
     for (const [id, vector] of this.vectors.entries()) {
       const score = this.cosineSimilarity(queryVector, vector);
-      scores.push({ id, score });
+      scores.push({ 
+        id, 
+        score, 
+        state: this.nodes.get(id) 
+      });
     }
 
     return scores

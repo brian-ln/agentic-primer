@@ -1,7 +1,7 @@
 # Actor Worldview - Design Thinking Framework
 
 **Status:** Complete - V2.0 Consolidated
-**Date:** 2026-01-18
+**Date:** 2026-01-19
 **Purpose:** Actor model as design tool for system thinking, not implementation dogma
 
 ---
@@ -46,6 +46,9 @@ actor-worldview/
 ├── WORLDVIEW.md           # Consolidated philosophy (START HERE)
 ├── README.md              # This file (navigation guide)
 ├── INDEX.md               # Complete file index
+│
+├── seag/                  # SEAG MVP Implementation (Short Path)
+├── ap/                    # Formal Models & Specs for SEAG
 │
 ├── guides/                # How-to guides
 │   ├── ADDRESSING_CONVENTIONS.md
