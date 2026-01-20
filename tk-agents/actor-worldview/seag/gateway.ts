@@ -101,124 +101,255 @@ const REPL = `<!DOCTYPE html>
     </div>
 
     <script>
-      const scheme = (location.protocol === 'https:' ? 'wss:' : 'ws:');
-      const wsUrl = scheme + '//' + location.host + '/ws';
+      // --- Client-Side Actor Kernel ---
       
-      const log = document.getElementById('log');
-      const traceLog = document.getElementById('trace-log');
-      const input = document.getElementById('input');
-      const statusInd = document.getElementById('status');
-      const statusText = document.getElementById('status-text');
+      class Message {
+        constructor(type, payload, sender, target) {
+          this.type = type;
+          this.payload = payload;
+          this.sender = sender;
+          this.target = target;
+          this.traceId = null;
+        }
+      }
 
-      let ws;
-      let retryDelay = 1000;
-      const MAX_DELAY = 60000;
+      class ClientSystem {
+        constructor() {
+          this.actors = new Map();
+        }
 
-      function connect() {
-        ws = new WebSocket(wsUrl);
+        spawn(id, actorClass) {
+          const actor = new actorClass(id, this);
+          this.actors.set(id, actor);
+          actor.onStart();
+          return actor;
+        }
 
-        ws.onopen = () => {
-          statusInd.classList.add('connected');
-          statusText.textContent = "Connected";
-          statusText.style.color = "#4caf50";
-          append("System connected.", "thinking");
-          retryDelay = 1000; // Reset backoff on success
-        };
+        send(target, msg) {
+          // Local routing
+          if (this.actors.has(target)) {
+            const actor = this.actors.get(target);
+            setTimeout(() => actor.receive(msg), 0); // Async dispatch
+          } 
+          // Remote routing (default to NetworkActor for server)
+          else if (target.startsWith("seag://system/") || target.startsWith("seag://local/")) {
+             this.send("seag://client/network", { ...msg, target }); 
+          }
+          else {
+            console.warn("Dead Letter:", target, msg);
+          }
+        }
+      }
 
-        ws.onclose = () => {
-          statusInd.classList.remove('connected');
-          statusText.textContent = "Disconnected (Retrying in " + (retryDelay/1000) + "s...)";
-          statusText.style.color = "#f44336";
-          append("System disconnected.", "thinking");
+      class Actor {
+        constructor(id, system) {
+          this.id = id;
+          this.system = system;
+        }
+        onStart() {}
+        receive(msg) {}
+        send(target, payload, type="SIGNAL") {
+          this.system.send(target, { type, payload, sender: this.id });
+        }
+      }
+
+      // --- Concrete Actors ---
+
+      class REPLActor extends Actor {
+        onStart() {
+          this.log = document.getElementById('log');
+          this.traceLog = document.getElementById('trace-log');
+          this.input = document.getElementById('input');
           
-          setTimeout(() => {
-            retryDelay = Math.min(retryDelay * 2, MAX_DELAY);
-            connect();
-          }, retryDelay);
-        };
+          this.input.onkeydown = (ev) => {
+            if (ev.key === 'Enter') {
+              const text = this.input.value;
+              if (!text) return;
+              this.append("You: " + text, "");
+              
+              // Route to Inference Proxy
+              this.send("seag://client/inference", { text }, "PROMPT");
+              this.input.value = '';
+            }
+          };
+        }
 
-        ws.onmessage = (ev) => {
-          const msg = JSON.parse(ev.data);
-          
+        receive(msg) {
+          if (msg.type === "OUTPUT") {
+            this.append("Brain: " + msg.payload.content, "output");
+          }
           if (msg.type === "SIGNAL") {
-            // Check if it's a structured trace event
-            if (msg.payload.sender && msg.payload.target) {
-              appendTrace(msg.payload);
+             // Detect structured trace event
+             if (msg.payload.sender && msg.payload.target) {
+               this.appendTrace(msg.payload); 
+             } else {
+               const detail = msg.payload.detail || JSON.stringify(msg.payload);
+               this.append("Think: " + detail, "thinking");
+             }
+          }
+          if (msg.type === "STATUS_CHANGE") {
+            this.updateStatus(msg.payload.connected);
+          }
+        }
+
+        append(text, className) {
+          const div = document.createElement('div');
+          div.className = className;
+          div.textContent = text;
+          this.log.appendChild(div);
+          this.log.scrollTop = this.log.scrollHeight;
+        }
+        
+        appendTrace(event) {
+          // Re-use the structured rendering logic we built
+          const div = document.createElement('div');
+          div.className = "trace-item";
+          
+          // Handle string detail (legacy) vs structured object
+          if (typeof event.detail === 'string') {
+             // Fallback or parse string
+             div.textContent = event.detail; 
+          } else {
+             // It's the structured TraceEvent (passed as event)
+             // Wait, msg.payload is the TraceEvent? Yes.
+             // GatewayRelay passes msg.payload.
+             
+             // ... rendering logic from previous feature ...
+             const time = new Date(event.timestamp || Date.now()).toLocaleTimeString().split(' ')[0];
+             const timeSpan = document.createElement('span');
+             timeSpan.className = "time";
+             timeSpan.textContent = time;
+             div.appendChild(timeSpan);
+
+             const sSpan = document.createElement('span');
+             sSpan.className = "trace-sender";
+             sSpan.textContent = (event.sender || "?").replace('seag://system/', '').replace('seag://local/', ''); 
+             
+             const aSpan = document.createElement('span');
+             aSpan.className = "trace-arrow";
+             aSpan.textContent = "→";
+             
+             const tSpan = document.createElement('span');
+             tSpan.className = "trace-target";
+             tSpan.textContent = (event.target || "?").replace('seag://system/', '').replace('seag://local/', '');
+             
+             const tySpan = document.createElement('span');
+             tySpan.className = "trace-type";
+             tySpan.textContent = "[" + (event.messageType || "?") + "]";
+             
+             div.appendChild(sSpan);
+             div.appendChild(aSpan);
+             div.appendChild(tSpan);
+             div.appendChild(tySpan);
+          }
+          
+          this.traceLog.appendChild(div);
+          this.traceLog.scrollTop = this.traceLog.scrollHeight;
+        }
+
+        updateStatus(connected) {
+          const ind = document.getElementById('status');
+          const txt = document.getElementById('status-text');
+          if (connected) {
+            ind.classList.add('connected');
+            txt.textContent = "Connected";
+            txt.style.color = "#4caf50";
+            this.append("System connected.", "thinking");
+          } else {
+            ind.classList.remove('connected');
+            txt.textContent = "Disconnected";
+            txt.style.color = "#f44336";
+            this.append("System disconnected.", "thinking");
+          }
+        }
+      }
+
+      class NetworkActor extends Actor {
+        onStart() {
+          this.scheme = (location.protocol === 'https:' ? 'wss:' : 'ws:');
+          this.url = this.scheme + '//' + location.host + '/ws';
+          this.retryDelay = 1000;
+          this.connect();
+        }
+
+        connect() {
+          this.ws = new WebSocket(this.url);
+          this.ws.onopen = () => {
+            this.send("seag://client/repl", { connected: true }, "STATUS_CHANGE");
+            this.retryDelay = 1000;
+          };
+          this.ws.onclose = () => {
+            this.send("seag://client/repl", { connected: false }, "STATUS_CHANGE");
+            setTimeout(() => {
+              this.retryDelay = Math.min(this.retryDelay * 2, 60000);
+              this.connect();
+            }, this.retryDelay);
+          };
+          this.ws.onmessage = (ev) => {
+            try {
+              const data = JSON.parse(ev.data);
+              // Server messages usually go to REPL, but we could route them dynamically
+              // Server sends: { type, payload, sender }
+              // For now, forward everything to REPL
+              this.send("seag://client/repl", data.payload, data.type);
+            } catch(e) { console.error(e); }
+          };
+        }
+
+        receive(msg) {
+          // If we receive a message intended for remote, send it over WS
+          // In ClientSystem.send, we wrap the original msg in { ...msg, target }
+          // Or we just send the raw fields.
+          
+          // Currently msg is the internal client message.
+          // We want to send to server: { type: "INPUT", payload: { text } }
+          
+          if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            // Transform client PROMPT to server INPUT/THINK format?
+            // UserProxy expects: { type: "INPUT", payload: { text } }
+            
+            if (msg.type === "PROMPT") {
+               this.ws.send(JSON.stringify({ 
+                 type: "INPUT", 
+                 payload: { text: msg.payload.text } 
+               }));
+            }
+          } else {
+            // Notify sender of failure?
+            // Fallback logic could go here or in InferenceProxy
+          }
+        }
+      }
+
+      class InferenceProxy extends Actor {
+        receive(msg) {
+          if (msg.type === "PROMPT") {
+            const net = this.system.actors.get("seag://client/network");
+            if (net && net.ws && net.ws.readyState === WebSocket.OPEN) {
+              // Online: Route to Network
+              this.send("seag://client/network", msg.payload, "PROMPT");
             } else {
-              // Legacy/Normal signal
-              const detail = msg.payload.detail || JSON.stringify(msg.payload);
-              append("Think: " + detail, "thinking");
+              // Offline: Try Local
+              if (window.ai) {
+                this.send("seag://client/repl", { content: "(Local AI) Processing..." }, "OUTPUT");
+                // window.ai.createTextSession()... (Mock for now)
+                setTimeout(() => {
+                   this.send("seag://client/repl", { content: "(Local AI) I am a simple offline browser agent." }, "OUTPUT");
+                }, 500);
+              } else {
+                this.send("seag://client/repl", { content: "Error: Offline and no local AI." }, "OUTPUT");
+              }
             }
           }
-          
-          if (msg.type === "OUTPUT") {
-            append("Brain: " + msg.payload.content, "output");
-          }
-        };
-      }
-
-      // Initial connection
-      connect();
-
-      function append(text, className) {
-        const div = document.createElement('div');
-        div.className = className;
-        div.textContent = text;
-        log.appendChild(div);
-        log.scrollTop = log.scrollHeight;
-      }
-
-      function appendTrace(event) {
-        const div = document.createElement('div');
-        div.className = "trace-item";
-        
-        const time = new Date(event.timestamp).toLocaleTimeString().split(' ')[0];
-        
-        const timeSpan = document.createElement('span');
-        timeSpan.className = "time";
-        timeSpan.textContent = time;
-        div.appendChild(timeSpan);
-
-        const sSpan = document.createElement('span');
-        sSpan.className = "trace-sender";
-        sSpan.textContent = event.sender.replace('seag://system/', '').replace('seag://local/', ''); 
-        
-        const aSpan = document.createElement('span');
-        aSpan.className = "trace-arrow";
-        aSpan.textContent = "→";
-        
-        const tSpan = document.createElement('span');
-        tSpan.className = "trace-target";
-        tSpan.textContent = event.target.replace('seag://system/', '').replace('seag://local/', '');
-        
-        const tySpan = document.createElement('span');
-        tySpan.className = "trace-type";
-        tySpan.textContent = "[" + event.messageType + "]";
-        
-        div.appendChild(sSpan);
-        div.appendChild(aSpan);
-        div.appendChild(tSpan);
-        div.appendChild(tySpan);
-        
-        traceLog.appendChild(div);
-        traceLog.scrollTop = traceLog.scrollHeight;
-      }
-
-      input.onkeydown = (ev) => {
-        if (ev.key === 'Enter') {
-          const text = input.value;
-          if (!text) return;
-          
-          if (!ws || ws.readyState !== WebSocket.OPEN) {
-            append("Error: Not connected to server.", "output");
-            return;
-          }
-
-          append("You: " + text, "");
-          ws.send(JSON.stringify({ type: "INPUT", payload: { text } }));
-          input.value = '';
         }
-      };
+      }
+
+      // --- Boot ---
+      const system = new ClientSystem();
+      system.spawn("seag://client/repl", REPLActor);
+      system.spawn("seag://client/network", NetworkActor);
+      system.spawn("seag://client/inference", InferenceProxy);
+
     </script>
   </body>
 </html>
