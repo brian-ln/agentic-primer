@@ -66,9 +66,38 @@ export class BrainAgent extends Actor {
         return;
       }
 
+      if (input.startsWith("subscribe ")) {
+        const parts = input.split(" ");
+        const topic = parts[1];
+        const filter = parts.slice(2).join(" ");
+        this.send(topic, {
+          type: "SUBSCRIBE",
+          payload: { consumer_id: this.id, filter }
+        });
+        return;
+      }
+
+      if (input.startsWith("publish ")) {
+        const parts = input.split(" ");
+        const topic = parts[1];
+        const text = parts.slice(2).join(" ");
+        this.send(topic, {
+          type: "PUBLISH",
+          payload: { text }
+        });
+        return;
+      }
+
       this.send(msg.sender!, {
         type: "OUTPUT",
         payload: { content: "Unknown command: " + input }
+      });
+    }
+
+    if (msg.type === "NOTIFY") {
+      this.send("seag://local/user-proxy", {
+        type: "OUTPUT",
+        payload: { content: `🔔 Topic ${msg.sender}: ${msg.payload.text}` }
       });
     }
 

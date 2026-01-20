@@ -7,6 +7,7 @@ import { UserProxy } from "./user-proxy";
 import { BrainAgent } from "./brain-agent";
 import { GeminiInferenceActor } from "./inference-actor";
 import { GeminiEmbeddingActor } from "./embedding-actor";
+import { TopicNode, QueueNode } from "./messaging";
 import { Gateway } from "./gateway";
 
 async function bootstrap() {
@@ -21,6 +22,11 @@ async function bootstrap() {
   system.spawn("seag://system/file-io", FileEffectActor, "permanent");
   system.spawn("seag://system/inference", GeminiInferenceActor, "permanent");
   system.spawn("seag://system/embedder", GeminiEmbeddingActor, "permanent");
+  
+  // Messaging default hubs
+  system.spawn("seag://system/topic/main", TopicNode, "permanent");
+  system.spawn("seag://system/queue/main", QueueNode, "permanent");
+
   system.spawn("seag://local/user-proxy", UserProxy);
   system.spawn("seag://system/brain", BrainAgent);
   
