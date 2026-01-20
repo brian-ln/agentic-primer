@@ -19,6 +19,8 @@ These hooks automatically create and update tasks in `tasks.json` when backgroun
 
 | File | Purpose | Status |
 |------|---------|--------|
+| `session-start` | Display orientation on session startup | **ACTIVE** |
+| `post-compaction.sh` | Auto-mode agent scheduling after compaction | **PHASE 2** (informational) |
 | `pre-tool-use.sh` | Auto-create task when agent launches | Reference only |
 | `post-tool-use.sh` | Auto-update task when agent completes | Reference only |
 | `README.md` | This documentation | Current |
@@ -26,6 +28,140 @@ These hooks automatically create and update tasks in `tasks.json` when backgroun
 ---
 
 ## How They Work
+
+### Session-Start Hook
+
+**Trigger:** Session initialization (new conversation or `/clear`)
+**Status:** ACTIVE (automatically runs on session start)
+**Action:**
+1. Check if tasks.json exists in project root
+2. Run orientation script: `bun src/cli/orient.ts`
+3. Display formatted orientation summary
+4. Always exit 0 (graceful, never blocks session)
+
+**Output:**
+```
+📍 SESSION ORIENTATION
+────────────────────────────────────────────────────────────
+
+🚨 BLOCKERS (0)
+   None - all clear!
+
+⏭️  READY WORK (P0-P1: 5 tasks)
+   P0  task_55  Implement blob storage actor
+   ...
+
+🔄 IN PROGRESS (2 tasks)
+   task_50  Agent completion protocol (3h ago)
+   ...
+
+✅ COMPLETED RECENTLY (3 tasks)
+   Review tasks pending:
+   → task_review_23  Review: Graph query research (P1)
+   ...
+
+📊 PROJECT HEALTH
+   65 tasks total | 42 done (65%) | 8 active | 15 ready | 0 blocked
+
+💡 SUGGESTED ACTION:
+   Start task_55 (P0, Implement blob storage actor)
+
+────────────────────────────────────────────────────────────
+Type 'bun run orient' to refresh this view
+```
+
+**Error Handling:**
+- Gracefully skips if tasks.json missing (shows friendly message)
+- Logs errors but doesn't block session start
+- Always exits with code 0
+
+**Installation:**
+Hook is project-local (hooks/session-start). To enable globally:
+```bash
+mkdir -p ~/.claude/hooks
+cp hooks/session-start ~/.claude/hooks/
+chmod +x ~/.claude/hooks/session-start
+```
+
+### Post-Compaction Hook
+
+**Trigger:** After conversation compaction
+**Status:** PHASE 2 (informational only, no auto-launch)
+**Action:**
+1. Load auto-mode config from `~/.primer-config.json`
+2. Update last compaction timestamp
+3. Check auto-mode enabled/disabled status
+4. If disabled: Show message, skip scheduling
+5. If enabled: Continue to step 6
+6. Load `tasks.json` and count active agents
+7. Calculate available capacity (target: 10 - current)
+8. Query for P0-P1 tasks in `created` state with no blockers
+9. Display tasks that would be launched
+10. Show manual launch instructions
+
+**Output (Auto-Mode Enabled):**
+```
+================================================================================
+POST-COMPACTION HOOK TRIGGERED
+================================================================================
+
+Auto-mode: ENABLED
+Checking for work to schedule...
+
+Current agents: 3/10
+Available slots: 7
+
+Ready tasks found (P0-P1): 5
+
+Tasks ready for launch:
+  P0  task_55  Implement blob storage actor
+  P1  task_23  Review: Graph query research
+  ...
+
+NOTE: Auto-mode agent launching not yet implemented
+Manual launch: Use /bg <task-description> for each task above
+```
+
+**Output (Auto-Mode Disabled):**
+```
+================================================================================
+POST-COMPACTION HOOK TRIGGERED
+================================================================================
+
+Auto-mode: DISABLED
+
+Post-compaction agent scheduling is disabled.
+Enable with: bun src/cli/auto.ts on
+
+Manual options:
+  - List ready work: bun src/cli/task.ts ready
+  - Launch agent: /bg <task-description>
+```
+
+**Installation:**
+```bash
+# Copy to global hooks directory
+mkdir -p ~/.claude/hooks
+cp hooks/post-compaction.sh ~/.claude/hooks/
+chmod +x ~/.claude/hooks/post-compaction.sh
+```
+
+**Manual Testing:**
+```bash
+# Test hook directly
+bun src/hooks/post-compaction.ts
+
+# Test with auto-mode disabled
+bun src/cli/auto.ts off
+bun src/hooks/post-compaction.ts
+
+# Test with auto-mode enabled
+bun src/cli/auto.ts on
+bun src/hooks/post-compaction.ts
+```
+
+**Phase 3 Enhancement:**
+When full agent launch integration is ready, the hook will automatically launch agents to fill capacity using `/bg` or equivalent API.
 
 ### Pre-Tool-Use Hook
 
