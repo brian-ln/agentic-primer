@@ -3,9 +3,9 @@
  * These tie the Implementation (Code) back to the Design (Model).
  */
 
-export function Actor(modelName: string) {
-  return function <T extends { new (...args: any[]): {} }>(constructor: T) {
-    // Runtime metadata could be attached here if needed
+export function Actor(name: string) {
+  return (constructor: Function) => {
+    (constructor as any).modelName = name; // Statically assign for easy lookup
   };
 }
 

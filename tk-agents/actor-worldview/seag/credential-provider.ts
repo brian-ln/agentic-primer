@@ -41,7 +41,25 @@ export class CredentialProviderActor extends Actor {
   async receive(msg: Message) {
     if (msg.type === "GET_CREDENTIALS") {
       const { service_id } = msg.payload;
-      console.log(`[Credentials] Request for: ${service_id}`);
+      console.log(`[Credentials] Request for: ${service_id} from ${msg.sender}`);
+      
+      // Security: Validate CapabilityToken
+      if (!msg.capabilityToken) {
+        this.send(msg.sender!, { type: "ERROR", payload: { message: "Unauthorized: Missing capability token" } });
+        return;
+      }
+
+      try {
+        const decoded = JSON.parse(Buffer.from(msg.capabilityToken, 'base64').toString());
+        if (decoded.resource !== `seag://system/credentials/${service_id}` || decoded.action !== "GET" || decoded.expiresAt < this.system.clock.now()) {
+          throw new Error("Invalid capability");
+        }
+      } catch (e) {
+        console.error("[Credentials] Capability validation failed:", e);
+        this.send(msg.sender!, { type: "ERROR", payload: { message: "Unauthorized: Invalid capability token" } });
+        return;
+      }
+      
       const entry = this.secrets.get(service_id);
 
       if (!entry) {
