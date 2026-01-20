@@ -90,7 +90,7 @@ kill_pids_gracefully() {
         echo "No PIDs provided to kill."
         return 1
     fi
-    PIDS=("$@")
+    PIDS=($@)
     for pid in "${PIDS[@]}"; do
         if [ -z "$pid" ]; then continue; fi
         if ! ps -p "$pid" > /dev/null 2>&1; then
@@ -181,7 +181,15 @@ ensure_port_free() {
 
 start() {
     FORCE=false
-    if [ "$1" = "--force" ] || [ "$1" = "-f" ]; then FORCE=true; fi
+    WATCH=false
+    
+    # Simple argument parsing
+    for arg in "$@"; do
+        case $arg in
+            --force|-f) FORCE=true ;; 
+            --watch|-w) WATCH=true ;; 
+        esac
+    done
 
     # Handle stale or bad PID file
     if [ -f "$PID_FILE" ]; then
@@ -223,9 +231,16 @@ start() {
         fi
     fi
 
-    echo "--- Starting server in background (using nohup) ---"
+    WATCH_FLAG=""
+    if [ "$WATCH" = "true" ]; then
+        WATCH_FLAG="--watch"
+        echo "--- Starting server in background (WATCH MODE) ---"
+    else
+        echo "--- Starting server in background ---"
+    fi
+
     cd "$SEAG_DIR" || exit 1
-    nohup bun run main.ts > "$LOG_FILE" 2>&1 &
+    nohup bun $WATCH_FLAG run main.ts > "$LOG_FILE" 2>&1 &
     SERVER_PID=$!
     echo $SERVER_PID > "$PID_FILE"
     echo "Server started with PID $SERVER_PID. Logs at $LOG_FILE"
@@ -234,6 +249,12 @@ start() {
     sleep 5
 
     status # Run status check after starting
+}
+
+dev() {
+    echo "--- Starting SEAG in Interactive Dev Mode (Watch + Hot) ---"
+    cd "$SEAG_DIR" || exit 1
+    bun --watch run main.ts
 }
 
 stop() {
@@ -303,14 +324,20 @@ open_url() {
 
 case "$1" in
     start)
-        start "$2"
+        shift
+        start "$@"
+        ;;
+    dev)
+        dev
         ;;
     stop)
-        stop "$2"
+        shift
+        stop "$@"
         ;;
     restart)
+        shift
         stop --force
-        start --force
+        start "$@"
         ;;
     status)
         status
@@ -322,7 +349,7 @@ case "$1" in
         open_url
         ;;
     *)
-        echo "Usage: $0 {start|stop|restart|status|port|open} [--force]"
+        echo "Usage: $0 {start|stop|restart|status|port|open|dev} [--force] [--watch]"
         exit 1
         ;;
 esac
