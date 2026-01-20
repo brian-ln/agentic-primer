@@ -55,31 +55,7 @@ const REPL = `<!DOCTYPE html>
   <head>
     <meta charset="UTF-8">
     <title>SEAG REPL</title>
-    <style>
-      body { background: #121212; color: #00ff00; font-family: monospace; padding: 20px; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; margin: 0; }
-      h1 { margin: 0 0 10px 0; font-size: 1.2em; }
-      #container { display: flex; flex: 1; gap: 20px; min-height: 0; }
-      #main-panel { flex: 2; display: flex; flex-direction: column; }
-      #trace-panel { flex: 1; display: flex; flex-direction: column; border-left: 1px solid #333; padding-left: 20px; }
-      
-      .log-window { flex: 1; overflow-y: auto; border: 1px solid #333; padding: 10px; margin-bottom: 10px; background: #000; }
-      input { background: #111; color: #00ff00; border: 1px solid #333; width: 100%; padding: 10px; font-family: monospace; box-sizing: border-box; }
-      
-      .thinking { color: #888; font-style: italic; }
-      .output { color: #00ffff; }
-      .trace-item { font-size: 0.85em; color: #ccc; border-bottom: 1px solid #222; padding: 4px 8px; font-family: 'Consolas', 'Monaco', monospace; line-height: 1.4; }
-      .trace-item:nth-child(odd) { background: #0a0a0a; }
-      .trace-item .time { color: #666; margin-right: 8px; font-size: 0.9em; min-width: 50px; display: inline-block; }
-      .trace-sender { color: #4db6ac; font-weight: bold; }
-      .trace-arrow { color: #555; margin: 0 5px; }
-      .trace-target { color: #81c784; font-weight: bold; }
-      .trace-type { color: #ffb74d; margin-left: 8px; font-weight: bold; float: right; }
-      
-      .header-container { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-      .status-indicator { width: 10px; height: 10px; border-radius: 50%; background: #f44336; display: inline-block; box-shadow: 0 0 5px #f44336; transition: all 0.3s; }
-      .status-indicator.connected { background: #4caf50; box-shadow: 0 0 8px #4caf50; }
-      .status-text { font-size: 0.8em; color: #666; margin-left: 8px; }
-    </style>
+    <link rel="stylesheet" href="/style.css">
   </head>
   <body>
     <div class="header-container">
@@ -400,6 +376,11 @@ export class Gateway {
 
         if (url.pathname === '/') {
           return new Response(REPL, { headers: { 'Content-Type': 'text\/html' } });
+        }
+
+        if (url.pathname === '/style.css') {
+          const css = await Bun.file("public/style.css").text();
+          return new Response(css, { headers: { "Content-Type": "text\/css" } });
         }
 
         if (url.pathname === '/health') {
