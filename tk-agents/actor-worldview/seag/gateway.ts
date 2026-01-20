@@ -37,22 +37,41 @@ const REPL = `<!DOCTYPE html>
     <meta charset="UTF-8">
     <title>SEAG REPL</title>
     <style>
-      body { background: #121212; color: #00ff00; font-family: monospace; padding: 20px; }
-      #log { height: 400px; overflow-y: auto; border: 1px solid #333; padding: 10px; margin-bottom: 10px; }
-      input { background: #000; color: #00ff00; border: 1px solid #333; width: 100%; padding: 10px; font-family: monospace; }
+      body { background: #121212; color: #00ff00; font-family: monospace; padding: 20px; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; margin: 0; }
+      h1 { margin: 0 0 10px 0; font-size: 1.2em; }
+      #container { display: flex; flex: 1; gap: 20px; min-height: 0; }
+      #main-panel { flex: 2; display: flex; flex-direction: column; }
+      #trace-panel { flex: 1; display: flex; flex-direction: column; border-left: 1px solid #333; padding-left: 20px; }
+      
+      .log-window { flex: 1; overflow-y: auto; border: 1px solid #333; padding: 10px; margin-bottom: 10px; background: #000; }
+      input { background: #111; color: #00ff00; border: 1px solid #333; width: 100%; padding: 10px; font-family: monospace; box-sizing: border-box; }
+      
       .thinking { color: #888; font-style: italic; }
       .output { color: #00ffff; }
+      .trace-item { font-size: 0.8em; color: #555; border-bottom: 1px solid #222; padding: 2px 0; }
+      .trace-item .time { color: #444; margin-right: 5px; }
     </style>
   </head>
   <body>
     <h1>🌌 SEAG Actor Graph REPL</h1>
-    <div id="log"></div>
-    <input id="input" type="text" placeholder="Type a message to the graph" autofocus>
+    <div id="container">
+      <div id="main-panel">
+        <div id="log" class="log-window"></div>
+        <input id="input" type="text" placeholder="Type a message (e.g. 'trace ask ...')" autofocus>
+      </div>
+      <div id="trace-panel">
+        <div style="color: #666; margin-bottom: 5px;">Trace Log</div>
+        <div id="trace-log" class="log-window"></div>
+      </div>
+    </div>
+
     <script>
       const scheme = (location.protocol === 'https:' ? 'wss:' : 'ws:');
       const ws = new WebSocket(scheme + '//' + location.host + '/ws');
       const log = document.getElementById('log');
+      const traceLog = document.getElementById('trace-log');
       const input = document.getElementById('input');
+
       function append(text, className) {
         const div = document.createElement('div');
         div.className = className;
@@ -60,11 +79,40 @@ const REPL = `<!DOCTYPE html>
         log.appendChild(div);
         log.scrollTop = log.scrollHeight;
       }
+
+      function appendTrace(text) {
+        const div = document.createElement('div');
+        div.className = "trace-item";
+        
+        const time = new Date().toLocaleTimeString().split(' ')[0];
+        const span = document.createElement('span');
+        span.className = "time";
+        span.textContent = time;
+        
+        div.appendChild(span);
+        div.appendChild(document.createTextNode(text));
+        
+        traceLog.appendChild(div);
+        traceLog.scrollTop = traceLog.scrollHeight;
+      }
+
       ws.onmessage = (ev) => {
         const msg = JSON.parse(ev.data);
-        if (msg.type === "SIGNAL") append("Think: " + msg.payload.detail, "thinking");
-        if (msg.type === "OUTPUT") append("Brain: " + msg.payload.content, "output");
+        
+        if (msg.type === "SIGNAL") {
+          // Check if it's a trace signal
+          if (msg.payload.status === "trace") {
+            appendTrace(msg.payload.detail);
+          } else {
+            append("Think: " + msg.payload.detail, "thinking");
+          }
+        }
+        
+        if (msg.type === "OUTPUT") {
+          append("Brain: " + msg.payload.content, "output");
+        }
       };
+
       input.onkeydown = (ev) => {
         if (ev.key === 'Enter') {
           const text = input.value;
