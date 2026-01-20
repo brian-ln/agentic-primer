@@ -72,6 +72,17 @@
 
 
 
+(defprotocol Persistence
+  "Interface for actor state durability."
+  (on SNAPSHOT (target_uri)
+    (or
+      (one SNAPSHOT_OK (uri version))
+      (one ERROR (message))))
+  (on RESTORE (source_uri)
+    (or
+      (one RESTORE_OK (version))
+      (one ERROR (message)))))
+
 (defprotocol ModelRegistry
 
 

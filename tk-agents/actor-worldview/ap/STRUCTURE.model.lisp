@@ -43,12 +43,15 @@
 
     ;; Persistence Boundary: The "Spoon" manager
     (actor PersistenceManager
-      (state (registry map)) ; UUID -> URI
+      (implements Persistence)
+      (state (registry map)) ; address -> path
       (behavior
-        (on resolve (uuid)
-          (get registry uuid))
-        (on sync (uuid event)
-          (let ((uri (resolve uuid)))
-            (match uri
-              ((fs-path p) (send FileActor 'write p event))
-              ((web-url u) (send WebActor 'post u event)))))))))
+        (on snapshot (target_uri)
+          (send target_uri 'get) ; Pull current state
+          (on state (data) 
+            (call-file-effect 'write target_uri data)))
+        (on restore (source_uri)
+          (let ((data (call-file-effect 'read source_uri)))
+            (send source_uri 'patch data)))
+        (on commit-log (event)
+          (send 'seag://system/event-log 'append event)))))) ; Closing PersistenceManager, actors list, and system

@@ -8,6 +8,7 @@ import { BrainAgent } from "./brain-agent";
 import { GeminiInferenceActor } from "./inference-actor";
 import { GeminiEmbeddingActor } from "./embedding-actor";
 import { InferenceRouter } from "./inference-router";
+import { PersistenceManager } from "./persistence-manager";
 import { TopicNode, QueueNode } from "./messaging";
 import { Gateway } from "./gateway";
 
@@ -21,6 +22,7 @@ async function bootstrap() {
   system.spawn("seag://system/projector", GraphProjector, "permanent");
   system.spawn("seag://system/parser", DocumentParser, "permanent");
   system.spawn("seag://system/file-io", FileEffectActor, "permanent");
+  system.spawn("seag://system/persistence", PersistenceManager, "permanent");
   
   // Concrete providers
   system.spawn("seag://system/inference/gemini", GeminiInferenceActor, "permanent");
