@@ -74,10 +74,21 @@ const REPL = `<!DOCTYPE html>
       .trace-arrow { color: #555; margin: 0 5px; }
       .trace-target { color: #81c784; font-weight: bold; }
       .trace-type { color: #ffb74d; margin-left: 8px; font-weight: bold; float: right; }
+      
+      .header-container { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+      .status-indicator { width: 10px; height: 10px; border-radius: 50%; background: #f44336; display: inline-block; box-shadow: 0 0 5px #f44336; transition: all 0.3s; }
+      .status-indicator.connected { background: #4caf50; box-shadow: 0 0 8px #4caf50; }
+      .status-text { font-size: 0.8em; color: #666; margin-left: 8px; }
     </style>
   </head>
   <body>
-    <h1>🌌 SEAG Actor Graph REPL</h1>
+    <div class="header-container">
+      <h1>🌌 SEAG Actor Graph REPL</h1>
+      <div>
+        <span id="status" class="status-indicator"></span>
+        <span id="status-text" class="status-text">Disconnected</span>
+      </div>
+    </div>
     <div id="container">
       <div id="main-panel">
         <div id="log" class="log-window"></div>
@@ -95,6 +106,22 @@ const REPL = `<!DOCTYPE html>
       const log = document.getElementById('log');
       const traceLog = document.getElementById('trace-log');
       const input = document.getElementById('input');
+      const statusInd = document.getElementById('status');
+      const statusText = document.getElementById('status-text');
+
+      ws.onopen = () => {
+        statusInd.classList.add('connected');
+        statusText.textContent = "Connected";
+        statusText.style.color = "#4caf50";
+        append("System connected.", "thinking");
+      };
+
+      ws.onclose = () => {
+        statusInd.classList.remove('connected');
+        statusText.textContent = "Disconnected";
+        statusText.style.color = "#f44336";
+        append("System disconnected.", "thinking");
+      };
 
       function append(text, className) {
         const div = document.createElement('div');
