@@ -40,3 +40,4 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .autonomous/
 tasks.json
 events.jsonl
+\n# SEAG\nserver_*.log\nserver_*.pid\n
