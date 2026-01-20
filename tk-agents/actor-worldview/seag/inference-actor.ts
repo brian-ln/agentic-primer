@@ -47,7 +47,7 @@ export class GeminiInferenceActor extends Actor {
   }
 
   @Handler("HANDLE_PROMPT")
-  private async handlePrompt(msg: Message) {
+  public async handlePrompt(msg: Message) {
     if (!this.credential) {
       this.send(msg.sender!, { type: "ERROR", payload: { message: "No credentials loaded" } });
       return;

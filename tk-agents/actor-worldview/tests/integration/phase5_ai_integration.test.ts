@@ -3,6 +3,7 @@ import { System, Actor, Message } from "../../seag/kernel";
 import { GeminiInferenceActor } from "../../seag/inference-actor";
 import { GeminiEmbeddingActor } from "../../seag/embedding-actor";
 import { GraphProjector } from "../../seag/graph-projector";
+import { CredentialProviderActor } from "../../seag/credential-provider";
 
 /**
  * PHASE 5.1 HARNESS: Semantic Discovery (AI Integration)
@@ -59,15 +60,17 @@ describe("SEAG Phase 5: Semantic Discovery", () => {
     expect(results[0].score).toBeGreaterThan(0.9);
   });
 
-  test("Objective 5.1.2: Inference Actor Protocol (REAL API)", async () => {
-    const system = new System();
-    console.log("VERTEX MODE:", process.env.GOOGLE_GENAI_USE_VERTEXAI);
-    console.log("PROJECT:", process.env.GOOGLE_CLOUD_PROJECT);
-    
-    system.spawn("seag://system/inference", GeminiInferenceActor);
-    await new Promise(resolve => setTimeout(resolve, 50)); // Wait for onStart
-
-    let response: string | null = null;
+    test("Objective 5.1.2: Inference Actor Protocol (REAL API)", async () => {
+      const system = new System();
+      console.log("VERTEX MODE:", process.env.GOOGLE_GENAI_USE_VERTEXAI);
+      console.log("PROJECT:", process.env.GOOGLE_CLOUD_PROJECT);
+  
+      system.spawn("seag://system/credentials", CredentialProviderActor);
+      await new Promise(resolve => setTimeout(resolve, 50)); // Allow it to start
+  
+      system.spawn("seag://system/inference", GeminiInferenceActor);
+      await new Promise(resolve => setTimeout(resolve, 50)); // Wait for onStart
+      let response: string | null = null;
     class MockUser extends Actor {
       async receive(msg: Message) {
         if (msg.type === "RESPONSE") response = msg.payload.text;
