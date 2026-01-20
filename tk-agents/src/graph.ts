@@ -3,6 +3,7 @@
 import { System } from "./actors/index.ts";
 import type { Address, Message as ActorMessage, Response, System as SystemType } from "./actors/index.ts";
 import type { Edge, EdgeType, Message, NodeProperties } from "./types";
+import type { EventLog } from "./persistence/event-log.ts";
 
 /**
  * Graph - manages nodes (actors) and edges with both string IDs and Addresses
@@ -19,9 +20,11 @@ export class Graph {
   private nodeProperties: Map<string, NodeProperties> = new Map(); // Cache for properties
   private edges: Map<string, Edge> = new Map();
   private edgeCounter = 0;
+  public eventLog?: EventLog;
 
-  constructor() {
+  constructor(eventLog?: EventLog) {
     this.system = System();
+    this.eventLog = eventLog;
   }
 
   /**
@@ -211,6 +214,3 @@ export class Graph {
     this.edgeCounter = counter;
   }
 }
-
-// Singleton for convenience (can also instantiate directly)
-export const graph = new Graph();

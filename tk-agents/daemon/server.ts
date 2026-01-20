@@ -35,8 +35,8 @@ let network: NetworkSetup;
 /**
  * Load Graph from snapshot file
  */
-function loadGraph(filePath: string): Graph {
-  const graph = new Graph();
+function loadGraph(filePath: string, eventLog?: EventLog): Graph {
+  const graph = new Graph(eventLog);
 
   if (!existsSync(filePath)) {
     console.log(`No snapshot found at ${filePath}, starting with empty graph`);
@@ -71,10 +71,10 @@ function loadGraph(filePath: string): Graph {
 
         // Get the newly created task ID (last one in graph)
         const allIds = graph.getNodeIds();
-        const newId = allIds[allIds.length - 1];
+        const newId = allIds.length > 0 ? allIds[allIds.length - 1] : undefined;
 
         // If the IDs don't match, we need to fix this
-        if (newId !== originalId) {
+        if (newId && newId !== originalId) {
           // Get the node's address and properties
           const address = (graph as any).nodes.get(newId);
           const props = graph.getNodeProperties(newId);
@@ -133,32 +133,82 @@ async function replayEvents(graph: Graph, eventLog: EventLog, coordinator: DualW
   // For now, since we don't store "last replayed event" in snapshot, we replay everything
   // Graph.registerNode and coordinator handles idempotency (usually)
   
-  eventLog.replay(async (event) => {
+  await eventLog.replay(async (event) => {
     count++;
     try {
       switch (event.type) {
         case "task_created": {
           const data = event.data as any;
-          // Use coordinator to ensure CozoDB also stays in sync
-          await coordinator.createTask({
+          const { TaskActor } = require("../src/task.ts");
+          
+          // PHASE 1: Restore to Graph (Silent)
+          const address = TaskActor({
             ...data,
-            // Pass explicit ID if we want to preserve history exactly
-            // But createTask generates its own. 
-            // In a mature system, we'd use the event.nodeId.
+            id: event.nodeId,
+            graph
+          });
+          graph.registerNode(event.nodeId, address, {
+            ...data,
+            id: event.nodeId,
+            type: "task",
+            createdAt: new Date(event.timestamp)
+          });
+
+          // PHASE 2: Restore to CozoDB (Silent)
+          await coordinator.getCozoDB().run(
+            `?[id, type, status, priority, title] <- [[$id, $type, $status, $priority, $title]]
+             :put work {id, type, status, priority, title}`,
+            {
+              id: event.nodeId,
+              type: "task",
+              status: data.state,
+              priority: data.priority ?? null,
+              title: data.goal
+            }
+          );
+          break;
+        }
+        case "channel_created": {
+          const data = event.data as any;
+          const actor = { send: async () => ({ success: true, data: {} }) };
+          const address = graph.getSystem().register(actor);
+          graph.registerNode(event.nodeId, address, {
+            ...data,
+            id: event.nodeId,
+            type: "channel"
+          });
+          break;
+        }
+        case "signal_captured": {
+          const data = event.data as any;
+          const actor = { send: async () => ({ success: true, data: {} }) };
+          const address = graph.getSystem().register(actor);
+          graph.registerNode(event.nodeId, address, {
+            ...data,
+            id: event.nodeId,
+            type: "signal"
           });
           break;
         }
         case "task_start":
         case "task_complete":
         case "task_block": {
-          const action = event.type.split("_")[1] as any;
-          await coordinator.updateTask(event.nodeId, action, event.data as any);
+          const action = event.type.split("_")[1];
+          const nodeProps = graph.getNodeProperties(event.nodeId) as any;
+          if (nodeProps) {
+             const newState = action === "start" ? "active" : action === "complete" ? "completed" : "blocked";
+             nodeProps.state = newState;
+             
+             await coordinator.getCozoDB().run(
+               `?[id, status] <- [[$id, $status]] :put work {id, status}`,
+               { id: event.nodeId, status: newState }
+             );
+          }
           break;
         }
-        // ... handle other event types ...
       }
     } catch (e) {
-      // Ignore replay errors (idempotency issues, etc)
+      // Ignore replay errors
     }
   });
   
@@ -186,21 +236,10 @@ function saveGraph(graph: Graph, filePath: string): void {
 }
 
 /**
- * Initialize EventLog and emit startup event
+ * Initialize EventLog
  */
 function initEventLog(filePath: string): EventLog {
   const log = new EventLog(filePath);
-
-  log.append({
-    timestamp: new Date().toISOString(),
-    type: "daemon_started",
-    nodeId: "daemon",
-    data: {
-      pid: process.pid,
-      config: config.network,
-    },
-  });
-
   console.log(`EventLog initialized at ${filePath}`);
   return log;
 }
@@ -397,10 +436,21 @@ async function main() {
   // REPLAY LOG: Bring graph up to date from EventLog
   await replayEvents(graph, eventLog, coordinator);
 
+  // LOG STARTUP (After replay to avoid loop)
+  eventLog.append({
+    timestamp: new Date().toISOString(),
+    type: "daemon_started",
+    nodeId: "daemon",
+    data: {
+      pid: process.pid,
+      config: config.network,
+    },
+  });
+
   // Import API routes
   const { createRoutes } = await import("./api/routes.ts");
   // Pass graph, eventLog, and coordinator to routes
-  const routes = createRoutes(() => graph, eventLog, coordinator, wsManager);
+  const routes = await createRoutes(() => graph, eventLog, coordinator, wsManager);
 
   // Setup file watcher for snapshot
   if (!existsSync(snapshotPath)) {

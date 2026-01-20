@@ -38,7 +38,7 @@ export class HttpTransport implements Transport {
 
       // Wait for health check to pass
       let ready = false;
-      const timeout = 5000;
+      const timeout = 30000;
       const start = Date.now();
 
       while (Date.now() - start < timeout) {
@@ -58,7 +58,7 @@ export class HttpTransport implements Transport {
       }
 
       if (!ready) {
-        throw new Error("Daemon auto-start timed out (5s). Check daemon logs.");
+        throw new Error("Daemon auto-start timed out (30s). Check daemon logs.");
       }
       console.error("Daemon ready.");
     }

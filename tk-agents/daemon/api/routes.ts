@@ -42,12 +42,12 @@ function errorResponse(message: string, status = 500): Response {
  * Create all API routes
  * Note: graph is passed as a getter function to support hot-reloading
  */
-export function createRoutes(
+export async function createRoutes(
   getGraph: () => Graph,
   eventLog: EventLog,
   coordinator: DualWriteCoordinator,
   wsManager: any
-): Route[] {
+): Promise<Route[]> {
   // Helper to get current graph (supports hot-reload)
   const graph = () => getGraph();
 
@@ -56,6 +56,12 @@ export function createRoutes(
 
   // Initialize Signals Supervisor
   const signalsSupervisor = createSignalsSupervisor(graph());
+
+  const { createQualityFilter } = await import("../../src/signals/quality-filter.ts");
+  const qualityFilter = createQualityFilter(graph());
+
+  const { createChannelMonitor } = await import("../../src/signals/channel-monitor.ts");
+  const channelMonitor = createChannelMonitor(graph());
 
   return [
     // Generic Actor Message Gateway
@@ -97,6 +103,21 @@ export function createRoutes(
             }
             
             return errorResponse(`Unknown message type for primer.knowledge: ${message.type}`, 400);
+          }
+
+          if (target === "primer.signals.youtube") {
+            const result = await signalsSupervisor.send(message);
+            return jsonResponse(result);
+          }
+
+          if (target === "primer.signals.youtube.quality-filter") {
+            const result = await qualityFilter.send(message);
+            return jsonResponse(result);
+          }
+
+          if (target === "primer.signals.youtube.channel-monitor") {
+            const result = await channelMonitor.send(message);
+            return jsonResponse(result);
           }
 
           if (target === "primer.tasks") {
@@ -154,6 +175,13 @@ export function createRoutes(
               case "delete_node": {
                 const success = graph().removeNode(message.payload.id);
                 return jsonResponse({ success, data: { deleted: success } });
+              }
+              case "update_node": {
+                const { id, properties } = message.payload;
+                const nodeProps = graph().getNodeProperties(id);
+                if (!nodeProps) return errorResponse("Node not found", 404);
+                Object.assign(nodeProps, properties);
+                return jsonResponse({ success: true, data: { id, updated: true } });
               }
               case "create_edge": {
                 const { from, to, type, properties } = message.payload;
@@ -750,14 +778,14 @@ export function createRoutes(
     {
       method: "GET",
       path: "/api/timeline",
-      handler: (req) => {
+      handler: async (req) => {
         const url = new URL(req.url);
         const eventType = url.searchParams.get("type");
         const limit = parseInt(url.searchParams.get("limit") || "100");
 
         let events = eventType
-          ? eventLog.getEventsByType(eventType)
-          : eventLog.getAllEvents();
+          ? await eventLog.getEventsByType(eventType)
+          : await eventLog.getAllEvents();
 
         // Reverse chronological order
         events = events.reverse();

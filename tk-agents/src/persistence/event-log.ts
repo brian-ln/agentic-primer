@@ -100,7 +100,7 @@ export class EventLog {
    *
    * @param handler Function called for each event
    */
-  replay(handler: (event: Event) => void): void {
+  async replay(handler: (event: Event) => void | Promise<void>): Promise<void> {
     if (!existsSync(this.filePath)) {
       return; // No file, no events
     }
@@ -115,7 +115,7 @@ export class EventLog {
 
       try {
         const event = JSON.parse(line) as Event;
-        handler(event);
+        await handler(event);
       } catch (error) {
         console.error(`Failed to parse event line: ${line}`, error);
         // Continue processing other events
@@ -128,9 +128,9 @@ export class EventLog {
    *
    * @returns Array of all events
    */
-  getAllEvents(): Event[] {
+  async getAllEvents(): Promise<Event[]> {
     const events: Event[] = [];
-    this.replay((event) => events.push(event));
+    await this.replay((event) => { events.push(event); });
     return events;
   }
 
@@ -140,9 +140,9 @@ export class EventLog {
    * @param eventType Event type to filter by
    * @returns Array of matching events
    */
-  getEventsByType(eventType: string): Event[] {
+  async getEventsByType(eventType: string): Promise<Event[]> {
     const events: Event[] = [];
-    this.replay((event) => {
+    await this.replay((event) => {
       if (event.type === eventType) {
         events.push(event);
       }
@@ -156,9 +156,9 @@ export class EventLog {
    * @param nodeId Node ID to filter by
    * @returns Array of matching events
    */
-  getEventsByNode(nodeId: string): Event[] {
+  async getEventsByNode(nodeId: string): Promise<Event[]> {
     const events: Event[] = [];
-    this.replay((event) => {
+    await this.replay((event) => {
       if (event.nodeId === nodeId) {
         events.push(event);
       }

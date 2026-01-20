@@ -100,13 +100,16 @@ async function main() {
       const depends = getArg("--depends")?.split(",");
 
       try {
-        // Create task
+        // Create task with default success criteria if none provided
         const response = await client.send(TARGET_COLLECTION, "create", {
           goal,
           labels,
           priority,
           parentTaskId: parent,
-          desiredDeliverables: deliverables,
+          desiredDeliverables: deliverables || ["Task completion"],
+          objectiveSuccessCriteria: [
+            { criterion: "Task marked complete", measure: "Manual completion", threshold: true }
+          ]
         });
 
         if (!response.success) {
@@ -168,9 +171,26 @@ async function main() {
       }
 
       try {
-        const response = await client.send(TARGET_COLLECTION, "update", payload);
+        let response = await client.send(TARGET_COLLECTION, "update", payload);
         
-        if (!response.success) throw new Error(response.error);
+        if (!response.success) {
+          // If it failed due to missing criteria, attempt a repair update
+          if (response.error?.includes("objectiveSuccessCriteria")) {
+             console.error("Repairing task criteria...");
+             await client.send(TARGET_GRAPH, "update_node", {
+               id,
+               properties: {
+                 objectiveSuccessCriteria: [
+                   { criterion: "Task marked complete", measure: "Manual", threshold: true }
+                 ]
+               }
+             });
+             // Retry original update
+             response = await client.send(TARGET_COLLECTION, "update", payload);
+          }
+          
+          if (!response.success) throw new Error(response.error);
+        }
 
         if (jsonMode) {
           jsonOutput(true, response.data);

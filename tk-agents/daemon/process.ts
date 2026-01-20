@@ -156,7 +156,7 @@ export function stopDaemon(): { success: boolean; error?: string } {
 
     // Wait briefly for process to exit
     let attempts = 0;
-    const maxAttempts = 10;
+    const maxAttempts = 150; // 15 seconds total
 
     while (attempts < maxAttempts) {
       if (!isProcessRunning(status.pid)) {
