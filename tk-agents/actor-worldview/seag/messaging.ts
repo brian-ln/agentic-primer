@@ -87,7 +87,7 @@ export class QueueNode extends Actor {
     }
 
     if (msg.type === "CHECK_TIMEOUTS") {
-      const now = Date.now();
+      const now = this.system.clock.now();
       for (const [id, entry] of this.pending.entries()) {
         if (now > entry.expiresAt) {
           console.warn(`[Queue] Lease expired for task ${id}. Re-enqueuing.`);
@@ -120,7 +120,7 @@ export class QueueNode extends Actor {
       
       this.pending.set(work.id!, { 
         worker, 
-        expiresAt: Date.now() + this.leaseDuration, 
+        expiresAt: this.system.clock.now() + this.leaseDuration, 
         msg: work 
       });
       

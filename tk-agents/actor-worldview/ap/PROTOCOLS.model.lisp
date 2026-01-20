@@ -45,8 +45,49 @@
       (one ERROR (message)))))
 
 (defprotocol Embedding
+
   "Interface for Vector Embedding models."
+
   (on EMBED (text)
+
     (or
+
       (one VECTOR (floats))
+
       (one ERROR (message)))))
+
+
+
+(defprotocol PubSub
+
+  "Interface for Topic-based message broadcasting."
+
+  (on SUBSCRIBE (consumer_id filter)
+
+    (one SUBSCRIBE_OK ()))
+
+  (on PUBLISH (text)
+
+    (any NOTIFY (text))))
+
+
+
+(defprotocol WorkQueue
+
+  "Interface for reliable work distribution."
+
+  (on ENQUEUE (task)
+
+    (one ENQUEUE_OK (msg_id)))
+
+  (on REGISTER_WORKER (worker_id)
+
+    (one REGISTER_OK ()))
+
+  (on ACK (msg_id) (one ACK_OK ()))
+
+  (on NACK (msg_id) (one NACK_OK ()))
+
+  (on CHECK_TIMEOUTS ()
+
+    (any NACK (msg_id))))

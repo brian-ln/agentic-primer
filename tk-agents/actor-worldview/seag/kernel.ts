@@ -138,6 +138,14 @@ class JSONSerializer implements Serializer {
   }
 }
 
+export interface Clock {
+  now(): number;
+}
+
+export class SystemClock implements Clock {
+  now() { return Date.now(); }
+}
+
 @ActorModel("Kernel")
 export class System {
   private actors: Map<ActorAddress, Actor> = new Map();
@@ -148,6 +156,7 @@ export class System {
   private serializer: Serializer = new JSONSerializer();
   private supervisorAddress: ActorAddress | null = null;
   private eventLogAddress: ActorAddress | null = null;
+  public clock: Clock = new SystemClock();
 
   constructor(serializer?: Serializer) {
     if (serializer) this.serializer = serializer;
