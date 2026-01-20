@@ -108,6 +108,41 @@ export class BrainAgent extends Actor {
         return;
       }
 
+      if (input.startsWith("help")) {
+        const args = input.split(" ");
+        if (args.length > 1) {
+          const query = args.slice(1).join(" ");
+          this.send("seag://system/inference", {
+            type: "PROMPT",
+            payload: { text: query }
+          });
+          return;
+        }
+
+        const helpText = [
+          "Available Commands:",
+          "- mount <path>: Load a file into the graph",
+          "- watch <path>: Watch a file for changes",
+          "- explore <nodeId>: Query reachable nodes",
+          "- get <nodeId>: Get actor state",
+          "- set <nodeId> <value>: Update actor state",
+          "- ask <question>: Ask the AI",
+          "- search <text>: Semantic search",
+          "- embed <nodeId>: Generate embeddings",
+          "- subscribe <topic> <filter>: Subscribe to a topic",
+          "- publish <topic> <message>: Publish to a topic",
+          "- enqueue <queue> <task>: Add task to queue",
+          "- register-worker <queue>: Register as worker",
+          "- help [query]: Show this message or ask for help"
+        ].join("\n");
+        
+        this.send(msg.sender!, {
+          type: "OUTPUT",
+          payload: { content: helpText }
+        });
+        return;
+      }
+
       this.send(msg.sender!, {
         type: "OUTPUT",
         payload: { content: "Unknown command: " + input }

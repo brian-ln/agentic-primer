@@ -30,6 +30,8 @@
             (('watch path) (send self 'handle-watch path))
             (('get addr) (send self 'handle-get addr))
             (('set addr val) (send self 'handle-set addr val))
+            (('help) (send self 'handle-help))
+            (('help query...) (send InferenceAgent 'prompt {text: query}))
             (_ (send self 'handle-unknown input))))
         
         (on handle-mount (path)

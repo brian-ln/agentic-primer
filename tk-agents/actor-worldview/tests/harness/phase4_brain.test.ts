@@ -111,7 +111,61 @@ describe("SEAG Phase 4.2: The Brain Agent", () => {
     });
 
     await new Promise(resolve => setTimeout(resolve, 50));
-    expect(lastOutput).toContain('"updated"');
+    expect(lastOutput).toContain('Updated');
+  });
+
+  test("Objective 4.2.3: Help Command", async () => {
+    const system = new System();
+    system.spawn("seag://system/brain", BrainAgent);
+
+    let lastOutput: string | null = null;
+    class User extends Actor {
+      async receive(msg: Message) {
+        if (msg.type === "OUTPUT") lastOutput = msg.payload.content;
+      }
+    }
+    system.spawn("seag://local/user-proxy", User);
+
+    system.send("seag://system/brain", {
+      type: "THINK",
+      sender: "seag://local/user-proxy",
+      payload: { input: "help" }
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(lastOutput).toContain("Available Commands:");
+    expect(lastOutput).toContain("- mount <path>");
+    expect(lastOutput).toContain("- help [query]: Show this message or ask for help");
+  });
+
+  test("Objective 4.2.4: Help Query", async () => {
+    const system = new System();
+    system.spawn("seag://system/brain", BrainAgent);
+
+    let receivedPrompt: string | null = null;
+    class MockInference extends Actor {
+      async receive(msg: Message) {
+        if (msg.type === "PROMPT") {
+          receivedPrompt = msg.payload.text;
+          this.send(msg.sender!, { type: "RESPONSE", payload: { text: "I can help with that." } });
+        }
+      }
+    }
+    system.spawn("seag://system/inference", MockInference);
+
+    class User extends Actor {
+      async receive(msg: Message) {}
+    }
+    system.spawn("seag://local/user-proxy", User);
+
+    system.send("seag://system/brain", {
+      type: "THINK",
+      sender: "seag://local/user-proxy",
+      payload: { input: "help how do I mount a file?" }
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(receivedPrompt).toBe("how do I mount a file?");
   });
 
 });

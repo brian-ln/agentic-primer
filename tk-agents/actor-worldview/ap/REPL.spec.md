@@ -22,6 +22,7 @@ The BrainAgent implements an intent-parsing layer for the following commands:
 - **`explore <address>`**: Performs a graph query (via `GraphProjector`) to discover reachable nodes.
 - **`get <address>`**: Retrieves the current state of a specific actor.
 - **`set <address> <value>`**: Sends a `PATCH` message to a specific fragment actor, triggering back-propagation to disk.
+- **`help [query]`**: Lists available commands. If a query is provided, asks the Inference Agent for assistance.
 
 ## 4. The Short Path Implementation (Bun + TS)
 1. **The Hub:** A `Bun.serve()` WebSocket server that acts as the `Gateway Actor`.
