@@ -48,8 +48,13 @@ const REPL = `<!DOCTYPE html>
       
       .thinking { color: #888; font-style: italic; }
       .output { color: #00ffff; }
-      .trace-item { font-size: 0.8em; color: #555; border-bottom: 1px solid #222; padding: 2px 0; }
-      .trace-item .time { color: #444; margin-right: 5px; }
+      .trace-item { font-size: 0.85em; color: #ccc; border-bottom: 1px solid #222; padding: 4px 8px; font-family: 'Consolas', 'Monaco', monospace; line-height: 1.4; }
+      .trace-item:nth-child(odd) { background: #0a0a0a; }
+      .trace-item .time { color: #666; margin-right: 8px; font-size: 0.9em; min-width: 50px; display: inline-block; }
+      .trace-sender { color: #4db6ac; font-weight: bold; }
+      .trace-arrow { color: #555; margin: 0 5px; }
+      .trace-target { color: #81c784; font-weight: bold; }
+      .trace-type { color: #ffb74d; margin-left: 8px; font-weight: bold; float: right; }
     </style>
   </head>
   <body>
@@ -60,7 +65,7 @@ const REPL = `<!DOCTYPE html>
         <input id="input" type="text" placeholder="Type a message (e.g. 'trace ask ...')" autofocus>
       </div>
       <div id="trace-panel">
-        <div style="color: #666; margin-bottom: 5px;">Trace Log</div>
+        <div style="color: #888; margin-bottom: 5px; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px;">Trace Log</div>
         <div id="trace-log" class="log-window"></div>
       </div>
     </div>
@@ -84,13 +89,46 @@ const REPL = `<!DOCTYPE html>
         const div = document.createElement('div');
         div.className = "trace-item";
         
+        // Parse format: "SENDER -> TARGET [TYPE]"
         const time = new Date().toLocaleTimeString().split(' ')[0];
-        const span = document.createElement('span');
-        span.className = "time";
-        span.textContent = time;
         
-        div.appendChild(span);
-        div.appendChild(document.createTextNode(text));
+        // Regex to parse the trace string
+        // Format: "SENDER -> TARGET [TYPE]"
+        const match = text.trim().match(/(.*?) -> (.*?) \[(.*?)\]/);
+        
+        const timeSpan = document.createElement('span');
+        timeSpan.className = "time";
+        timeSpan.textContent = time;
+        div.appendChild(timeSpan);
+
+        if (match) {
+          const [_, sender, target, type] = match;
+          
+          const sSpan = document.createElement('span');
+          sSpan.className = "trace-sender";
+          sSpan.textContent = sender.replace('seag://system/', '').replace('seag://local/', ''); 
+          
+          const aSpan = document.createElement('span');
+          aSpan.className = "trace-arrow";
+          aSpan.textContent = "→";
+          
+          const tSpan = document.createElement('span');
+          tSpan.className = "trace-target";
+          tSpan.textContent = target.replace('seag://system/', '').replace('seag://local/', '');
+          
+          const tySpan = document.createElement('span');
+          tySpan.className = "trace-type";
+          tySpan.textContent = type;
+          
+          div.appendChild(sSpan);
+          div.appendChild(aSpan);
+          div.appendChild(tSpan);
+          div.appendChild(tySpan);
+        } else {
+          // Fallback for non-matching strings
+          div.appendChild(document.createTextNode(text));
+          console.warn("Trace parse failed for:", text);
+        }
         
         traceLog.appendChild(div);
         traceLog.scrollTop = traceLog.scrollHeight;
