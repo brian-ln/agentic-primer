@@ -1,0 +1,30 @@
+SEAG Bootstrapping at 2026-01-20T15:17:53.318Z
+[Router] Registered gemini-2.0-flash-exp -> seag://system/inference/vertex
+[System] Dead Letter: undefined (Type: REGISTER_OK, Sender: seag://system/inference)
+Gateway started on 3000
+SEAG MVP is Online: http://localhost:3000
+[RootSupervisor] Started
+[Credentials] Starting...
+[Credentials] Registered google-ai-studio API key.
+[Credentials] Registered google-vertex-ai token generator.
+[Credentials] Request for: google-vertex-ai
+[Router] Registered vertex:gemini-2.0-flash-exp -> seag://system/inference/vertex
+[System] Dead Letter: undefined (Type: REGISTER_OK, Sender: seag://system/inference)
+[Router] Registered models/gemini-2.0-flash-exp -> seag://system/inference/studio
+[System] Dead Letter: undefined (Type: REGISTER_OK, Sender: seag://system/inference)
+[Router] Registered studio:gemini-2.0-flash-exp -> seag://system/inference/studio
+[System] Dead Letter: undefined (Type: REGISTER_OK, Sender: seag://system/inference)
+[Credentials] Request for: google-ai-studio
+[Credentials] Request for: google-vertex-ai
+[GeminiEmbedding] Credentials received. Processing 0 pending embeds.
+[UserProxy] Received: ask Are you online?
+[BrainAgent] Thinking about: ask Are you online?
+[VertexInference] Received PROMPT from seag://system/brain: Are you online?
+[VertexInference] Calling Vertex API: https://us-central1-aiplatform.googleapis.com/v1/projects/gen-lang-client-0778589105/locations/us-central1/publishers/google/models/gemini-2.0-flash-exp:generateContent
+[System] Dead Letter: seag://system/kernel (Type: ACK_APPEND, Sender: seag://system/event-log)
+[VertexInference] API Response status: 200
+[VertexInference] AI Reply: I am an AI and don't have the concept of being "on...
+[BrainAgent] Received AI response: I am an AI and don't have the concept of being "online" in the same way a human does. I am running on Google's servers and am ready to respond to your prompts. So, in that sense, yes, I am available and ready to assist you.
+
+[UserProxy] Replying: Gemini: I am an AI and don't have the concept of being "online" in the same way a human does. I am running on Google's servers and am ready to respond to your prompts. So, in that sense, yes, I am available and ready to assist you.
+

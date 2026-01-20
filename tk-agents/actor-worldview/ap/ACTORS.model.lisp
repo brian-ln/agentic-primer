@@ -4,6 +4,7 @@
 (defprotocol Inference
   "Interface for Large Language Models."
   (on PROMPT (text params)
+    "Params may include 'model' and optional 'provider' (e.g. 'vertex', 'studio')."
     (or
       (one RESPONSE (text))
       (one ERROR (message)))))
@@ -80,8 +81,14 @@
           (if (eq direction 'forward) to-node from-node))))
 
     ;; AI Boundary Actors
-    (actor GeminiInferenceActor
+    (actor VertexInferenceActor
       (implements Inference)
+      (description "Bridges to Google Cloud Vertex AI (Enterprise).")
+      (behavior))
+
+    (actor StudioInferenceActor
+      (implements Inference)
+      (description "Bridges to Google AI Studio (Hobbyist/Dev).")
       (behavior))
 
     (actor GeminiEmbeddingActor
@@ -95,7 +102,11 @@
       (state (routing_table map))
       (behavior
         (on prompt (text params)
-          (let ((target (get-route params.model)))
+          ;; Routing Logic:
+          ;; 1. If params.provider is set, look up by "provider:model"
+          ;; 2. Else look up by "model"
+          ;; 3. Fallback to default
+          (let ((target (get-route (or (concat params.provider ":" params.model) params.model))))
             (delegate target)))
         (on register-provider (model_id addr type)
           (set routing_table model_id addr))))

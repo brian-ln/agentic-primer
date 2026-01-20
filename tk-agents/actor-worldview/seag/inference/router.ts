@@ -1,5 +1,5 @@
-import { Actor, Message, ActorAddress } from "./kernel";
-import { Actor as ActorModel, Implements, Handler } from "./lib/meta";
+import { Actor, Message, ActorAddress } from "../kernel";
+import { Actor as ActorModel, Implements, Handler } from "../lib/meta";
 
 /**
  * InferenceRouter: The Virtual Stable Identity for all Inference.
@@ -19,19 +19,32 @@ export class InferenceRouter extends Actor {
   async receive(msg: Message) {
     // 1. Inference Protocol
     if (msg.type === "PROMPT") {
-      const modelId = msg.payload.params?.model || this.defaultModel;
-      const target = this.routingTable.get(modelId!);
+      const { params } = msg.payload;
+      const model = params?.model || this.defaultModel;
+      const provider = params?.provider;
+
+      let target: ActorAddress | undefined;
+
+      // Priority 1: Namespaced (provider:model)
+      if (provider && model) {
+        target = this.routingTable.get(`${provider}:${model}`);
+      }
+
+      // Priority 2: Direct model ID
+      if (!target && model) {
+        target = this.routingTable.get(model);
+      }
       
       if (!target) {
         this.send(msg.sender!, { 
           type: "ERROR", 
-          payload: { message: `No provider registered for model: ${modelId}` } 
+          payload: { message: `No provider registered for model: ${model}${provider ? ` (provider: ${provider})` : ""}` } 
         });
         return;
       }
 
       // Delegate the prompt (preserving the original sender for the reply)
-      this.send(target, {
+      this.system.send(target, {
         ...msg,
         sender: msg.sender // Keep original requester as the reply target
       });

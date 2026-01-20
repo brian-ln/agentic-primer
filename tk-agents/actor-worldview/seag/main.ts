@@ -5,9 +5,10 @@ import { FileEffectActor } from "./file-effect";
 import { DocumentParser } from "./shredder";
 import { UserProxy } from "./user-proxy";
 import { BrainAgent } from "./brain-agent";
-import { GeminiInferenceActor } from "./inference-actor";
+import { VertexInferenceActor } from "./inference/google/vertex";
+import { StudioInferenceActor } from "./inference/google/studio";
 import { GeminiEmbeddingActor } from "./embedding-actor";
-import { InferenceRouter } from "./inference-router";
+import { InferenceRouter } from "./inference/router";
 import { PersistenceManager } from "./persistence-manager";
 import { CredentialProviderActor } from "./credential-provider";
 import { TopicNode, QueueNode } from "./messaging";
@@ -25,21 +26,47 @@ async function bootstrap() {
   system.spawn("seag://system/file-io", FileEffectActor, "permanent");
   system.spawn("seag://system/persistence", PersistenceManager, "permanent");
   system.spawn("seag://system/credentials", CredentialProviderActor, "permanent");
+  system.spawn("seag://system/interaction-log", EventLogActor, "permanent");
   
   // Concrete providers
-  system.spawn("seag://system/inference/gemini", GeminiInferenceActor, "permanent");
+  system.spawn("seag://system/inference/vertex", VertexInferenceActor, "permanent");
+  system.spawn("seag://system/inference/studio", StudioInferenceActor, "permanent");
   system.spawn("seag://system/embedder", GeminiEmbeddingActor, "permanent");
   
   // Stable Router
   system.spawn("seag://system/inference", InferenceRouter, "permanent");
   
-  // Register Gemini with Router
+  // Register Providers with Router
+  // Vertex (The Default)
   system.send("seag://system/inference", {
     type: "REGISTER_PROVIDER",
     payload: { 
-      model_id: "gemini-3-pro-preview", 
-      actor_address: "seag://system/inference/gemini",
+      model_id: "gemini-2.0-flash-exp", 
+      actor_address: "seag://system/inference/vertex",
       is_default: true
+    }
+  });
+  system.send("seag://system/inference", {
+    type: "REGISTER_PROVIDER",
+    payload: { 
+      model_id: "vertex:gemini-2.0-flash-exp", 
+      actor_address: "seag://system/inference/vertex"
+    }
+  });
+
+  // Studio
+  system.send("seag://system/inference", {
+    type: "REGISTER_PROVIDER",
+    payload: { 
+      model_id: "models/gemini-2.0-flash-exp", 
+      actor_address: "seag://system/inference/studio"
+    }
+  });
+  system.send("seag://system/inference", {
+    type: "REGISTER_PROVIDER",
+    payload: { 
+      model_id: "studio:gemini-2.0-flash-exp", 
+      actor_address: "seag://system/inference/studio"
     }
   });
 

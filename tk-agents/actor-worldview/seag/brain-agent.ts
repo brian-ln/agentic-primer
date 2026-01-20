@@ -12,6 +12,7 @@ export class BrainAgent extends Actor {
   async receive(msg: Message) {
     if (msg.type === "THINK") {
       const input = msg.payload.input as string;
+      console.log(`[BrainAgent] Thinking about: ${input}`);
       
       if (input.startsWith("mount ")) {
         await this.handleMount(input.split(" ")[1], msg.sender!);
@@ -169,6 +170,7 @@ export class BrainAgent extends Actor {
     }
 
     if (msg.type === "RESPONSE") {
+      console.log(`[BrainAgent] Received AI response: ${msg.payload.text}`);
       this.send("seag://local/user-proxy", {
         type: "OUTPUT",
         payload: { content: "Gemini: " + msg.payload.text }

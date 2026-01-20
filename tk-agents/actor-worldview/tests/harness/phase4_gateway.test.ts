@@ -32,8 +32,8 @@ describe("SEAG Phase 4.1: Gateway Integration", () => {
     const gateway = new Gateway(system);
     gateway.start(PORT);
 
-    // 3. Connect as a client
-    const ws = new WebSocket(`ws://localhost:${PORT}`);
+    // 3. Connect as a client to /ws
+    const ws = new WebSocket(`ws://localhost:${PORT}/ws`);
     
     await new Promise((resolve) => {
       ws.onopen = () => {
@@ -41,6 +41,17 @@ describe("SEAG Phase 4.1: Gateway Integration", () => {
         setTimeout(resolve, 300); // Increased wait
       };
     });
+
+    // --- Additional test: connecting to root should NOT upgrade to websocket
+    const wsRoot = new WebSocket(`ws://localhost:${PORT}`);
+    let rootOpened = false;
+    await new Promise((resolve) => {
+      wsRoot.onopen = () => { rootOpened = true; resolve(null); };
+      wsRoot.onerror = () => resolve(null);
+      // Wait 300ms to allow handshake to succeed/fail
+      setTimeout(resolve, 300);
+    });
+    expect(rootOpened).toBe(false);
 
     // 4. Verify Log Entry
     let logEntries: any[] = [];

@@ -1,6 +1,6 @@
 import { expect, test, describe, mock } from "bun:test";
 import { System, Actor, Message } from "../../seag/kernel";
-import { GeminiInferenceActor } from "../../seag/inference-actor";
+import { VertexInferenceActor } from "../../seag/inference/google/vertex";
 
 describe("SEAG Phase 5: AI (Unit Tests)", () => {
 
@@ -15,7 +15,7 @@ describe("SEAG Phase 5: AI (Unit Tests)", () => {
       send: mock(() => {}),
     } as unknown as System;
 
-    const actor = new GeminiInferenceActor("seag://test/inference", mockSystem);
+    const actor = new VertexInferenceActor("seag://test/inference", mockSystem);
 
     // 3. Manually set internal state for the test
     (actor as any).credential = { type: "api_key", value: "mock_key" };

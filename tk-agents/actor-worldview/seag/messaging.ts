@@ -1,5 +1,5 @@
 import { Actor, Message, ActorAddress } from "./kernel";
-import { Actor as ActorModel, Handler } from "./lib/meta";
+import { Actor as ActorModel, Handler, Implements } from "./lib/meta";
 
 /**
  * TopicNode: Implements Pub/Sub logic with simple filtering.

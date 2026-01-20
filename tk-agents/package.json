@@ -4,7 +4,8 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "orient": "bun src/cli/orient.ts"
+    "orient": "bun src/cli/orient.ts",
+    "test:smoke": "bun test actor-worldview/tests/smoke"
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0",

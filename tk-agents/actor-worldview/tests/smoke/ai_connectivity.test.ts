@@ -1,6 +1,6 @@
 import { expect, test, describe } from "bun:test";
 import { System, Actor, Message } from "../../seag/kernel";
-import { GeminiInferenceActor } from "../../seag/inference-actor";
+import { VertexInferenceActor } from "../../seag/inference/google/vertex";
 import { GeminiEmbeddingActor } from "../../seag/embedding-actor";
 import { GraphProjector } from "../../seag/graph-projector";
 import { CredentialProviderActor } from "../../seag/credential-provider";
@@ -68,7 +68,7 @@ describe("SEAG Phase 5: Semantic Discovery", () => {
       system.spawn("seag://system/credentials", CredentialProviderActor);
       await new Promise(resolve => setTimeout(resolve, 50)); // Allow it to start
   
-      system.spawn("seag://system/inference", GeminiInferenceActor);
+      system.spawn("seag://system/inference", VertexInferenceActor);
       await new Promise(resolve => setTimeout(resolve, 50)); // Wait for onStart
       let response: string | null = null;
     class MockUser extends Actor {
@@ -83,8 +83,8 @@ describe("SEAG Phase 5: Semantic Discovery", () => {
       type: "PROMPT",
       sender: "seag://local/user",
       payload: { 
-        text: "Say 'Hello from Gemini 3 Pro'",
-        params: { model: "gemini-3-pro-preview" }
+        text: "Say 'Hello from Gemini'",
+        params: { model: "gemini-2.0-flash-exp" }
       }
     });
 
