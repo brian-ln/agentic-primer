@@ -97,4 +97,46 @@ describe("SEAG Phase 6: Messaging Subsystem", () => {
     await new Promise(resolve => setTimeout(resolve, 100));
     expect(completedTasks).toBe(2);
   });
+
+  test("Objective 6.1.3: QueueNode Lease Timeout and Re-delivery", async () => {
+    const system = new System();
+    const queue = system.spawn("seag://system/queue/lease-test", QueueNode);
+    // Set a very short lease for testing
+    (queue as any).leaseDuration = 100;
+
+    let deliveryCount = 0;
+
+    class ForgetfulWorker extends Actor {
+      async receive(msg: Message) {
+        if (msg.type === "DO_WORK") {
+          deliveryCount++;
+          // NEVER ACK
+        }
+      }
+    }
+
+    system.spawn("seag://local/forgetful", ForgetfulWorker);
+    
+    system.send("seag://system/queue/lease-test", {
+      type: "REGISTER_WORKER",
+      payload: { worker_id: "seag://local/forgetful" }
+    });
+
+    system.send("seag://system/queue/lease-test", {
+      type: "ENQUEUE",
+      payload: { task: "Urgent Work" }
+    });
+
+    // 1. First delivery
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(deliveryCount).toBe(1);
+
+    // 2. Wait for timeout and check re-delivery
+    // Trigger check-timeouts manually to avoid waiting for interval
+    await new Promise(resolve => setTimeout(resolve, 200)); // Ensure expiresAt is passed
+    system.send("seag://system/queue/lease-test", { type: "CHECK_TIMEOUTS" });
+    
+    await new Promise(resolve => setTimeout(resolve, 500));
+    expect(deliveryCount).toBeGreaterThan(1);
+  });
 });

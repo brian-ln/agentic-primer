@@ -1,60 +1,10 @@
-SEAG Bootstrapping at 2026-01-20T01:32:59.767Z
+SEAG Bootstrapping at 2026-01-20T01:42:21.800Z
 Gateway started on 3000
 SEAG MVP is Online: http://localhost:3000
 [RootSupervisor] Started
-[UserProxy] Received: ask "Are you running on port 3000?"
+[UserProxy] Received: register-worker seag://system/queue/main
 [System] Dead Letter: seag://system/interaction-log (Type: APPEND, Sender: seag://local/user-proxy)
-[GeminiInference] Calling models/gemini-3-pro-preview...
-[GeminiInference] Fetch status: 200
-[GeminiInference] RAW RESPONSE: {
-  "candidates": [
-    {
-      "content": {
-        "parts": [
-          {
-            "text": "No, I am an AI model running on Google's servers, not on your local machine. I communicate with you via the internet (usually over HTTPS on port 443), so I am not running on your `localhost` port 3000.\n\n However, **port 3000** is the default development port for many popular web frameworks (like React, Node.js/Express, and Ruby on Rails).\n\n**If you are trying to troubleshoot your own application, here is how you can check what is running on port 3000:**\n\n**On macOS or Linux (Terminal):**\n```bash\nlsof -i :3000\n```\n*If you see a process listed, you can kill it using `kill -9 \u003cPID\u003e` (replace `\u003cPID\u003e` with the Process ID listed).*\n\n**On Windows (Command Prompt or PowerShell):**\n```cmd\nnetstat -ano | findstr :3000\n```\n*If you find a PID, you can stop it with `taskkill /PID \u003cPID\u003e /F`.*\n\nAre you having trouble connecting to a local server?",
-            "thoughtSignature": "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"
-          }
-        ],
-        "role": "model"
-      },
-      "finishReason": "STOP",
-      "index": 0
-    }
-  ],
-  "usageMetadata": {
-    "promptTokenCount": 12,
-    "candidatesTokenCount": 242,
-    "totalTokenCount": 1117,
-    "promptTokensDetails": [
-      {
-        "modality": "TEXT",
-        "tokenCount": 12
-      }
-    ],
-    "thoughtsTokenCount": 863
-  },
-  "modelVersion": "gemini-3-pro-preview",
-  "responseId": "Y9tuacODGOepqtsPmZvkwAk"
-}
-
-[GeminiInference] Extracted reply: No, I am an AI model running on Google's servers, ...
-[UserProxy] Replying: Gemini: No, I am an AI model running on Google's servers, not on your local machine. I communicate with you via the internet (usually over HTTPS on port 443), so I am not running on your `localhost` port 3000.
-
- However, **port 3000** is the default development port for many popular web frameworks (like React, Node.js/Express, and Ruby on Rails).
-
-**If you are trying to troubleshoot your own application, here is how you can check what is running on port 3000:**
-
-**On macOS or Linux (Terminal):**
-```bash
-lsof -i :3000
-```
-*If you see a process listed, you can kill it using `kill -9 <PID>` (replace `<PID>` with the Process ID listed).*
-
-**On Windows (Command Prompt or PowerShell):**
-```cmd
-netstat -ano | findstr :3000
-```
-*If you find a PID, you can stop it with `taskkill /PID <PID> /F`.*
-
-Are you having trouble connecting to a local server?
+[Queue] seag://system/queue/main registered worker: seag://system/brain
+[UserProxy] Received: enqueue seag://system/queue/main "Self-Destruct (Not really)"
+[System] Dead Letter: seag://system/interaction-log (Type: APPEND, Sender: seag://local/user-proxy)
+[UserProxy] Replying: 🛠️ Worker (Brain) processing task: "Self-Destruct (Not really)"

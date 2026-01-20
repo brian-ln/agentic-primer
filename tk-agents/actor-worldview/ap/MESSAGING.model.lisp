@@ -17,7 +17,8 @@
     (actor QueueNode
       (state 
         (backlog list)
-        (pending map) ; id -> {worker, timestamp}
+        (pending map)       ; id -> {worker, expires_at, msg}
+        (lease_duration duration)
         (workers set))
       (behavior
         (on enqueue (payload)
@@ -28,13 +29,17 @@
         (on ack (msg_id)
           (remove pending msg_id))
         (on nack (msg_id)
-          (let ((msg (get pending msg_id)))
-            (push backlog msg)
+          (let ((entry (get pending msg_id)))
+            (push backlog entry.msg)
             (remove pending msg_id)
             (trigger-distribution)))
+        (on check-timeouts ()
+          (for-each (id entry) pending
+            (if (> now entry.expires_at)
+                (trigger-nack id))))
         (on distribute ()
           (while (and backlog workers)
             (let ((msg (pop backlog))
                   (worker (pop workers)))
               (send worker 'do-work msg)
-              (set pending msg.id {worker, now}))))))))
+              (set pending msg.id {worker, (+ now lease_duration), msg}))))))))

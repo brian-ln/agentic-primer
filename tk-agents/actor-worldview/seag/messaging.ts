@@ -47,14 +47,24 @@ export class TopicNode extends Actor {
 @ActorModel("QueueNode")
 export class QueueNode extends Actor {
   private backlog: Message[] = [];
-  private pending: Map<string, { worker: ActorAddress; timestamp: number; msg: Message }> = new Map();
+  private pending: Map<string, { worker: ActorAddress; expiresAt: number; msg: Message }> = new Map();
   private workers: Set<ActorAddress> = new Set();
+  private leaseDuration: number = 30000; // 30s default
+  private checkTimer: any;
+
+  async onStart() {
+    // Start background timeout checker
+    this.checkTimer = setInterval(() => {
+      this.system.send(this.id, { type: "CHECK_TIMEOUTS", sender: this.id });
+    }, 5000);
+  }
 
   @Handler("ENQUEUE")
   @Handler("REGISTER_WORKER")
   @Handler("ACK")
   @Handler("NACK")
   @Handler("DISTRIBUTE")
+  @Handler("CHECK_TIMEOUTS")
   async receive(msg: Message) {
     if (msg.type === "ENQUEUE") {
       const workMsg = { ...msg, id: msg.id || `work-${Math.random().toString(36).substring(7)}` };
@@ -73,16 +83,31 @@ export class QueueNode extends Actor {
     }
 
     if (msg.type === "NACK") {
-      const entry = this.pending.get(msg.payload.msg_id);
-      if (entry) {
-        this.backlog.push(entry.msg);
-        this.pending.delete(msg.payload.msg_id);
-        await this.distribute();
+      this.handleNack(msg.payload.msg_id);
+    }
+
+    if (msg.type === "CHECK_TIMEOUTS") {
+      const now = Date.now();
+      for (const [id, entry] of this.pending.entries()) {
+        if (now > entry.expiresAt) {
+          console.warn(`[Queue] Lease expired for task ${id}. Re-enqueuing.`);
+          this.handleNack(id);
+        }
       }
+      await this.distribute();
     }
 
     if (msg.type === "DISTRIBUTE") {
       await this.distribute();
+    }
+  }
+
+  private handleNack(msgId: string) {
+    const entry = this.pending.get(msgId);
+    if (entry) {
+      this.backlog.push(entry.msg);
+      this.pending.delete(msgId);
+      this.distribute();
     }
   }
 
@@ -91,12 +116,13 @@ export class QueueNode extends Actor {
     while (this.backlog.length > 0 && this.workers.size > 0) {
       const work = this.backlog.shift()!;
       const workerList = Array.from(this.workers);
-      const worker = workerList[0]; // Simple Round-Robin/FCFS for now
+      const worker = workerList[Math.floor(Math.random() * workerList.length)]; 
       
-      // Move worker to end of line or temporary "busy" set? 
-      // For simplicity, we just keep them in the set for now.
-      
-      this.pending.set(work.id!, { worker, timestamp: Date.now(), msg: work });
+      this.pending.set(work.id!, { 
+        worker, 
+        expiresAt: Date.now() + this.leaseDuration, 
+        msg: work 
+      });
       
       this.send(worker, {
         type: "DO_WORK",

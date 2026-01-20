@@ -11,7 +11,9 @@ A **Topic Node** acts as a message relay. It decouples the "Producer" from the "
 A **Queue Node** manages a backlog of work to be distributed among "Workers."
 
 - **Behavior:** Implements the "Competing Consumers" pattern. Unlike Pub/Sub, a message in a Queue is intended to be processed by **exactly one** worker.
-- **Acknowledgement:** Supports `ack`/`nack` to ensure reliable processing (if a worker fails, the message is returned to the queue).
+- **Acknowledgement:** Supports `ack`/`nack` to ensure reliable processing.
+- **Leasing:** When a worker receives a task, it is "leased" (made invisible). If no `ack` is received within the `lease_timeout`, the task is automatically returned to the backlog.
+- **Reliability:** Guaranteed delivery. If a message fails `max_retries`, it can be moved to a Dead Letter Queue (DLQ).
 
 ## 3. Comparison in the Graph
 
