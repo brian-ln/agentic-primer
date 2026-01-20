@@ -63,6 +63,18 @@
       (implements Embedding)
       (behavior))
 
+    ;; The Router (Virtual Stable Identity)
+    (actor InferenceRouter
+      (implements Inference)
+      (implements ModelRegistry)
+      (state (routing_table map))
+      (behavior
+        (on prompt (text params)
+          (let ((target (get-route params.model)))
+            (delegate target)))
+        (on register-provider (model_id addr type)
+          (set routing_table model_id addr))))
+
     ;; The Projector (Maintains the graph view)
     (actor GraphProjector
       (behavior

@@ -7,6 +7,7 @@ import { UserProxy } from "./user-proxy";
 import { BrainAgent } from "./brain-agent";
 import { GeminiInferenceActor } from "./inference-actor";
 import { GeminiEmbeddingActor } from "./embedding-actor";
+import { InferenceRouter } from "./inference-router";
 import { TopicNode, QueueNode } from "./messaging";
 import { Gateway } from "./gateway";
 
@@ -20,9 +21,24 @@ async function bootstrap() {
   system.spawn("seag://system/projector", GraphProjector, "permanent");
   system.spawn("seag://system/parser", DocumentParser, "permanent");
   system.spawn("seag://system/file-io", FileEffectActor, "permanent");
-  system.spawn("seag://system/inference", GeminiInferenceActor, "permanent");
+  
+  // Concrete providers
+  system.spawn("seag://system/inference/gemini", GeminiInferenceActor, "permanent");
   system.spawn("seag://system/embedder", GeminiEmbeddingActor, "permanent");
   
+  // Stable Router
+  system.spawn("seag://system/inference", InferenceRouter, "permanent");
+  
+  // Register Gemini with Router
+  system.send("seag://system/inference", {
+    type: "REGISTER_PROVIDER",
+    payload: { 
+      model_id: "gemini-3-pro-preview", 
+      actor_address: "seag://system/inference/gemini",
+      is_default: true
+    }
+  });
+
   // Messaging default hubs
   system.spawn("seag://system/topic/main", TopicNode, "permanent");
   system.spawn("seag://system/queue/main", QueueNode, "permanent");

@@ -72,22 +72,44 @@
 
 
 
-(defprotocol WorkQueue
+(defprotocol ModelRegistry
 
-  "Interface for reliable work distribution."
 
-  (on ENQUEUE (task)
 
-    (one ENQUEUE_OK (msg_id)))
+  "Interface for managing and discovering model providers."
 
-  (on REGISTER_WORKER (worker_id)
+
+
+  (on REGISTER_PROVIDER (model_id actor_address type)
+
+
 
     (one REGISTER_OK ()))
 
-  (on ACK (msg_id) (one ACK_OK ()))
 
-  (on NACK (msg_id) (one NACK_OK ()))
 
-  (on CHECK_TIMEOUTS ()
+  (on GET_PROVIDER (model_id)
 
-    (any NACK (msg_id))))
+
+
+    (or
+
+
+
+      (one PROVIDER_INFO (actor_address type))
+
+
+
+      (one ERROR (message))))
+
+
+
+  (on LIST_MODELS (type)
+
+
+
+    (one MODEL_LIST (models))))
+
+
+
+

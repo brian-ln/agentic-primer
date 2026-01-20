@@ -144,7 +144,8 @@ function parseTsImpl(content: string, filename: string): ActorImpl[] {
       // Parse "Proto1", "Proto2"
       const protos = implMatch[1].match(/["']([^"']+)["']/g);
       if (protos) {
-        currentClass.implements = protos.map(p => p.replace(/['"]/g, ''));
+        const names = protos.map(p => p.replace(/['"]/g, ''));
+        currentClass.implements = [...(currentClass.implements || []), ...names];
       }
     }
 
