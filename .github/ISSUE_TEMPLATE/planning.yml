@@ -1,0 +1,70 @@
+name: 📋 Planning Task
+description: Automated planning and design task
+title: "[Planning] "
+labels: ["planning", "automated"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Planning Task
+        This issue will trigger an automated planning workflow to create implementation plans.
+  
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective
+      description: What needs to be planned?
+      placeholder: "Example: Plan the architecture for the automation system"
+    validations:
+      required: true
+  
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requirements
+      description: List the requirements and constraints
+      placeholder: |
+        - Must be git-native
+        - Should support multiple issue types
+        - Need automated workflows
+    validations:
+      required: false
+  
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Provide background and related information
+      placeholder: "Link to related issues, research, or documentation"
+    validations:
+      required: false
+  
+  - type: textarea
+    id: deliverables
+    attributes:
+      label: Expected Deliverables
+      description: What outputs are expected from this planning?
+      placeholder: |
+        - Architecture document
+        - Implementation plan with tasks
+        - Timeline and milestones
+      value: |
+        - Architecture document in docs/knowledge/
+        - Implementation plan with tasks
+        - Timeline and milestones
+    validations:
+      required: false
+  
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How urgent is this planning?
+      options:
+        - Low
+        - Medium
+        - High
+        - Critical
+      default: 1
+    validations:
+      required: true
