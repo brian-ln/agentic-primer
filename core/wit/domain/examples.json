@@ -1,0 +1,222 @@
+{
+  "$schema": "./domain.schema.json",
+  "description": "Example instances demonstrating the Convergence domain model",
+
+  "examples": {
+    "address_simple": {
+      "id": "agent-001",
+      "scope": "node"
+    },
+
+    "address_with_namespace": {
+      "id": "task-research-001",
+      "namespace": "convergence",
+      "scope": "node",
+      "version": "1.0.0"
+    },
+
+    "address_edge_scoped": {
+      "id": "relationship-001",
+      "scope": {
+        "edge": {
+          "source": "agent-001",
+          "target": "task-001"
+        }
+      }
+    },
+
+    "node_basic": {
+      "id": "node-001",
+      "properties": [
+        ["name", {"string-val": "Research Node"}],
+        ["priority", {"number-val": 1.0}],
+        ["active", {"bool-val": true}]
+      ],
+      "metadata": {
+        "created-at": "2026-02-05T10:00:00Z",
+        "updated-at": "2026-02-05T10:00:00Z",
+        "version": 1
+      }
+    },
+
+    "edge_simple": {
+      "id": "edge-001",
+      "source": {"id": "agent-001", "scope": "node"},
+      "target": {"id": "task-001", "scope": "node"},
+      "edge-type": "assigned-to",
+      "weight": 1.0,
+      "properties": [
+        ["created", {"string-val": "2026-02-05T10:00:00Z"}]
+      ]
+    },
+
+    "agent_config": {
+      "name": "Research Agent",
+      "system-prompt": "You are an expert research assistant specialized in technical documentation analysis.",
+      "tools": [
+        {"id": "web-search", "scope": "node"},
+        {"id": "file-read", "scope": "node"},
+        {"id": "code-analyze", "scope": "node"}
+      ],
+      "default-model": {
+        "id": "claude-3-5-sonnet-20241022",
+        "namespace": "anthropic",
+        "scope": "node"
+      },
+      "harness": {
+        "max-turns": 15,
+        "reflect-on-failure": true,
+        "checkpoint-every": 5
+      }
+    },
+
+    "task_complete": {
+      "title": "Analyze codebase architecture",
+      "description": "Review the project architecture and generate documentation",
+      "spec": {
+        "inputs": [
+          "src/**/*.ts",
+          "docs/architecture/*.md"
+        ],
+        "outputs": [
+          "docs/architecture-analysis.md",
+          "docs/architecture-diagram.svg"
+        ],
+        "constraints": [
+          "Must analyze at least 50 files",
+          "Documentation must be under 10,000 words",
+          "Diagram must include all major components"
+        ],
+        "success-criteria": [
+          {
+            "criterion-type": "file-exists",
+            "params": "{\"path\": \"docs/architecture-analysis.md\"}"
+          },
+          {
+            "criterion-type": "word-count",
+            "params": "{\"min-words\": 2000, \"max-words\": 10000, \"text-source\": \"docs/architecture-analysis.md\"}"
+          },
+          {
+            "criterion-type": "pattern-match",
+            "params": "{\"pattern\": \"## Component\", \"text-source\": \"docs/architecture-analysis.md\", \"must-match\": true}"
+          }
+        ]
+      },
+      "priority": "p1"
+    },
+
+    "session_config": {
+      "owner": {"id": "human-alice", "scope": "node"},
+      "default-model": {
+        "id": "claude-3-5-sonnet-20241022",
+        "scope": "node"
+      },
+      "log-file": "/var/log/convergence/session-20260205-001.jsonl"
+    },
+
+    "session_message_user": {
+      "uuid": "550e8400-e29b-41d4-a716-446655440000",
+      "parent-uuid": null,
+      "timestamp": "2026-02-05T10:00:00Z",
+      "role": "user",
+      "content": "Please analyze the domain model WIT files."
+    },
+
+    "session_message_assistant": {
+      "uuid": "550e8400-e29b-41d4-a716-446655440001",
+      "parent-uuid": "550e8400-e29b-41d4-a716-446655440000",
+      "timestamp": "2026-02-05T10:00:15Z",
+      "role": "assistant",
+      "content": "I'll analyze the domain model WIT files. Let me start by examining the structure...",
+      "model": "claude-3-5-sonnet-20241022",
+      "usage": {
+        "input-tokens": 1500,
+        "output-tokens": 850
+      }
+    },
+
+    "human_config": {
+      "name": "Alice Johnson",
+      "email": "alice@convergence.dev",
+      "preferences": {
+        "notification-channel": "slack",
+        "timezone": "America/Los_Angeles"
+      },
+      "permissions": ["approve", "assign", "configure"]
+    },
+
+    "approval_request": {
+      "id": "approval-001",
+      "description": "Agent requests permission to delete temporary files older than 30 days",
+      "requested-by": {"id": "agent-cleanup-001", "scope": "node"},
+      "requested-at": 1707134400,
+      "status": "pending"
+    },
+
+    "notification": {
+      "id": "notif-001",
+      "message": "Your task 'Analyze codebase architecture' has been completed successfully",
+      "sent-at": 1707134400,
+      "channel": "slack",
+      "read": false
+    },
+
+    "similarity_search_options": {
+      "node-type": "documentation",
+      "limit": 10,
+      "min-similarity": 0.75
+    },
+
+    "similarity_result": {
+      "node": {"id": "doc-architecture-001", "scope": "node"},
+      "similarity": 0.89
+    },
+
+    "convergence_detection": {
+      "nodes": [
+        {"id": "research-path-1", "scope": "node"},
+        {"id": "research-path-2", "scope": "node"},
+        {"id": "research-path-3", "scope": "node"}
+      ],
+      "strength": "strong",
+      "similarity": 0.92,
+      "theme": "Graph-based knowledge representation with actor model communication",
+      "detected-at": 1707134400
+    },
+
+    "knowledge_artifact": {
+      "id": "artifact-001",
+      "artifact-type": "pattern",
+      "content": "{\"pattern\": \"Entity-Component-System\", \"confidence\": 0.85, \"occurrences\": 12}",
+      "source": {"id": "agent-research-001", "scope": "node"},
+      "created-at": 1707134400,
+      "relevance": 0.95
+    },
+
+    "program_metadata": {
+      "name": "code-analyzer",
+      "description": "Analyzes code structure and generates architecture documentation",
+      "runtime": "javascript",
+      "execution-mode": "worker",
+      "state": "published",
+      "version": 1,
+      "input-schema": "{\"type\": \"object\", \"properties\": {\"files\": {\"type\": \"array\"}}}",
+      "output-schema": "{\"type\": \"object\", \"properties\": {\"analysis\": {\"type\": \"string\"}}}",
+      "created": "2026-02-01T10:00:00Z",
+      "modified": "2026-02-05T10:00:00Z",
+      "tags": ["analysis", "code", "architecture"]
+    },
+
+    "invocation_result": {
+      "request-id": "req-001",
+      "success": true,
+      "output": [123, 34, 114, 101, 115, 117, 108, 116, 34, 58, 34, 115, 117, 99, 99, 101, 115, 115, 34, 125],
+      "duration-ms": 1250,
+      "timestamp": "2026-02-05T10:00:15Z",
+      "metadata": [
+        ["model", "claude-3-5-sonnet-20241022"],
+        ["tokens", "2350"]
+      ]
+    }
+  }
+}
