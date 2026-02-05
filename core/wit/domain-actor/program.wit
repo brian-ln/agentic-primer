@@ -1,0 +1,408 @@
+// Program Protocol for Universal Graph System
+//
+// Programs are executable units that can be invoked with inputs and produce outputs.
+// They are a specialized type of actor that executes code.
+// Use cases: APIs, inference endpoints, tool implementations, business logic.
+
+package convergence:domain-actor@0.1.0;
+
+use convergence:domain-graph/address.{address};
+use convergence:domain-entity/entity.{entity-lifecycle};
+use agentic-primer:types/types.{error-info};
+
+/// Program implementation language/runtime
+enum program-runtime {
+    /// JavaScript/TypeScript code
+    javascript,
+    /// Python code
+    python,
+    /// WebAssembly module
+    wasm,
+    /// Native binary
+    native,
+    /// Container image
+    container,
+    /// Custom runtime
+    custom,
+}
+
+/// Program execution mode
+enum execution-mode {
+    /// Execute in same process (fast, unsafe)
+    inline,
+    /// Execute in worker thread (isolated, shared memory)
+    worker,
+    /// Execute in subprocess (isolated, separate memory)
+    subprocess,
+    /// Execute in container (highly isolated)
+    container,
+}
+
+/// Program state machine
+/// Programs follow draft -> published -> deprecated lifecycle
+variant program-state {
+    /// Program is being developed (editable)
+    draft,
+    /// Program is published (immutable, invokable)
+    published,
+    /// Program is deprecated (not recommended, still invokable)
+    deprecated,
+}
+
+/// Program metadata
+record program-metadata {
+    /// Program name
+    name: string,
+    /// Program description
+    description: option<string>,
+    /// Implementation runtime
+    runtime: program-runtime,
+    /// Execution mode
+    execution-mode: execution-mode,
+    /// Program state
+    state: program-state,
+    /// Schema version
+    version: u32,
+    /// Input schema ID (for validation)
+    input-schema: option<string>,
+    /// Output schema ID (for validation)
+    output-schema: option<string>,
+    /// Creation timestamp
+    created: string,
+    /// Last modification timestamp
+    modified: string,
+    /// Tags for discovery
+    tags: list<string>,
+}
+
+/// Program invocation request
+record invocation-request {
+    /// Request ID (for tracking)
+    id: string,
+    /// Program address
+    program: address,
+    /// Input payload (serialized)
+    input: option<list<u8>>,
+    /// Invocation timeout in milliseconds
+    timeout-ms: u64,
+    /// Execution context (metadata)
+    context: list<tuple<string, string>>,
+    /// Timestamp
+    timestamp: string,
+}
+
+/// Program invocation result
+record invocation-result {
+    /// Request ID
+    request-id: string,
+    /// Success flag
+    success: bool,
+    /// Output payload (serialized)
+    output: option<list<u8>>,
+    /// Error message if failed
+    error: option<string>,
+    /// Execution duration in milliseconds
+    duration-ms: u64,
+    /// Completion timestamp
+    timestamp: string,
+    /// Execution metadata
+    metadata: list<tuple<string, string>>,
+}
+
+/// Program event types
+enum program-event-type {
+    /// Program created
+    created,
+    /// Program updated (only in draft state)
+    updated,
+    /// Program published
+    published,
+    /// Program invoked
+    invoked,
+    /// Program deprecated
+    deprecated,
+}
+
+/// Program event for audit trail
+record program-event {
+    /// Event ID
+    id: string,
+    /// Event type
+    event-type: program-event-type,
+    /// Program address
+    program: address,
+    /// Event data (serialized)
+    data: option<list<u8>>,
+    /// Timestamp
+    timestamp: string,
+}
+
+/// Program statistics
+record program-stats {
+    /// Total invocations
+    total-invocations: u64,
+    /// Successful invocations
+    successful-invocations: u64,
+    /// Failed invocations
+    failed-invocations: u64,
+    /// Average execution time in milliseconds
+    avg-duration-ms: f64,
+    /// Last invocation timestamp
+    last-invoked-at: option<string>,
+}
+
+/// Program resource interface
+///
+/// Programs are executable actors that can be invoked with inputs.
+/// They encapsulate business logic, API endpoints, inference, etc.
+resource program {
+    /// Get program address
+    get-address: func() -> address;
+
+    /// Get program metadata
+    get-metadata: func() -> program-metadata;
+
+    /// Get program implementation code
+    get-implementation: func() -> result<string, error-info>;
+
+    /// Get program statistics
+    get-stats: func() -> program-stats;
+
+    /// Get program state
+    get-state: func() -> program-state;
+
+    /// Update program (only allowed in draft state)
+    update: func(
+        implementation: option<string>,
+        input-schema: option<string>,
+        output-schema: option<string>,
+        description: option<string>
+    ) -> result<_, error-info>;
+
+    /// Publish program (draft -> published transition)
+    /// Makes program immutable and invokable
+    publish: func() -> result<_, error-info>;
+
+    /// Deprecate program (published -> deprecated transition)
+    deprecate: func() -> result<_, error-info>;
+
+    /// Invoke program with input
+    /// Only published programs can be invoked
+    invoke: func(input: option<list<u8>>, timeout-ms: u64) -> result<invocation-result, error-info>;
+
+    /// Validate input against schema
+    validate-input: func(input: list<u8>) -> result<bool, error-info>;
+
+    /// Validate output against schema
+    validate-output: func(output: list<u8>) -> result<bool, error-info>;
+}
+
+/// Program manager interface
+interface program-manager {
+    use convergence:domain-graph/address.{address};
+    use agentic-primer:types/types.{error-info};
+
+    /// Create a new program in draft state
+    create-program: func(
+        id: string,
+        name: string,
+        implementation: string,
+        runtime: program-runtime,
+        execution-mode: execution-mode,
+        options: program-options
+    ) -> result<program, error-info>;
+
+    /// Get program by address
+    get-program: func(addr: address) -> result<program, error-info>;
+
+    /// Delete program (only in draft state)
+    delete-program: func(addr: address) -> result<_, error-info>;
+
+    /// List all programs
+    list-programs: func() -> list<address>;
+
+    /// List programs by state
+    list-by-state: func(state: program-state) -> list<address>;
+
+    /// List programs by runtime
+    list-by-runtime: func(runtime: program-runtime) -> list<address>;
+
+    /// Search programs by tags
+    search-by-tags: func(tags: list<string>) -> list<address>;
+
+    /// Get program event history
+    get-events: func(addr: address) -> result<list<program-event>, error-info>;
+
+    /// Invoke program by address (convenience method)
+    invoke-program: func(
+        addr: address,
+        input: option<list<u8>>,
+        timeout-ms: u64
+    ) -> result<invocation-result, error-info>;
+}
+
+/// Program creation options
+record program-options {
+    /// Input schema (JSON Schema)
+    input-schema: option<string>,
+    /// Output schema (JSON Schema)
+    output-schema: option<string>,
+    /// Description
+    description: option<string>,
+    /// Tags for discovery
+    tags: list<string>,
+}
+
+/// Program actor context interface
+///
+/// This interface is injected into program execution context,
+/// enabling programs to interact with the graph via actor messaging.
+/// Programs can call other programs, query the graph, etc.
+interface program-context {
+    use convergence:domain-graph/address.{address};
+    use agentic-primer:types/types.{error-info};
+
+    /// Ask another actor and get response
+    /// Enables programs to call other programs/actors
+    ask: func(
+        to: address,
+        message-type: string,
+        payload: list<u8>,
+        timeout-ms: u64
+    ) -> result<list<u8>, error-info>;
+
+    /// Tell another actor (fire-and-forget)
+    /// No response expected
+    tell: func(
+        to: address,
+        message-type: string,
+        payload: list<u8>
+    ) -> result<_, error-info>;
+
+    /// Get current program's address
+    self-address: func() -> address;
+
+    /// Get invocation request metadata
+    get-context: func() -> list<tuple<string, string>>;
+
+    /// Log message from program
+    log: func(level: log-level, message: string) -> result<_, error-info>;
+}
+
+/// Log level for program logging
+enum log-level {
+    debug,
+    info,
+    warning,
+    error,
+}
+
+/// Tool actor interface
+///
+/// Tool actors are specialized programs that expose tool functionality.
+/// Examples: file operations, bash execution, API calls, inference.
+/// They are registered by ID and invoked via the actor system.
+interface tool-actor {
+    use convergence:domain-graph/address.{address};
+    use agentic-primer:types/types.{error-info};
+
+    /// Tool invocation request
+    record tool-request {
+        /// Tool name
+        tool: string,
+        /// Operation/method
+        operation: string,
+        /// Tool parameters (serialized JSON)
+        parameters: list<u8>,
+        /// Execution timeout
+        timeout-ms: u64,
+    }
+
+    /// Tool invocation response
+    record tool-response {
+        /// Success flag
+        success: bool,
+        /// Result data (serialized)
+        result: option<list<u8>>,
+        /// Error message if failed
+        error: option<string>,
+        /// Execution duration
+        duration-ms: u64,
+    }
+
+    /// Register a tool actor
+    /// Makes tool available via @(tool-{name}) address
+    register-tool: func(
+        name: string,
+        operations: list<string>,
+        implementation: program
+    ) -> result<address, error-info>;
+
+    /// Invoke a tool
+    invoke-tool: func(request: tool-request) -> result<tool-response, error-info>;
+
+    /// List available tools
+    list-tools: func() -> list<string>;
+
+    /// Get tool operations
+    get-tool-operations: func(tool-name: string) -> result<list<string>, error-info>;
+}
+
+/// Inference actor interface
+///
+/// Specialized programs for AI model inference.
+/// Supports both synchronous and streaming inference.
+interface inference-actor {
+    use convergence:domain-graph/address.{address};
+    use agentic-primer:types/types.{error-info};
+
+    /// Inference request
+    record inference-request {
+        /// Model identifier
+        model: string,
+        /// Input prompt/data (serialized)
+        input: list<u8>,
+        /// Model parameters (temperature, top-p, etc.)
+        parameters: list<tuple<string, string>>,
+        /// Streaming enabled
+        stream: bool,
+        /// Timeout in milliseconds
+        timeout-ms: u64,
+    }
+
+    /// Inference response
+    record inference-response {
+        /// Success flag
+        success: bool,
+        /// Generated output (serialized)
+        output: option<list<u8>>,
+        /// Error message if failed
+        error: option<string>,
+        /// Token count
+        token-count: option<u32>,
+        /// Execution duration
+        duration-ms: u64,
+        /// Model metadata
+        metadata: list<tuple<string, string>>,
+    }
+
+    /// Register an inference endpoint
+    register-inference: func(
+        model-name: string,
+        endpoint: address
+    ) -> result<_, error-info>;
+
+    /// Run inference (synchronous)
+    infer: func(request: inference-request) -> result<inference-response, error-info>;
+
+    /// Run streaming inference
+    /// Returns stream handle for consuming tokens
+    infer-stream: func(request: inference-request) -> result<stream-handle, error-info>;
+
+    /// List available models
+    list-models: func() -> list<string>;
+}
+
+/// Stream handle for consuming streamed inference tokens
+/// (Re-exported from actor.wit for convenience)
+use self.actor.{stream-handle};
