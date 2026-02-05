@@ -1,0 +1,151 @@
+// Human Entity for User Representation
+//
+// Humans are actors who can receive notifications and approve requests.
+// State machine: available <-> busy, available <-> away, any -> offline, offline -> available
+
+package convergence:domain@0.1.0;
+
+use address.{address};
+use entity.{entity};
+
+/// Human presence/availability states
+enum human-state {
+    available,
+    busy,
+    away,
+    offline,
+}
+
+/// Notification channel
+enum notification-channel {
+    terminal,
+    email,
+    slack,
+}
+
+/// Human permission
+enum human-permission {
+    approve,
+    assign,
+    configure,
+    admin,
+}
+
+/// Human preferences
+record human-preferences {
+    notification-channel: option<notification-channel>,
+    timezone: option<string>,
+}
+
+/// Human configuration
+record human-config {
+    name: string,
+    email: option<string>,
+    preferences: option<human-preferences>,
+    permissions: list<human-permission>,
+}
+
+/// Approval request status
+enum approval-status {
+    pending,
+    approved,
+    rejected,
+}
+
+/// Approval request
+record approval-request {
+    id: string,
+    description: string,
+    requested-by: option<address>,
+    requested-at: u64,
+    status: approval-status,
+    resolved-at: option<u64>,
+    reason: option<string>,
+}
+
+/// Notification
+record notification {
+    id: string,
+    message: string,
+    sent-at: u64,
+    channel: notification-channel,
+    read: bool,
+}
+
+/// Human resource - user representation
+resource human {
+    use entity.{entity};
+
+    /// Get underlying entity
+    as-entity: func() -> entity;
+
+    /// Get human state (presence)
+    get-state: func() -> human-state;
+
+    /// Get human configuration
+    get-config: func() -> human-config;
+
+    /// Check if human has permission
+    has-permission: func(permission: human-permission) -> bool;
+}
+
+/// Human lifecycle and interaction interface
+interface human-ops {
+    use address.{address};
+
+    /// Create a new human
+    create-human: func(
+        id: string,
+        name: string,
+        config: human-config,
+        initial-state: option<human-state>
+    ) -> result<address, string>;
+
+    /// Get human by address
+    get-human: func(addr: address) -> result<human, string>;
+
+    /// Update human configuration
+    update-human: func(
+        addr: address,
+        config: human-config
+    ) -> result<_, string>;
+
+    /// Set human status/presence
+    set-status: func(addr: address, state: human-state) -> result<_, string>;
+
+    /// Send notification to human
+    notify: func(
+        addr: address,
+        message: string,
+        channel: option<notification-channel>
+    ) -> result<notification, string>;
+
+    /// Request approval from human
+    request-approval: func(
+        addr: address,
+        description: string,
+        requested-by: option<address>
+    ) -> result<approval-request, string>;
+
+    /// Approve a pending request
+    approve: func(
+        addr: address,
+        approval-id: string
+    ) -> result<approval-request, string>;
+
+    /// Reject a pending request
+    reject: func(
+        addr: address,
+        approval-id: string,
+        reason: option<string>
+    ) -> result<approval-request, string>;
+
+    /// Get pending approvals for human
+    get-pending-approvals: func(addr: address) -> list<approval-request>;
+
+    /// Get notifications for human
+    get-notifications: func(addr: address, unread-only: bool) -> list<notification>;
+
+    /// List humans by state
+    list-by-state: func(state: human-state) -> list<address>;
+}

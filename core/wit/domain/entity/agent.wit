@@ -1,0 +1,126 @@
+// Agent Entity for Autonomous Task Execution
+//
+// Agents are program executors with system prompts and agentic capabilities.
+// State machine: idle -> thinking -> executing -> waiting -> completed | error
+
+package convergence:domain@0.1.0;
+
+use address.{address};
+use entity.{entity};
+
+/// Agent execution state
+enum agent-state {
+    idle,
+    thinking,
+    executing,
+    waiting,
+    completed,
+    error,
+}
+
+/// Agent harness configuration (execution limits)
+record agent-harness {
+    /// Maximum turns before auto-stop
+    max-turns: u32,
+    /// Auto-reflect on errors
+    reflect-on-failure: bool,
+    /// Checkpoint interval (turns)
+    checkpoint-every: u32,
+}
+
+/// Agent configuration
+record agent-config {
+    name: string,
+    system-prompt: string,
+    tools: list<address>,
+    default-model: address,
+    harness: agent-harness,
+}
+
+/// Step execution result
+record step-result {
+    done: bool,
+    turn: option<u32>,
+    reason: option<string>,
+    response: option<string>,
+    error: option<string>,
+}
+
+/// Agent resource - autonomous task executor
+///
+/// Agents execute tasks iteratively with model inference and tool use.
+/// They maintain session history and support streaming responses.
+resource agent {
+    use entity.{entity};
+
+    /// Get underlying entity
+    as-entity: func() -> entity;
+
+    /// Get current execution state
+    get-state: func() -> agent-state;
+
+    /// Get agent configuration
+    get-config: func() -> agent-config;
+
+    /// Get current task (if assigned)
+    get-current-task: func() -> option<address>;
+
+    /// Get current session (if active)
+    get-current-session: func() -> option<address>;
+
+    /// Get turn count
+    get-turn-count: func() -> u32;
+
+    /// Get last error (if any)
+    get-last-error: func() -> option<string>;
+}
+
+/// Agent lifecycle and execution interface
+interface agent-ops {
+    use address.{address};
+
+    /// Create a new agent in idle state
+    create-agent: func(
+        id: string,
+        name: string,
+        system-prompt: string,
+        default-model: address,
+        harness: option<agent-harness>
+    ) -> result<address, string>;
+
+    /// Get agent by address
+    get-agent: func(addr: address) -> result<agent, string>;
+
+    /// Configure agent (only in idle state)
+    configure-agent: func(
+        addr: address,
+        config: agent-config
+    ) -> result<_, string>;
+
+    /// Assign task to agent (idle -> thinking)
+    assign-task: func(addr: address, task: address) -> result<_, string>;
+
+    /// Execute one turn (thinking -> thinking/executing/completed/error)
+    ///
+    /// Returns step result indicating if execution should continue.
+    /// Supports streaming via external event subscriptions.
+    step: func(addr: address) -> result<step-result, string>;
+
+    /// Run agent until completion or limit
+    run: func(addr: address, max-turns: option<u32>) -> result<step-result, string>;
+
+    /// Pause execution (thinking/executing -> waiting)
+    pause: func(addr: address, reason: option<string>) -> result<_, string>;
+
+    /// Resume execution (waiting -> thinking)
+    resume: func(addr: address, input: option<string>) -> result<_, string>;
+
+    /// Stop and reset (any -> idle)
+    stop: func(addr: address) -> result<_, string>;
+
+    /// Set error state
+    set-error: func(addr: address, error: string) -> result<_, string>;
+
+    /// List agents by state
+    list-by-state: func(state: agent-state) -> list<address>;
+}

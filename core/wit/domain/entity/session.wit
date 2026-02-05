@@ -1,0 +1,124 @@
+// Session Entity for Conversation Management
+//
+// Sessions maintain conversation history with JSONL logging and model integration.
+// State machine: created -> active -> paused | completed
+
+package convergence:domain@0.1.0;
+
+use address.{address};
+use entity.{entity};
+
+/// Session lifecycle states
+enum session-lifecycle {
+    created,
+    active,
+    paused,
+    completed,
+}
+
+/// Message role
+enum message-role {
+    user,
+    assistant,
+}
+
+/// Message usage statistics
+record message-usage {
+    input-tokens: u32,
+    output-tokens: u32,
+}
+
+/// Session message entry (JSONL format)
+record session-message {
+    uuid: string,
+    parent-uuid: option<string>,
+    timestamp: string,
+    role: message-role,
+    content: string,
+    model: option<string>,
+    usage: option<message-usage>,
+}
+
+/// Session configuration
+record session-config {
+    owner: option<address>,
+    default-model: address,
+    log-file: string,
+}
+
+/// Send message options
+record send-message-options {
+    model: option<address>,
+    situation: option<string>,
+    system: option<string>,
+}
+
+/// Send message result
+record send-message-result {
+    success: bool,
+    text: option<string>,
+    usage: option<message-usage>,
+    error: option<string>,
+    duration: u64,
+    model: string,
+}
+
+/// Session resource - conversation container
+resource session {
+    use entity.{entity};
+
+    /// Get underlying entity
+    as-entity: func() -> entity;
+
+    /// Get session lifecycle state
+    get-lifecycle: func() -> session-lifecycle;
+
+    /// Get session configuration
+    get-config: func() -> session-config;
+
+    /// Get conversation history
+    get-history: func(limit: option<u32>) -> list<session-message>;
+
+    /// Get message count
+    get-message-count: func() -> u32;
+}
+
+/// Session lifecycle and messaging interface
+interface session-ops {
+    use address.{address};
+
+    /// Create a new session
+    create-session: func(
+        id: string,
+        default-model: address,
+        owner: option<address>
+    ) -> result<address, string>;
+
+    /// Get session by address
+    get-session: func(addr: address) -> result<session, string>;
+
+    /// Send message in session (creates -> active, paused -> active)
+    ///
+    /// Logs user message, invokes model, logs assistant response.
+    /// Supports streaming via external event subscriptions.
+    send-message: func(
+        addr: address,
+        message: string,
+        options: option<send-message-options>
+    ) -> result<send-message-result, string>;
+
+    /// Pause session (active -> paused)
+    pause-session: func(addr: address) -> result<_, string>;
+
+    /// Resume session (paused -> active)
+    resume-session: func(addr: address) -> result<_, string>;
+
+    /// Complete session (active/paused -> completed)
+    complete-session: func(addr: address) -> result<_, string>;
+
+    /// List sessions by lifecycle
+    list-by-lifecycle: func(lifecycle: session-lifecycle) -> list<address>;
+
+    /// List sessions by owner
+    list-by-owner: func(owner: address) -> list<address>;
+}

@@ -1,0 +1,97 @@
+// Node Definition for Universal Graph System
+//
+// Nodes are the primary data containers in the graph with properties and data payloads.
+
+package convergence:domain@0.1.0;
+
+use address.{address};
+use signal-hub:core/types@0.1.0.{json-value};
+
+/// Node property value (can be primitive or address reference)
+variant property-value {
+    string-val(string),
+    number-val(float64),
+    bool-val(bool),
+    null-val,
+    address-ref(address),
+    list-val(list<property-value>),
+}
+
+/// Node metadata (timestamps, versioning)
+record node-metadata {
+    created: u64,
+    modified: u64,
+    version: u32,
+}
+
+/// Node interface - primary graph element
+///
+/// Nodes store information as properties (indexed) and data (payload).
+/// Properties support both direct values and address references for interconnection.
+interface node {
+    use address.{address};
+
+    /// Get node's unique address
+    get-address: func() -> address;
+
+    /// Get node type (optional classification)
+    get-type: func() -> option<string>;
+
+    /// Get property by key
+    get-property: func(key: string) -> option<property-value>;
+
+    /// Set property value
+    set-property: func(key: string, value: property-value) -> result<_, string>;
+
+    /// List all property keys
+    list-properties: func() -> list<string>;
+
+    /// Delete property
+    delete-property: func(key: string) -> result<_, string>;
+
+    /// Get data payload (arbitrary JSON)
+    get-data: func() -> option<json-value>;
+
+    /// Set data payload
+    set-data: func(data: json-value) -> result<_, string>;
+
+    /// Get metadata
+    get-metadata: func() -> node-metadata;
+
+    /// Serialize node to JSON
+    to-json: func() -> json-value;
+}
+
+/// Node operations interface (factory and queries)
+interface node-ops {
+    use address.{address};
+
+    /// Create a new node
+    create-node: func(
+        id: string,
+        node-type: option<string>,
+        properties: list<tuple<string, property-value>>,
+        data: option<json-value>
+    ) -> result<address, string>;
+
+    /// Get node by address
+    get-node: func(addr: address) -> result<borrow<node>, string>;
+
+    /// Update node properties
+    update-node: func(
+        addr: address,
+        properties: list<tuple<string, property-value>>
+    ) -> result<_, string>;
+
+    /// Delete node
+    delete-node: func(addr: address) -> result<_, string>;
+
+    /// Find nodes by type
+    find-by-type: func(node-type: string) -> list<address>;
+
+    /// Find nodes by property value
+    find-by-property: func(key: string, value: property-value) -> list<address>;
+
+    /// Full-text search across node content
+    search: func(query: string) -> list<address>;
+}

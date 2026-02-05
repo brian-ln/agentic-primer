@@ -1,0 +1,90 @@
+// Session State Management for Knowledge Tracking
+//
+// Maintains session-level knowledge including context, history, and learned patterns.
+
+package convergence:domain@0.1.0;
+
+use address.{address};
+use signal-hub:core/types@0.1.0.{json-value};
+
+/// Session context snapshot
+record session-context {
+    /// Active session
+    session: address,
+    /// Current iteration/turn
+    iteration: u32,
+    /// Active task (if any)
+    task: option<address>,
+    /// Key-value context data
+    context: list<tuple<string, json-value>>,
+    /// Timestamp
+    captured-at: u64,
+}
+
+/// Knowledge artifact
+record knowledge-artifact {
+    id: string,
+    artifact-type: string,
+    content: json-value,
+    source: address,
+    created-at: u64,
+    relevance: float64,
+}
+
+/// Session knowledge state
+record session-knowledge {
+    /// Session address
+    session: address,
+    /// Captured artifacts
+    artifacts: list<knowledge-artifact>,
+    /// Learned patterns
+    patterns: list<string>,
+    /// Context snapshots
+    contexts: list<session-context>,
+}
+
+/// Session state management interface
+interface session-state {
+    use address.{address};
+
+    /// Capture current session context
+    capture-context: func(session: address) -> result<session-context, string>;
+
+    /// Get session context history
+    get-context-history: func(session: address, limit: u32) -> list<session-context>;
+
+    /// Store knowledge artifact
+    store-artifact: func(
+        session: address,
+        artifact-type: string,
+        content: json-value,
+        source: address
+    ) -> result<knowledge-artifact, string>;
+
+    /// Retrieve artifacts by type
+    get-artifacts: func(
+        session: address,
+        artifact-type: option<string>
+    ) -> list<knowledge-artifact>;
+
+    /// Extract learned patterns from session
+    ///
+    /// Analyzes session history to identify recurring patterns,
+    /// successful strategies, and emergent knowledge.
+    extract-patterns: func(session: address) -> result<list<string>, string>;
+
+    /// Get session knowledge state
+    get-session-knowledge: func(session: address) -> result<session-knowledge, string>;
+
+    /// Clear session state
+    clear-session-state: func(session: address) -> result<_, string>;
+
+    /// Export session knowledge
+    export-knowledge: func(session: address) -> result<json-value, string>;
+
+    /// Import session knowledge
+    import-knowledge: func(
+        session: address,
+        knowledge: json-value
+    ) -> result<_, string>;
+}
