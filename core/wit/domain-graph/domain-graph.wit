@@ -1,0 +1,157 @@
+// Domain Graph Protocols - Consolidated
+// Graph primitives: Address, Node, Edge, Graph operations
+// Adapted from Simplify/UGS for cross-system protocol definition
+
+package convergence:domain-graph@0.1.0;
+
+/// Address types and resolution interface
+interface address {
+    /// Edge reference for scoped addresses  
+    record edge-ref {
+        source: string,
+        target: string,
+    }
+
+    /// Address scope determines how the address is resolved
+    variant address-scope {
+        node,
+        edge(edge-ref),
+        computed(string),
+    }
+
+    /// Address primitive - universal reference (@(id))
+    record address {
+        id: string,
+        namespace: option<string>,
+        scope: address-scope,
+        version: option<string>,
+    }
+
+    variant parse-error {
+        invalid-format(string),
+        missing-id,
+        invalid-scope(string),
+    }
+
+    variant resolve-error {
+        not-found(string),
+        ambiguous(list<string>),
+        invalid-scope,
+        permission-denied,
+    }
+
+    record routing-info {
+        canonical: address,
+        location: option<string>,
+        metadata: list<tuple<string, string>>,
+    }
+
+    parse: func(input: string) -> result<address, parse-error>;
+    serialize: func(addr: address) -> string;
+    resolve: func(addr: address) -> result<routing-info, resolve-error>;
+    create: func(id: string, namespace: option<string>, scope: address-scope, version: option<string>) -> address;
+    normalize: func(addr: address) -> address;
+    equals: func(a: address, b: address) -> bool;
+}
+
+/// Node operations interface
+interface node {
+    use address.{address};
+
+    variant property-value {
+        string-val(string),
+        number-val(f64),
+        bool-val(bool),
+        null-val,
+        address-ref(address),
+    }
+
+    record node-metadata {
+        created-at: string,
+        updated-at: string,
+        version: u64,
+    }
+
+    record node {
+        id: string,
+        node-type: option<string>,
+        properties: list<tuple<string, property-value>>,
+        data: option<string>,
+        metadata: node-metadata,
+    }
+
+    variant node-error {
+        not-found(string),
+        already-exists(string),
+        invalid-property(string),
+    }
+
+    create-node: func(id: string, node-type: option<string>) -> result<node, node-error>;
+    get-node: func(id: string) -> result<node, node-error>;
+    update-node: func(id: string, properties: list<tuple<string, property-value>>) -> result<_, node-error>;
+    delete-node: func(id: string) -> result<_, node-error>;
+    set-property: func(node-id: string, key: string, value: property-value) -> result<_, node-error>;
+    get-property: func(node-id: string, key: string) -> result<property-value, node-error>;
+}
+
+/// Edge operations interface
+interface edge {
+    use address.{address};
+    use node.{property-value};
+
+    record edge {
+        id: string,
+        source: address,
+        target: address,
+        edge-type: option<string>,
+        weight: f64,
+        properties: list<tuple<string, property-value>>,
+    }
+
+    variant edge-error {
+        not-found(string),
+        already-exists(string),
+        invalid-endpoints,
+    }
+
+    create-edge: func(id: string, source: address, target: address, edge-type: option<string>) -> result<edge, edge-error>;
+    get-edge: func(id: string) -> result<edge, edge-error>;
+    delete-edge: func(id: string) -> result<_, edge-error>;
+    set-weight: func(edge-id: string, weight: f64) -> result<_, edge-error>;
+}
+
+/// Graph traversal and operations
+interface graph {
+    use address.{address};
+    use node.{node};
+    use edge.{edge};
+
+    enum direction {
+        outgoing,
+        incoming,
+        bidirectional,
+    }
+
+    record traversal-options {
+        max-depth: option<u32>,
+        edge-types: option<list<string>>,
+        direction: direction,
+    }
+
+    record path {
+        nodes: list<node>,
+        edges: list<edge>,
+        total-weight: f64,
+    }
+
+    traverse: func(start: address, options: traversal-options) -> result<list<node>, string>;
+    shortest-path: func(start: address, end: address) -> result<path, string>;
+    neighbors: func(node: address, direction: direction) -> result<list<node>, string>;
+}
+
+world domain-graph {
+    export address;
+    export node;
+    export edge;
+    export graph;
+}

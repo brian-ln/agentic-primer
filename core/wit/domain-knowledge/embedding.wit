@@ -1,0 +1,91 @@
+// Embedding and Similarity Search for Knowledge Management
+//
+// Vector embeddings enable semantic similarity search across graph content.
+
+package convergence:domain-knowledge@0.1.0;
+
+use self.address.{address};
+
+/// Embedding model information
+record embedding-model {
+    name: string,
+    dimensions: u32,
+    provider: string,
+}
+
+/// Similarity search result
+record similarity-result {
+    node: address,
+    similarity: float64,
+}
+
+/// Similarity search options
+record similarity-options {
+    /// Filter by node type
+    node-type: option<string>,
+    /// Maximum results
+    limit: u32,
+    /// Minimum similarity threshold (0.0 to 1.0)
+    min-similarity: float64,
+}
+
+/// Embedding statistics
+record embedding-stats {
+    total-nodes: u32,
+    embedded-nodes: u32,
+    model: string,
+    dimensions: u32,
+}
+
+/// Embedding and similarity search interface
+interface embedding {
+    use self.address.{address};
+
+    /// Get default embedding model
+    get-model: func() -> embedding-model;
+
+    /// Generate embedding for text
+    embed-text: func(text: string) -> result<list<float64>, string>;
+
+    /// Embed node content and store
+    ///
+    /// Extracts text from node properties and data, generates embedding,
+    /// and stores it in the node for future similarity searches.
+    embed-node: func(node: address) -> result<list<float64>, string>;
+
+    /// Batch embed multiple nodes
+    ///
+    /// Returns addresses of successfully embedded nodes.
+    /// Failed embeddings are silently skipped.
+    embed-nodes: func(nodes: list<address>) -> result<list<address>, string>;
+
+    /// Get stored embedding for node
+    get-node-embedding: func(node: address) -> option<list<float64>>;
+
+    /// Check if node has embedding
+    has-embedding: func(node: address) -> bool;
+
+    /// Calculate cosine similarity between vectors
+    cosine-similarity: func(a: list<float64>, b: list<float64>) -> result<float64, string>;
+
+    /// Find nodes similar to query text
+    find-similar-to-text: func(
+        text: string,
+        options: similarity-options
+    ) -> result<list<similarity-result>, string>;
+
+    /// Find nodes similar to a given node
+    find-similar-to-node: func(
+        node: address,
+        options: similarity-options
+    ) -> result<list<similarity-result>, string>;
+
+    /// Find nodes similar to vector
+    find-similar: func(
+        vector: list<float64>,
+        options: similarity-options
+    ) -> list<similarity-result>;
+
+    /// Get embedding statistics
+    get-stats: func() -> embedding-stats;
+}
