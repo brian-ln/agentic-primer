@@ -1,0 +1,4 @@
+Generated system must:
+- Process test issue end-to-end without errors
+- Pass syntax validation (yamllint, shellcheck)
+- GitHub workflow triggers on issue creation

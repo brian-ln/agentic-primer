@@ -1,0 +1,21 @@
+# CODEOWNERS file for @copilot automation
+# Automatically assigns PRs to maintainers for review
+
+# GitHub Actions and automation workflows
+.github/workflows/ @maintainer
+.github/ISSUE_TEMPLATE/ @maintainer
+
+# Documentation and knowledge base
+docs/ @maintainer
+docs/knowledge/ @maintainer
+
+# Core implementation
+src/ @maintainer
+
+# Configuration files
+*.json @maintainer
+*.yml @maintainer
+*.yaml @maintainer
+
+# Default owner for all other files
+* @maintainer

@@ -1,0 +1,114 @@
+name: Copilot Task
+description: Create a task for @copilot to implement autonomously
+title: "[Task]: "
+labels: ["copilot"]
+assignees:
+  - copilot
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## GitHub Copilot Task
+
+        This template creates a structured task that @copilot can implement autonomously.
+
+        **Instructions:**
+        - Fill out all required fields below
+        - Be specific in your description and acceptance criteria
+        - Reference relevant knowledge base files if available
+        - Assign to @copilot to trigger automation
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Task Description
+      description: Describe what needs to be implemented
+      placeholder: |
+        Add a health check endpoint that returns the service status.
+
+        The endpoint should:
+        - Respond to GET /health
+        - Return 200 OK when service is healthy
+        - Include timestamp and version in response
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Define what "done" looks like (use checkboxes)
+      placeholder: |
+        - [ ] Endpoint responds to GET /health
+        - [ ] Returns 200 status code
+        - [ ] Response includes timestamp
+        - [ ] Response includes version number
+        - [ ] Unit tests added with 80%+ coverage
+        - [ ] Documentation updated
+      value: |
+        - [ ]
+    validations:
+      required: true
+
+  - type: textarea
+    id: files-to-modify
+    attributes:
+      label: Files to Modify or Create
+      description: List specific files that should be changed (optional but helpful)
+      placeholder: |
+        - src/api/health.js (create)
+        - tests/api/health.test.js (create)
+        - docs/api/endpoints.md (update)
+    validations:
+      required: false
+
+  - type: textarea
+    id: knowledge-references
+    attributes:
+      label: Knowledge Base References
+      description: Link to relevant patterns, decisions, or insights from docs/knowledge/
+      placeholder: |
+        - docs/knowledge/patterns/api-error-handling.md
+        - docs/knowledge/decisions/001-github-copilot-automation.md
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How urgent is this task?
+      options:
+        - Low
+        - Medium
+        - High
+        - Critical
+      default: 1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: Estimated Complexity
+      description: How complex is this task?
+      options:
+        - Simple (< 1 hour)
+        - Moderate (1-4 hours)
+        - Complex (> 4 hours)
+      default: 0
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any other information that would help @copilot implement this task
+      placeholder: |
+        - Related issues: #123, #456
+        - API documentation: https://...
+        - Example code: ...
+    validations:
+      required: false

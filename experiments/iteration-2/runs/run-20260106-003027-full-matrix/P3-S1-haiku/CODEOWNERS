@@ -1,0 +1,34 @@
+# CODEOWNERS - Automatic PR assignment for @copilot generated PRs
+# This file controls which users/teams are automatically requested for review
+# when changes are made to matching paths.
+
+# Global rule: All changes require review from default owner
+* @owner
+
+# Frontend changes
+src/ui/** @frontend-team @owner
+src/components/** @frontend-team @owner
+
+# Backend changes
+src/api/** @backend-team @owner
+src/services/** @backend-team @owner
+
+# Database changes
+src/db/** @database-team @owner
+migrations/** @database-team @owner
+
+# Testing
+__tests__/** @qa-team @owner
+*.test.ts @qa-team @owner
+*.spec.ts @qa-team @owner
+
+# Documentation
+docs/** @owner
+README.md @owner
+CONTRIBUTING.md @owner
+
+# Configuration
+.github/** @owner
+.env* @owner
+tsconfig.json @owner
+package.json @owner

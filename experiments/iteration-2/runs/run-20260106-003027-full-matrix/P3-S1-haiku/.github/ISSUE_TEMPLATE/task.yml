@@ -1,0 +1,97 @@
+name: @copilot Task
+description: Structured task for @copilot autonomous processing
+title: "[Task] "
+assignees:
+  - copilot
+labels:
+  - copilot
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is a structured task template for the @copilot agent. Please fill in all sections clearly.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Task Description
+      description: Clear description of what needs to be done
+      placeholder: |
+        Example: Add deprecation warning to legacy API endpoint /api/v1/users
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Specific, measurable criteria for task completion
+      placeholder: |
+        - [ ] Legacy endpoint logs deprecation warning on each call
+        - [ ] Warning message is clear and points to new endpoint
+        - [ ] Tests pass and coverage maintained
+        - [ ] PR includes migration guide in documentation
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: Task priority level
+      options:
+        - "Low"
+        - "Medium"
+        - "High"
+        - "Critical"
+      default: 1
+      required: true
+
+  - type: dropdown
+    id: issue_type
+    attributes:
+      label: Issue Type
+      description: Type of work required
+      options:
+        - "Feature"
+        - "Bug Fix"
+        - "Refactor"
+        - "Documentation"
+        - "Performance"
+        - "Testing"
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Background information, related issues, or links to relevant documentation
+      placeholder: |
+        - Related issue #123
+        - Depends on PR #456
+        - See design doc: docs/knowledge/decisions/adr-001-architecture.md
+      required: false
+
+  - type: textarea
+    id: technical_notes
+    attributes:
+      label: Technical Notes
+      description: Implementation hints, constraints, or technical considerations for @copilot
+      placeholder: |
+        - Use the pattern from docs/knowledge/patterns/implementation-patterns.md#deprecation
+        - Avoid breaking changes to public API
+        - Consider performance impact on high-volume endpoints
+      required: false
+
+  - type: checkboxes
+    id: requirements
+    attributes:
+      label: Requirements
+      description: Standard requirements for all tasks
+      options:
+        - label: Code follows project standards
+          required: true
+        - label: Tests are included and passing
+          required: true
+        - label: Documentation is updated
+          required: true
+        - label: No breaking changes without issue discussion
+          required: true

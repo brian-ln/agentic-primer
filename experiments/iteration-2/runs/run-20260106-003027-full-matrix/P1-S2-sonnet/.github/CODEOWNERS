@@ -1,0 +1,22 @@
+# CODEOWNERS
+#
+# This file defines code ownership for automatic PR review assignment.
+# GitHub automatically requests reviews from the code owners when PRs are opened.
+#
+# Documentation: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for all files
+# Replace @owner with the actual GitHub username or team
+* @owner
+
+# Knowledge base - owned by documentation team (if applicable)
+# docs/knowledge/ @docs-team
+
+# GitHub workflows - owned by DevOps/platform team (if applicable)
+# .github/workflows/ @devops-team
+
+# Auto-review scripts - owned by quality/testing team (if applicable)
+# scripts/auto-review.sh @qa-team
+
+# Note: All @copilot-generated PRs will be assigned to the default owner
+# This ensures human review of all agent-generated code changes

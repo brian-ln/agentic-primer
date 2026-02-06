@@ -1,0 +1,309 @@
+# Technology Stack
+#
+# Overview of technologies, frameworks, and tools used in this project.
+
+version: "1.0"
+
+description: |
+  Complete technology stack documentation for @copilot to understand
+  the tools and frameworks available for implementation.
+
+frontend:
+  framework:
+    name: Next.js
+    version: "14.x"
+    features:
+      - App Router (not Pages Router)
+      - Server Components
+      - Server Actions
+      - React Server Components (RSC)
+    documentation: https://nextjs.org/docs
+
+  ui_library:
+    name: React
+    version: "18.x"
+    patterns:
+      - Functional components
+      - Hooks
+      - Context API for state management
+    documentation: https://react.dev
+
+  styling:
+    framework: Tailwind CSS
+    version: "3.x"
+    approach: Utility-first CSS
+    configuration: tailwind.config.js
+    documentation: https://tailwindcss.com/docs
+
+  state_management:
+    - React Context (for global state)
+    - React hooks (useState, useReducer)
+    - Server state via Next.js server actions
+    - No Redux/Zustand (keep it simple)
+
+  forms:
+    library: React Hook Form
+    validation: Zod schema validation
+    example: |
+      import { useForm } from "react-hook-form";
+      import { zodResolver } from "@hookform/resolvers/zod";
+      import { z } from "zod";
+
+      const schema = z.object({
+        email: z.string().email(),
+        password: z.string().min(8),
+      });
+
+      function LoginForm() {
+        const { register, handleSubmit } = useForm({
+          resolver: zodResolver(schema),
+        });
+      }
+
+backend:
+  framework:
+    name: Next.js API Routes
+    version: "14.x"
+    pattern: App Router API routes
+    location: src/app/api/
+
+  runtime:
+    name: Node.js
+    version: "20.x LTS"
+    package_manager: npm
+
+  language:
+    name: TypeScript
+    version: "5.x"
+    strict_mode: true
+    configuration: tsconfig.json
+
+  authentication:
+    approach: JWT tokens
+    storage: HTTP-only cookies
+    library: jsonwebtoken
+    oauth_providers:
+      - GitHub OAuth
+      - Google OAuth
+
+  validation:
+    library: Zod
+    usage: Request body validation, type inference
+
+database:
+  primary:
+    name: PostgreSQL
+    version: "15.x"
+    hosting: Cloud-hosted (Neon, Supabase, or AWS RDS)
+
+  orm:
+    name: Prisma
+    version: "5.x"
+    schema_location: prisma/schema.prisma
+    migrations: prisma/migrations/
+    commands: |
+      # Generate Prisma client
+      npx prisma generate
+
+      # Create migration
+      npx prisma migrate dev --name <migration-name>
+
+      # Apply migrations
+      npx prisma migrate deploy
+
+      # Open Prisma Studio
+      npx prisma studio
+
+  caching:
+    name: Redis
+    usage: Session storage, rate limiting, caching
+    client: ioredis
+    example: |
+      import Redis from "ioredis";
+
+      const redis = new Redis(process.env.REDIS_URL);
+
+      // Cache user data
+      await redis.setex(`user:${id}`, 3600, JSON.stringify(user));
+      const cached = await redis.get(`user:${id}`);
+
+testing:
+  unit_integration:
+    framework: Jest
+    version: "29.x"
+    configuration: jest.config.js
+    coverage_tool: Built-in (Istanbul)
+
+  react_testing:
+    library: React Testing Library
+    version: "14.x"
+    approach: User-centric testing
+
+  e2e_testing:
+    framework: Playwright
+    version: "1.x"
+    browsers: Chromium, Firefox, WebKit
+    configuration: playwright.config.ts
+
+  api_testing:
+    library: Supertest
+    usage: HTTP endpoint testing
+
+tooling:
+  linting:
+    - tool: ESLint
+      config: .eslintrc.json
+      extends: next/core-web-vitals
+
+  formatting:
+    - tool: Prettier
+      config: .prettierrc
+      integration: ESLint plugin
+
+  type_checking:
+    - tool: TypeScript compiler
+      command: tsc --noEmit
+
+  git_hooks:
+    - tool: Husky
+      hooks: pre-commit, pre-push
+      actions: Lint, type check, test
+
+deployment:
+  platform: Vercel
+  environment_variables:
+    - DATABASE_URL
+    - REDIS_URL
+    - JWT_SECRET
+    - GITHUB_CLIENT_ID
+    - GITHUB_CLIENT_SECRET
+    - GOOGLE_CLIENT_ID
+    - GOOGLE_CLIENT_SECRET
+
+  commands: |
+    # Preview deployment (automatic on PR)
+    git push origin feature-branch
+
+    # Production deployment (automatic on merge to main)
+    git push origin main
+
+environment:
+  development:
+    - Node.js 20.x
+    - npm 10.x
+    - PostgreSQL (local or cloud)
+    - Redis (local or cloud)
+
+  commands: |
+    # Install dependencies
+    npm install
+
+    # Run development server
+    npm run dev
+
+    # Run type checking
+    npm run type-check
+
+    # Run linting
+    npm run lint
+
+    # Run tests
+    npm test
+
+    # Run Prisma migrations
+    npm run db:migrate
+
+    # Generate Prisma client
+    npm run db:generate
+
+file_structure:
+  src:
+    app:
+      - Route handlers (Next.js App Router)
+      - Server Components
+      - Layouts
+
+    components:
+      - React components
+      - Organized by feature or type
+
+    lib:
+      - Utilities
+      - Shared logic
+      - External integrations
+
+    services:
+      - Business logic
+      - Service layer
+
+    repositories:
+      - Data access layer
+      - Database operations
+
+    middleware:
+      - Request preprocessing
+      - Authentication
+      - Validation
+
+    types:
+      - TypeScript type definitions
+      - Shared interfaces
+
+  prisma:
+    - schema.prisma (database schema)
+    - migrations/ (database migrations)
+
+  tests:
+    - Unit tests (co-located with source)
+    - Integration tests
+    - E2E tests
+
+  public:
+    - Static assets
+    - Images, fonts, etc.
+
+version_constraints:
+  node: ">=20.0.0"
+  npm: ">=10.0.0"
+  typescript: "^5.0.0"
+  next: "^14.0.0"
+  react: "^18.0.0"
+
+package_scripts: |
+  {
+    "scripts": {
+      "dev": "next dev",
+      "build": "next build",
+      "start": "next start",
+      "lint": "next lint",
+      "type-check": "tsc --noEmit",
+      "test": "jest",
+      "test:watch": "jest --watch",
+      "test:e2e": "playwright test",
+      "db:generate": "prisma generate",
+      "db:migrate": "prisma migrate dev",
+      "db:push": "prisma db push",
+      "db:studio": "prisma studio"
+    }
+  }
+
+dependencies_of_note:
+  - name: zod
+    purpose: Schema validation and type inference
+    usage: Form validation, API request validation
+
+  - name: jsonwebtoken
+    purpose: JWT token generation and verification
+    usage: Authentication
+
+  - name: bcrypt
+    purpose: Password hashing
+    usage: User authentication
+
+  - name: date-fns
+    purpose: Date manipulation
+    usage: Formatting, parsing dates
+
+  - name: clsx
+    purpose: Conditional CSS classes
+    usage: Dynamic styling with Tailwind

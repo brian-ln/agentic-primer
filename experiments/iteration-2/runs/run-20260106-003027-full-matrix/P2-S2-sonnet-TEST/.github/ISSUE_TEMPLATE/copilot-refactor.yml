@@ -1,0 +1,188 @@
+name: Copilot Refactoring
+description: Request code refactoring to be done by @copilot
+title: "[REFACTOR] "
+labels: ["copilot", "refactoring"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Refactoring Request for @copilot
+
+        This issue will be automatically assigned to @copilot for refactoring work.
+        Please clearly explain what needs to be improved and why.
+
+  - type: input
+    id: refactor-title
+    attributes:
+      label: Refactoring Title
+      description: Short, descriptive name for the refactoring
+      placeholder: "Extract authentication logic into separate service"
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-state
+    attributes:
+      label: Current State
+      description: Describe the code that needs refactoring
+      placeholder: |
+        Authentication logic is currently scattered across multiple components:
+        - LoginForm.tsx has OAuth logic
+        - Dashboard.tsx has session checking
+        - Profile.tsx has token refresh logic
+
+        This makes it hard to maintain and test authentication consistently.
+    validations:
+      required: true
+
+  - type: textarea
+    id: desired-state
+    attributes:
+      label: Desired State
+      description: Describe what the code should look like after refactoring
+      placeholder: |
+        All authentication logic should be centralized in src/lib/auth-service.ts:
+        - Single source of truth for auth state
+        - Reusable functions for login, logout, token refresh
+        - Clear separation of concerns
+        - Easier to test and maintain
+    validations:
+      required: true
+
+  - type: dropdown
+    id: refactor-type
+    attributes:
+      label: Refactoring Type
+      description: What kind of refactoring is this?
+      options:
+        - Extract function/class
+        - Rename variable/function
+        - Move code to different file
+        - Simplify complex logic
+        - Remove duplication
+        - Improve naming
+        - Update to modern patterns
+        - Performance optimization
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why is this refactoring needed?
+      placeholder: |
+        - Code is duplicated in 5 different components
+        - Hard to update authentication logic consistently
+        - New OAuth providers need to be added (blocked by current structure)
+        - Test coverage is low due to tight coupling
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What files/components are affected?
+      placeholder: |
+        Files to refactor:
+        - src/components/LoginForm.tsx
+        - src/components/Dashboard.tsx
+        - src/components/Profile.tsx
+        - src/app/api/auth/route.ts
+
+        Files to create:
+        - src/lib/auth-service.ts
+        - src/lib/auth-types.ts
+
+        Tests to update:
+        - tests/auth/*.test.ts
+    validations:
+      required: true
+
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints
+      description: What must not change during refactoring?
+      placeholder: |
+        - API contract must remain unchanged (backward compatibility)
+        - User-facing behavior must stay exactly the same
+        - Existing tests must continue to pass
+        - No breaking changes to exported interfaces
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Checklist of conditions that confirm the refactoring is complete
+      placeholder: |
+        - [ ] All authentication logic centralized in auth-service.ts
+        - [ ] Components use auth service instead of inline logic
+        - [ ] Code duplication eliminated (DRY principle)
+        - [ ] All existing tests pass without modification
+        - [ ] New unit tests for auth service (80%+ coverage)
+        - [ ] No change to user-facing behavior
+        - [ ] Code review confirms improved maintainability
+    validations:
+      required: true
+
+  - type: textarea
+    id: technical-context
+    attributes:
+      label: Technical Context
+      description: Relevant technical details
+      placeholder: |
+        - Framework: React 18 with TypeScript
+        - State management: React Context + hooks
+        - Current patterns: Component-level logic, inline handlers
+        - Target patterns: Service layer, dependency injection
+    validations:
+      required: false
+
+  - type: textarea
+    id: knowledge-base-refs
+    attributes:
+      label: Knowledge Base References
+      description: Link to relevant patterns or standards
+      placeholder: |
+        - Architecture: service-layer-pattern
+        - Standards: typescript-best-practices
+        - Practices: refactoring-safety-checklist
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How urgent is this refactoring?
+      options:
+        - Low (tech debt, not blocking)
+        - Medium (improves maintainability)
+        - High (blocking new features)
+        - Critical (causing production issues)
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      description: Confirm you've provided sufficient context
+      options:
+        - label: I have described the current and desired state clearly
+          required: true
+        - label: I have explained the motivation for refactoring
+          required: true
+        - label: I have defined the scope (files to change)
+          required: true
+        - label: I have listed constraints (what must not change)
+          required: true
+        - label: I have specified acceptance criteria
+          required: true
+        - label: I understand this will be done by an AI agent
+          required: true

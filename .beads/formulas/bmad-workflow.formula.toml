@@ -1,0 +1,472 @@
+# BMAD-METHOD Workflow Formula
+# Defines BMAD workflows and activities for beads integration
+# Date: 2026-01-11
+# Source: https://github.com/bmad-code-org/BMAD-METHOD
+
+[metadata]
+name = "bmad-workflow"
+version = "1.0.0"
+description = "BMAD-METHOD workflow patterns and activities"
+author = "Analysis from bmad-code-org/BMAD-METHOD"
+license = "MIT"
+source_repo = "https://github.com/bmad-code-org/BMAD-METHOD"
+
+# =============================================================================
+# Phase 1: Analysis (Optional)
+# =============================================================================
+
+[activity.brainstorm-project]
+name = "Brainstorm Project"
+phase = "analysis"
+agent = "analyst"
+description = "Explore ideas, problem statements, and potential solutions"
+duration_min = 10
+duration_max = 20
+inputs = [
+  { type = "idea", description = "Initial project idea or problem" }
+]
+outputs = [
+  { type = "brainstorming.md", path = "{planning_artifacts}/brainstorming.md" }
+]
+validation = [
+  "ideas_explored ≥ 5",
+  "problem_statement_clear",
+  "solutions_identified"
+]
+
+[activity.research]
+name = "Research"
+phase = "analysis"
+agent = "analyst"
+description = "Conduct market, domain, or technical research"
+duration_min = 15
+duration_max = 30
+types = ["market", "domain", "technical"]
+inputs = [
+  { type = "research_questions", description = "Questions to investigate" }
+]
+outputs = [
+  { type = "research.md", path = "{planning_artifacts}/research-{type}.md" }
+]
+validation = [
+  "questions_answered",
+  "decisions_documented",
+  "references_cited"
+]
+
+[activity.create-product-brief]
+name = "Create Product Brief"
+phase = "analysis"
+agent = "analyst"
+description = "Synthesize brainstorming and research into product brief"
+duration_min = 10
+duration_max = 15
+inputs = [
+  { type = "brainstorming.md", required = false },
+  { type = "research.md", required = false }
+]
+outputs = [
+  { type = "product-brief.md", path = "{planning_artifacts}/product-brief.md" }
+]
+validation = [
+  "vision_clear",
+  "market_validated",
+  "success_metrics_defined"
+]
+
+# =============================================================================
+# Phase 2: Planning (Required)
+# =============================================================================
+
+[activity.prd]
+name = "Product Requirements Document"
+phase = "planning"
+agent = "pm"
+description = "Create comprehensive PRD (tri-modal: Create/Validate/Edit)"
+duration_min = 10
+duration_max = 20
+modes = ["create", "validate", "edit"]
+inputs = [
+  { type = "product-brief.md", required = false },
+  { type = "user_input", required = true }
+]
+outputs = [
+  { type = "PRD.md", path = "{planning_artifacts}/PRD.md" }
+]
+validation = [
+  "functional_requirements ≥ 3",
+  "non_functional_requirements_specified",
+  "testable_requirements",
+  "no_implementation_leakage",
+  "density ≥ 200_words_per_section",
+  "prd_quality_score ≥ 0.7"
+]
+quality_formula = "0.2*clarity + 0.2*completeness + 0.15*testability + 0.15*measurability + 0.1*density + 0.1*no_impl + 0.1*coverage"
+
+[activity.create-ux-design]
+name = "Create UX Design"
+phase = "planning"
+agent = "ux-designer"
+description = "Create UX specification (tri-modal)"
+duration_min = 15
+duration_max = 25
+modes = ["create", "validate", "edit"]
+inputs = [
+  { type = "PRD.md", required = true }
+]
+outputs = [
+  { type = "ux-design.md", path = "{planning_artifacts}/ux-design.md" }
+]
+validation = [
+  "user_journeys_mapped",
+  "wireframes_complete",
+  "design_system_documented"
+]
+
+[activity.quick-spec]
+name = "Quick Technical Specification"
+phase = "planning"
+agent = "quick-flow-solo-dev"
+track = "quick-flow"
+description = "Lightweight tech spec for quick tasks (Level 0-1)"
+duration_min = 3
+duration_max = 5
+inputs = [
+  { type = "feature_description", required = true }
+]
+outputs = [
+  { type = "tech-spec.md", path = "{implementation_artifacts}/tech-spec.md" }
+]
+validation = [
+  "goal_clear",
+  "approach_feasible",
+  "acceptance_criteria_defined"
+]
+
+# =============================================================================
+# Phase 3: Solutioning (Track-Dependent)
+# =============================================================================
+
+[activity.create-architecture]
+name = "Create Architecture"
+phase = "solutioning"
+agent = "architect"
+description = "Design system architecture with ADRs (tri-modal)"
+duration_min = 15
+duration_max = 30
+modes = ["create", "validate", "edit"]
+inputs = [
+  { type = "PRD.md", required = true },
+  { type = "ux-design.md", required = false }
+]
+outputs = [
+  { type = "architecture.md", path = "{planning_artifacts}/architecture.md" },
+  { type = "ADRs", path = "{planning_artifacts}/ADRs/*.md" }
+]
+validation = [
+  "system_design_complete",
+  "adrs_documented ≥ 5",
+  "patterns_consistent",
+  "prd_coverage_complete",
+  "arch_quality_score ≥ 0.7"
+]
+quality_formula = "0.25*completeness + 0.25*adr_quality + 0.2*consistency + 0.15*prd_coverage + 0.15*guidance"
+
+[activity.create-epics-and-stories]
+name = "Create Epics and Stories"
+phase = "solutioning"
+agent = "pm"
+description = "Break down architecture and PRD into epics with stories"
+duration_min = 10
+duration_max = 20
+inputs = [
+  { type = "architecture.md", required = true },
+  { type = "PRD.md", required = true }
+]
+outputs = [
+  { type = "epic-*.md", path = "{planning_artifacts}/epic-*.md", multiple = true }
+]
+validation = [
+  "stories_defined ≥ 3_per_epic",
+  "dependencies_clear",
+  "estimates_reasonable",
+  "acceptance_criteria_present"
+]
+
+[activity.check-implementation-readiness]
+name = "Check Implementation Readiness"
+phase = "solutioning"
+agent = "architect"
+description = "Validate readiness to begin implementation"
+duration_min = 5
+duration_max = 10
+inputs = [
+  { type = "architecture.md", required = true },
+  { type = "epic-*.md", required = true }
+]
+outputs = [
+  { type = "readiness-report.md", path = "{planning_artifacts}/readiness-report.md" }
+]
+validation = [
+  "blockers_resolved",
+  "team_ready",
+  "architecture_approved"
+]
+
+# =============================================================================
+# Phase 4: Implementation (Required)
+# =============================================================================
+
+[activity.sprint-planning]
+name = "Sprint Planning"
+phase = "implementation"
+agent = "sm"
+description = "Plan sprint and initialize sprint status tracking"
+duration_min = 5
+duration_max = 10
+inputs = [
+  { type = "epic-*.md", required = true }
+]
+outputs = [
+  { type = "sprint-status.md", path = "{implementation_artifacts}/sprint-status.md" }
+]
+validation = [
+  "sprint_goal_defined",
+  "stories_selected",
+  "capacity_estimated"
+]
+
+[activity.create-story]
+name = "Create Story"
+phase = "implementation"
+agent = "sm"
+description = "Prepare detailed story file for development"
+duration_min = 5
+duration_max = 10
+inputs = [
+  { type = "epic-*.md", required = true },
+  { type = "sprint-status.md", required = true }
+]
+outputs = [
+  { type = "story-*.md", path = "{implementation_artifacts}/story-*.md" }
+]
+validation = [
+  "acceptance_criteria_clear",
+  "tasks_defined",
+  "dependencies_resolved",
+  "architecture_alignment",
+  "story_quality_score ≥ 0.7"
+]
+quality_formula = "0.3*ac_quality + 0.25*task_breakdown + 0.2*dependency_clarity + 0.15*arch_alignment + 0.1*estimate_reason"
+
+[activity.dev-story]
+name = "Develop Story"
+phase = "implementation"
+agent = "dev"
+description = "Implement story with code and tests"
+duration_min = 20
+duration_max = 60
+inputs = [
+  { type = "story-*.md", required = true },
+  { type = "architecture.md", required = false }
+]
+outputs = [
+  { type = "code", path = "src/**/*" },
+  { type = "tests", path = "tests/**/*" }
+]
+validation = [
+  "tests_pass",
+  "follows_architecture",
+  "story_complete",
+  "coverage_adequate"
+]
+
+[activity.code-review]
+name = "Code Review"
+phase = "implementation"
+agent = "dev"
+description = "Review code quality and adherence to standards"
+duration_min = 10
+duration_max = 20
+inputs = [
+  { type = "pull_request", required = true },
+  { type = "code", required = true }
+]
+outputs = [
+  { type = "review-*.md", path = "{implementation_artifacts}/review-*.md" }
+]
+validation = [
+  "quality_criteria_met",
+  "no_blocking_issues",
+  "approved"
+]
+
+[activity.retrospective]
+name = "Sprint Retrospective"
+phase = "implementation"
+agent = "sm"
+description = "Reflect on sprint and identify improvements"
+duration_min = 10
+duration_max = 15
+inputs = [
+  { type = "sprint-status.md", required = true }
+]
+outputs = [
+  { type = "retrospective.md", path = "{implementation_artifacts}/retrospective.md" }
+]
+validation = [
+  "lessons_captured",
+  "improvements_identified",
+  "action_items_defined"
+]
+
+[activity.quick-dev]
+name = "Quick Development"
+phase = "implementation"
+agent = "quick-flow-solo-dev"
+track = "quick-flow"
+description = "Fast implementation for simple tasks"
+duration_min = 10
+duration_max = 30
+inputs = [
+  { type = "tech-spec.md", required = true }
+]
+outputs = [
+  { type = "code", path = "src/**/*" },
+  { type = "tests", path = "tests/**/*" }
+]
+validation = [
+  "tests_pass",
+  "meets_spec",
+  "code_quality_adequate"
+]
+
+# =============================================================================
+# Track Definitions
+# =============================================================================
+
+[track.quick-flow]
+name = "Quick Flow"
+description = "Fast development for simple tasks (5-10 minutes total)"
+level_range = [0, 1]
+phases = ["planning", "implementation"]
+workflow = [
+  "workflow-init",
+  "quick-spec",
+  "quick-dev",
+  "code-review"
+]
+duration_min = 5
+duration_max = 45
+
+[track.bmad-method]
+name = "BMad Method"
+description = "Full methodology for complex projects (15-180 minutes)"
+level_range = [2, 3]
+phases = ["analysis", "planning", "solutioning", "implementation"]
+workflow = [
+  "workflow-init",
+  "brainstorm-project?",
+  "research?",
+  "create-product-brief?",
+  "prd",
+  "create-ux-design?",
+  "create-architecture",
+  "create-epics-and-stories",
+  "check-implementation-readiness",
+  "sprint-planning",
+  "create-story",
+  "dev-story",
+  "code-review",
+  "retrospective"
+]
+duration_min = 80
+duration_max = 300
+
+[track.enterprise]
+name = "Enterprise"
+description = "Enterprise development with compliance (30-300 minutes)"
+level_range = [4]
+phases = ["analysis", "planning", "solutioning", "implementation"]
+workflow = [
+  "workflow-init",
+  "brainstorm-project",
+  "research",
+  "create-product-brief",
+  "prd",
+  "create-ux-design",
+  "create-architecture",
+  "create-epics-and-stories",
+  "check-implementation-readiness",
+  "sprint-planning",
+  "create-story",
+  "dev-story",
+  "code-review",
+  "retrospective"
+]
+duration_min = 150
+duration_max = 600
+
+# =============================================================================
+# Scale-Adaptive Formulas
+# =============================================================================
+
+[formula.complexity-score]
+description = "Calculate project complexity score"
+formula = "0.3*num_epics + 0.25*num_components + 0.2*num_dependencies + 0.15*num_integrations + 0.1*regulatory_requirements"
+output_type = "float"
+range = [0.0, 100.0]
+
+[formula.level-threshold]
+description = "Map complexity score to planning level"
+formula = """
+if score < 2.0: level = 0
+elif score < 5.0: level = 1
+elif score < 10.0: level = 2
+elif score < 20.0: level = 3
+else: level = 4
+"""
+inputs = ["complexity_score"]
+output_type = "int"
+range = [0, 4]
+
+[formula.track-selection]
+description = "Select appropriate track based on complexity"
+formula = """
+if level in [0, 1]: track = 'quick-flow'
+elif level in [2, 3]: track = 'bmad-method'
+else: track = 'enterprise'
+"""
+inputs = ["level"]
+output_type = "string"
+options = ["quick-flow", "bmad-method", "enterprise"]
+
+# =============================================================================
+# Patterns
+# =============================================================================
+
+[pattern.progressive-disclosure]
+name = "Progressive Disclosure"
+description = "Load one step at a time, prevent AI shortcuts"
+rules = [
+  "loaded_steps = 1",
+  "execute_step(n) before load_step(n+1)",
+  "no_future_knowledge"
+]
+
+[pattern.tri-modal]
+name = "Tri-Modal Workflow"
+description = "Create/Validate/Edit as separate modes"
+modes = ["create", "validate", "edit"]
+applicable_workflows = ["prd", "create-ux-design", "create-architecture"]
+
+[pattern.scale-adaptive]
+name = "Scale-Adaptive Planning"
+description = "Automatic depth adjustment based on complexity"
+levels = [0, 1, 2, 3, 4]
+formula = "level_threshold(complexity_score(project))"
+
+[pattern.agent-orchestration]
+name = "Explicit Agent Orchestration"
+description = "Role-based agent assignment per phase/workflow"
+agents = ["analyst", "pm", "ux-designer", "architect", "sm", "dev", "tea", "quick-flow-solo-dev"]

@@ -1,0 +1,115 @@
+# GitHub Copilot Agent Configuration
+# Configuration for autonomous Copilot agent behavior
+
+agent:
+  # Agent identification
+  name: "copilot-agent"
+  version: "1.0.0"
+
+  # Processing behavior
+  auto_process: true
+  trigger_labels:
+    - "copilot-task"
+
+  # Knowledge base integration
+  knowledge_base:
+    enabled: true
+    path: "docs/knowledge"
+    read_before_implementation: true
+    update_after_completion: true
+
+  # Branch naming
+  branch_prefix: "copilot/issue-"
+
+  # PR configuration
+  pull_request:
+    auto_create: true
+    auto_assign_to_creator: true
+    title_prefix: "feat: "
+    include_knowledge_summary: true
+    request_review_from_creator: true
+
+  # Validation requirements
+  validation:
+    require_syntax_check: true
+    require_tests: false
+    require_documentation: false
+    fail_on_validation_errors: false
+
+  # Labels to apply during processing
+  labels:
+    processing: "copilot-processing"
+    completed: "copilot-completed"
+    failed: "copilot-failed"
+
+# Custom instructions for the Copilot agent
+instructions: |
+  When processing issues:
+
+  1. **Read the knowledge base first**
+     - Check docs/knowledge/patterns/ for relevant patterns
+     - Review docs/knowledge/decisions/ for architectural guidance
+     - Consult docs/knowledge/insights/ for lessons learned
+
+  2. **Follow existing patterns**
+     - Maintain consistency with established code patterns
+     - Respect architectural decisions documented in the knowledge base
+     - Apply insights to avoid known pitfalls
+
+  3. **Quality standards**
+     - Write clean, maintainable code
+     - Include appropriate comments
+     - Follow the project's coding conventions
+     - Validate syntax before creating PR
+
+  4. **Documentation**
+     - Update relevant documentation
+     - Add comments explaining non-obvious logic
+     - Document new patterns in knowledge base when appropriate
+
+  5. **Testing**
+     - Include tests when specified in acceptance criteria
+     - Ensure existing tests still pass
+     - Document test coverage
+
+  6. **PR creation**
+     - Write clear PR descriptions
+     - Reference the original issue
+     - Highlight any knowledge base articles consulted
+     - Include checklist for reviewers
+
+# Knowledge base update rules
+knowledge_updates:
+  # When to create new pattern documents
+  create_pattern_when:
+    - "Novel solution to recurring problem"
+    - "Reusable code structure identified"
+    - "Best practice established"
+
+  # When to create new decision records
+  create_decision_when:
+    - "Significant architectural choice made"
+    - "Technology or library selected"
+    - "Trade-off evaluation completed"
+
+  # When to create new insights
+  create_insight_when:
+    - "Unexpected behavior discovered"
+    - "Performance optimization found"
+    - "Integration quirk identified"
+    - "Lesson learned from implementation"
+
+# Notification preferences
+notifications:
+  issue_assigned: true
+  processing_started: true
+  pr_created: true
+  validation_failed: true
+  completion_success: true
+
+# Advanced settings
+advanced:
+  max_files_per_pr: 50
+  max_lines_per_file: 1000
+  require_issue_template: false
+  allow_manual_trigger: true

@@ -1,0 +1,255 @@
+// Agentic Primer Component Worlds
+// Defines component boundaries and composition patterns for
+// Signal Hub, Convergence Framework, Simplify, and AI tracking
+
+package agentic-primer:worlds@0.1.0;
+
+/// Provider Component World
+/// World for AI provider implementations
+/// Components implementing this world handle AI API interactions
+///
+/// Use cases:
+/// - Anthropic provider implementation
+/// - OpenAI provider implementation
+/// - Google Gemini provider implementation
+/// - Custom provider implementations
+///
+/// Example: Anthropic Messages API provider with cost tracking
+world provider-component {
+    /// Provider must implement the provider interface
+    export agentic-primer:provider/provider;
+
+    /// Provider can use metadata for model discovery
+    import agentic-primer:provider/metadata;
+}
+
+/// Event Handler Component World
+/// World for event processing components
+/// Handles events from event bus and produces derived events
+///
+/// Use cases:
+/// - Signal Hub event processors
+/// - Convergence iteration listeners
+/// - Usage tracking aggregators
+/// - Custom event handlers
+///
+/// Example: Signal triage event handler that processes signal-created events
+world event-handler-component {
+    /// Handler must implement the handler interface
+    export agentic-primer:event/handler;
+
+    /// Handler uses event bus for publishing derived events
+    import agentic-primer:event/bus;
+
+    /// Handler can use event store for querying history
+    import agentic-primer:event/store;
+}
+
+/// Message Node Component World
+/// World for message-graph node implementations
+/// Components participate in message routing and processing
+///
+/// Use cases:
+/// - Convergence supervisor nodes
+/// - Convergence worker nodes
+/// - Simplify actor implementations
+/// - Custom message processors
+///
+/// Example: Convergence worker node that processes tasks from supervisor
+world message-node-component {
+    /// Node must implement the node interface
+    export agentic-primer:message/node;
+
+    /// Node uses router for message routing
+    import agentic-primer:message/router;
+
+    /// Node can use delivery for tracked messaging
+    import agentic-primer:message/delivery;
+}
+
+/// Usage Tracking Component World
+/// World for AI capacity tracking implementations
+/// Tracks token usage, costs, and quotas across all AI interactions
+///
+/// Use cases:
+/// - Usage event collectors
+/// - Cost analytics services
+/// - Budget enforcement
+/// - Quota management
+///
+/// Example: Usage tracker that aggregates AI costs from all sources
+world usage-tracking-component {
+    /// Tracker must implement tracking interface
+    export agentic-primer:usage-tracking/tracking;
+
+    /// Tracker uses budget interface for quota management
+    import agentic-primer:usage-tracking/budget;
+
+    /// Tracker uses estimation for cost calculation
+    import agentic-primer:usage-tracking/estimation;
+
+    /// Tracker can publish usage events
+    import agentic-primer:event/bus;
+}
+
+/// Signal Hub Service World
+/// Complete world for Signal Hub deployment
+/// Combines provider, event handling, and usage tracking
+///
+/// Use cases:
+/// - Full Signal Hub service
+/// - Cloudflare Workers deployment
+/// - Integrated AI triage system
+///
+/// Example: Signal Hub Durable Object with all capabilities
+world signal-hub-service {
+    /// Export provider for AI interactions
+    export agentic-primer:provider/provider;
+
+    /// Export event handler for signal processing
+    export agentic-primer:event/handler;
+
+    /// Export event bus for event routing
+    export agentic-primer:event/bus;
+
+    /// Export usage tracker for capacity monitoring
+    export agentic-primer:usage-tracking/tracking;
+
+    /// Import metadata for provider discovery
+    import agentic-primer:provider/metadata;
+
+    /// Import event store for persistence
+    import agentic-primer:event/store;
+
+    /// Import budget management
+    import agentic-primer:usage-tracking/budget;
+
+    /// Import cost estimation
+    import agentic-primer:usage-tracking/estimation;
+}
+
+/// Convergence Service World
+/// World for Convergence Framework deployment
+/// Combines message routing, event handling, and usage tracking
+///
+/// Use cases:
+/// - Convergence supervisor
+/// - Convergence workers
+/// - Multi-agent orchestration
+///
+/// Example: Convergence supervisor coordinating worker nodes
+world convergence-service {
+    /// Export message node for communication
+    export agentic-primer:message/node;
+
+    /// Export message router for node coordination
+    export agentic-primer:message/router;
+
+    /// Export event handler for iteration tracking
+    export agentic-primer:event/handler;
+
+    /// Export usage tracker for cost monitoring
+    export agentic-primer:usage-tracking/tracking;
+
+    /// Import event bus for publishing events
+    import agentic-primer:event/bus;
+
+    /// Import provider for AI interactions
+    import agentic-primer:provider/provider;
+
+    /// Import delivery for reliable messaging
+    import agentic-primer:message/delivery;
+
+    /// Import budget for cost control
+    import agentic-primer:usage-tracking/budget;
+}
+
+/// Browser Extension World
+/// World for client-side browser extensions
+/// Consumes services but doesn't implement server interfaces
+///
+/// Use cases:
+/// - Simplify browser extension
+/// - Chrome extension actors
+/// - Client-side AI interactions
+///
+/// Example: Simplify extension using Signal Hub and providers
+world browser-extension {
+    /// Import provider for AI calls
+    import agentic-primer:provider/provider;
+
+    /// Import event bus for event publishing
+    import agentic-primer:event/bus;
+
+    /// Import usage tracker for quota checks
+    import agentic-primer:usage-tracking/tracking;
+
+    /// Import message router for actor communication
+    import agentic-primer:message/router;
+
+    /// Import metadata for model selection
+    import agentic-primer:provider/metadata;
+}
+
+/// CLI Tool World
+/// World for command-line tools
+/// Used by /ai skill and other CLI utilities
+///
+/// Use cases:
+/// - /ai skill implementation
+/// - Development tools
+/// - Administration utilities
+///
+/// Example: /ai skill that routes requests to providers
+world cli-tool {
+    /// Import provider for AI interactions
+    import agentic-primer:provider/provider;
+
+    /// Import event handler for event processing
+    import agentic-primer:event/handler;
+
+    /// Import message node for actor communication
+    import agentic-primer:message/node;
+
+    /// Import usage tracker for cost tracking
+    import agentic-primer:usage-tracking/tracking;
+
+    /// Import metadata for provider discovery
+    import agentic-primer:provider/metadata;
+
+    /// Import budget for quota checks
+    import agentic-primer:usage-tracking/budget;
+}
+
+/// Development World
+/// Complete world for development and testing
+/// Includes all interfaces for comprehensive testing
+///
+/// Use cases:
+/// - Integration tests
+/// - Development environment
+/// - Component validation
+///
+/// Example: Test harness for validating implementations
+world development {
+    /// Import all provider interfaces
+    import agentic-primer:provider/provider;
+    import agentic-primer:provider/metadata;
+
+    /// Import all event interfaces
+    import agentic-primer:event/event;
+    import agentic-primer:event/handler;
+    import agentic-primer:event/bus;
+    import agentic-primer:event/store;
+
+    /// Import all message interfaces
+    import agentic-primer:message/message;
+    import agentic-primer:message/node;
+    import agentic-primer:message/router;
+    import agentic-primer:message/delivery;
+
+    /// Import all usage tracking interfaces
+    import agentic-primer:usage-tracking/tracking;
+    import agentic-primer:usage-tracking/budget;
+    import agentic-primer:usage-tracking/estimation;
+}

@@ -1,0 +1,54 @@
+# Knowledge Base Index
+#
+# This file serves as the main index for the knowledge base.
+# It provides metadata and categorization for KB queries.
+
+version: "1.0"
+last_updated: "2026-01-06"
+
+metadata:
+  created: "2026-01-06"
+  maintained_by: "@copilot"
+  update_frequency: "as needed"
+  total_entries: 7
+
+description: |
+  Project knowledge base for @copilot autonomous development.
+  Contains architecture patterns, coding standards, testing practices,
+  and contextual information about the codebase.
+
+categories:
+  - name: architecture
+    description: Design patterns, system architecture, component structure
+    files:
+      - patterns.yml
+      - components.yml
+
+  - name: practices
+    description: Coding standards, testing requirements, review processes
+    files:
+      - coding-standards.yml
+      - testing.yml
+
+  - name: context
+    description: Tech stack, dependencies, environment specifics
+    files:
+      - tech-stack.yml
+      - dependencies.yml
+
+keywords:
+  authentication: [architecture/patterns.yml]
+  testing: [practices/testing.yml]
+  api: [architecture/patterns.yml, practices/coding-standards.yml]
+  database: [context/tech-stack.yml, context/dependencies.yml]
+  frontend: [context/tech-stack.yml, practices/coding-standards.yml]
+  backend: [architecture/patterns.yml, context/tech-stack.yml]
+  security: [architecture/patterns.yml, practices/coding-standards.yml]
+
+usage: |
+  Query the knowledge base using the knowledge-query.sh script:
+
+    .github/scripts/knowledge-query.sh "authentication oauth"
+
+  This will search for relevant KB entries and return contextual information
+  to inform implementation decisions.

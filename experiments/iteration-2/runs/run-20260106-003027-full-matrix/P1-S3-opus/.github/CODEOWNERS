@@ -1,0 +1,34 @@
+# CODEOWNERS - Auto-assign PR reviewers
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything in the repo
+* @owner
+
+# GitHub Actions and Workflows
+.github/ @owner
+
+# Documentation
+docs/ @owner
+*.md @owner
+
+# Scripts
+scripts/ @owner
+
+# Configuration files
+*.yml @owner
+*.yaml @owner
+*.json @owner
+
+# Source code (add specific paths as needed)
+# src/ @owner
+# lib/ @owner
+
+# Tests (add specific paths as needed)
+# tests/ @owner
+# __tests__/ @owner
+
+# Knowledge base - allow copilot to update
+docs/knowledge/ @owner
+
+# Logs are auto-generated, no review needed for appends
+# docs/knowledge/insights/logs/ (no owner - auto-merge eligible)

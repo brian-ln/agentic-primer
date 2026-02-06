@@ -1,0 +1,115 @@
+name: Copilot Task
+description: Create a task for @copilot to automate
+title: "[COPILOT] "
+labels: ["copilot", "automation"]
+assignees:
+  - copilot
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Task Assignment for @copilot
+
+        This form creates a structured task that @copilot can process automatically.
+        Fill in all fields to provide clear context for the AI agent.
+
+  - type: input
+    id: task-title
+    attributes:
+      label: Task Title
+      description: Short, descriptive title for the task
+      placeholder: "Add authentication middleware to API"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Detailed description of what needs to be done
+      placeholder: |
+        Implement JWT authentication middleware that:
+        - Validates tokens on protected routes
+        - Returns 401 for invalid/expired tokens
+        - Extracts user info into request context
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Specific, testable criteria for completion
+      placeholder: |
+        - [ ] Middleware validates JWT tokens
+        - [ ] Protected routes require valid token
+        - [ ] Tests cover success and failure cases
+        - [ ] Documentation updated
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Links, examples, or background information
+      placeholder: |
+        Related files: src/auth/*, tests/auth/*
+        Reference: https://example.com/auth-docs
+        Dependencies: jsonwebtoken@9.0.0
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: Task urgency
+      options:
+        - High (P0)
+        - Medium (P1)
+        - Low (P2)
+      default: 1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: Estimated Complexity
+      description: Rough estimate of task size
+      options:
+        - Small (< 1 hour)
+        - Medium (1-4 hours)
+        - Large (> 4 hours)
+      default: 1
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: requirements
+    attributes:
+      label: Requirements
+      description: Additional requirements for this task
+      options:
+        - label: Requires tests
+        - label: Requires documentation
+        - label: Breaking change (needs migration)
+        - label: Security sensitive
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+
+        **What happens next?**
+
+        1. Issue is assigned to @copilot
+        2. GitHub Actions workflow triggers automatically
+        3. @copilot analyzes the task and searches knowledge base
+        4. Pull request created with implementation
+        5. Automated validation checks run
+        6. PR awaits human review (via CODEOWNERS)
+
+        **Timeline**: Expect a PR within 2-5 minutes of issue creation.

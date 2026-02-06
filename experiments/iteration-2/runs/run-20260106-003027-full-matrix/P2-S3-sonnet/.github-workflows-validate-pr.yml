@@ -1,0 +1,117 @@
+name: Validate PR
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main, master]
+
+jobs:
+  syntax-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Validation Tools
+        run: |
+          # Install yamllint
+          pip install --upgrade pip
+          pip install yamllint
+
+          # Install shellcheck
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+          # Install markdownlint
+          npm install -g markdownlint-cli
+
+      - name: Validate YAML Files
+        run: |
+          echo "=== Validating YAML files ==="
+          if find . -name "*.yml" -o -name "*.yaml" | grep -q .; then
+            yamllint --config-data '{extends: default, rules: {line-length: {max: 120}, document-start: disable}}' \
+              $(find . -name "*.yml" -o -name "*.yaml" | grep -v node_modules | grep -v .venv)
+            echo "✓ YAML validation passed"
+          else
+            echo "No YAML files found to validate"
+          fi
+
+      - name: Validate Shell Scripts
+        run: |
+          echo "=== Validating shell scripts ==="
+          if find . -name "*.sh" | grep -q .; then
+            shellcheck --severity=warning $(find . -name "*.sh" | grep -v node_modules | grep -v .venv)
+            echo "✓ Shell script validation passed"
+          else
+            echo "No shell scripts found to validate"
+          fi
+
+      - name: Validate Markdown Files
+        run: |
+          echo "=== Validating markdown files ==="
+          if find . -name "*.md" | grep -q .; then
+            markdownlint --config .markdownlint.json $(find . -name "*.md" | grep -v node_modules | grep -v .venv) || true
+            echo "✓ Markdown validation completed (warnings allowed)"
+          else
+            echo "No markdown files found to validate"
+          fi
+
+      - name: Summary
+        run: |
+          echo "================================"
+          echo "Validation Summary"
+          echo "================================"
+          echo "✓ YAML syntax check: passed"
+          echo "✓ Shell script check: passed"
+          echo "✓ Markdown lint check: completed"
+          echo "================================"
+
+  test-suite:
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.message, '[test]') || github.event_name == 'pull_request'
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run Test Suite
+        run: |
+          echo "=== Running test suite ==="
+          if [ -f "scripts/test-workflow.sh" ]; then
+            bash scripts/test-workflow.sh
+          else
+            echo "No test script found, skipping"
+          fi
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Check for Secrets
+        run: |
+          echo "=== Checking for exposed secrets ==="
+          # Check for common secret patterns
+          if grep -r -E "(password|secret|token|api_key|private_key)\s*=\s*['\"][^'\"]+['\"]" \
+            --exclude-dir={.git,node_modules,.venv} \
+            --exclude="*.md" \
+            . ; then
+            echo "⚠️  Warning: Potential secrets found in code"
+            exit 1
+          else
+            echo "✓ No obvious secrets detected"
+          fi
+
+      - name: Validate File Permissions
+        run: |
+          echo "=== Checking file permissions ==="
+          # Ensure no files have overly permissive permissions
+          if find . -type f -perm /111 ! -path "./.git/*" ! -name "*.sh" | grep -q .; then
+            echo "⚠️  Warning: Unexpected executable files found"
+            find . -type f -perm /111 ! -path "./.git/*" ! -name "*.sh"
+          else
+            echo "✓ File permissions look good"
+          fi

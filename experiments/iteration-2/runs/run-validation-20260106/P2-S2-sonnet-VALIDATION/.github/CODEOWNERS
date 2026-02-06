@@ -1,0 +1,23 @@
+# CODEOWNERS - Auto-assign reviewers to pull requests
+#
+# This file specifies the default reviewers for different parts of the codebase.
+# When a PR is opened that modifies files matching these patterns, the specified
+# users/teams will automatically be requested as reviewers.
+#
+# Format: <pattern> <owner1> <owner2> ...
+# Patterns use .gitignore syntax (glob patterns)
+#
+# Documentation: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for all files
+# Replace @owner with your GitHub username or team name
+# Examples:
+#   * @john-doe
+#   * @my-org/backend-team
+*       @owner
+
+# Example: Specific patterns for different areas
+# /docs/           @my-org/docs-team
+# /src/api/        @my-org/backend-team
+# /src/ui/         @my-org/frontend-team
+# *.test.js        @my-org/qa-team

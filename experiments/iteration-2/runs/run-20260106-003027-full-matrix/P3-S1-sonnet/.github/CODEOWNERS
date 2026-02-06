@@ -1,0 +1,17 @@
+# CODEOWNERS - Auto-assign pull requests for review
+#
+# This file defines who reviews and approves changes to different parts
+# of the codebase. All PRs must be reviewed by the designated owner(s).
+#
+# Format: <path-pattern> <owner-username(s)>
+#
+# Learn more: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything in the repository
+# This ensures all PRs from @copilot get assigned to the repository owner
+* @owner
+
+# Specific overrides can be added here if needed, for example:
+# /docs/ @owner @doc-team
+# /.github/ @owner @devops-team
+# /src/critical/ @owner @senior-dev

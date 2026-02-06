@@ -1,0 +1,247 @@
+# Dependencies
+#
+# External services, APIs, and third-party integrations used in this project.
+
+version: "1.0"
+
+description: |
+  Documentation of external dependencies, their purposes, and integration details
+  to help @copilot understand the full system context.
+
+external_services:
+  - name: GitHub OAuth
+    purpose: Third-party authentication
+    integration_points:
+      - Login flow
+      - User registration
+      - Profile data sync
+    environment_variables:
+      - GITHUB_CLIENT_ID
+      - GITHUB_CLIENT_SECRET
+      - GITHUB_CALLBACK_URL
+    documentation: https://docs.github.com/en/apps/oauth-apps
+    rate_limits:
+      - 5000 requests/hour (authenticated)
+      - 60 requests/hour (unauthenticated)
+    error_handling: |
+      - Retry with exponential backoff
+      - Fallback to email/password auth
+      - Display user-friendly error messages
+
+  - name: Google OAuth
+    purpose: Third-party authentication
+    integration_points:
+      - Login flow
+      - User registration
+    environment_variables:
+      - GOOGLE_CLIENT_ID
+      - GOOGLE_CLIENT_SECRET
+      - GOOGLE_CALLBACK_URL
+    documentation: https://developers.google.com/identity/protocols/oauth2
+    scopes:
+      - openid
+      - email
+      - profile
+
+  - name: SendGrid
+    purpose: Transactional email delivery
+    integration_points:
+      - Welcome emails
+      - Password reset
+      - Notifications
+    environment_variables:
+      - SENDGRID_API_KEY
+      - SENDGRID_FROM_EMAIL
+    documentation: https://docs.sendgrid.com
+    rate_limits:
+      - 100 emails/day (free tier)
+      - 40,000 emails/day (paid tier)
+    templates:
+      - welcome: Welcome email for new users
+      - password-reset: Password reset link
+      - notification: General notifications
+
+  - name: Stripe
+    purpose: Payment processing
+    integration_points:
+      - Subscription management
+      - Payment processing
+      - Webhook handling
+    environment_variables:
+      - STRIPE_PUBLIC_KEY
+      - STRIPE_SECRET_KEY
+      - STRIPE_WEBHOOK_SECRET
+    documentation: https://stripe.com/docs
+    webhooks:
+      - payment_intent.succeeded
+      - customer.subscription.created
+      - customer.subscription.updated
+      - invoice.payment_failed
+    error_handling: |
+      - Handle payment failures gracefully
+      - Retry failed webhook deliveries
+      - Log all payment errors for review
+
+  - name: Sentry
+    purpose: Error tracking and monitoring
+    integration_points:
+      - Frontend error tracking
+      - Backend error tracking
+      - Performance monitoring
+    environment_variables:
+      - NEXT_PUBLIC_SENTRY_DSN
+      - SENTRY_AUTH_TOKEN
+    documentation: https://docs.sentry.io
+    configuration: |
+      // sentry.client.config.ts
+      Sentry.init({
+        dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+        tracesSampleRate: 0.1,
+        environment: process.env.NODE_ENV,
+      });
+
+cloud_services:
+  - name: Vercel
+    purpose: Hosting and deployment
+    features:
+      - Automatic deployments
+      - Preview deployments
+      - Edge functions
+      - Analytics
+    documentation: https://vercel.com/docs
+    configuration: vercel.json
+
+  - name: Neon (or Supabase)
+    purpose: PostgreSQL database hosting
+    features:
+      - Serverless PostgreSQL
+      - Automatic backups
+      - Connection pooling
+    environment_variables:
+      - DATABASE_URL
+    documentation: https://neon.tech/docs
+
+  - name: Upstash Redis
+    purpose: Redis hosting
+    features:
+      - Serverless Redis
+      - REST API access
+      - Global replication
+    environment_variables:
+      - REDIS_URL
+    documentation: https://docs.upstash.com
+
+internal_dependencies:
+  - name: Knowledge Base
+    location: knowledge-base/
+    purpose: Project documentation and context
+    query_script: .github/scripts/knowledge-query.sh
+
+  - name: Prisma Schema
+    location: prisma/schema.prisma
+    purpose: Database schema definition
+    update_process: |
+      1. Edit schema.prisma
+      2. Run: npx prisma migrate dev --name <migration-name>
+      3. Run: npx prisma generate
+      4. Update TypeScript types if needed
+
+  - name: Environment Variables
+    location: .env.local (not committed)
+    template: .env.example (committed)
+    required_variables:
+      - DATABASE_URL
+      - REDIS_URL
+      - JWT_SECRET
+      - GITHUB_CLIENT_ID
+      - GITHUB_CLIENT_SECRET
+
+api_dependencies:
+  - name: REST Countries API
+    purpose: Country data for registration forms
+    endpoint: https://restcountries.com/v3.1/all
+    rate_limit: None (free)
+    caching: Cache responses for 24 hours
+
+  - name: IP Geolocation API
+    purpose: User location detection
+    endpoint: https://ipapi.co/{ip}/json/
+    rate_limit: 1000 requests/day (free)
+    fallback: Use default location
+
+dependency_management:
+  update_policy: |
+    - Update patch versions automatically (security fixes)
+    - Review minor versions monthly
+    - Test major versions in feature branch
+    - Pin critical dependencies
+
+  security_scanning:
+    - Run npm audit regularly
+    - Fix high/critical vulnerabilities immediately
+    - Review and update dependencies quarterly
+
+  commands: |
+    # Check for outdated packages
+    npm outdated
+
+    # Update dependencies
+    npm update
+
+    # Audit security vulnerabilities
+    npm audit
+
+    # Fix vulnerabilities automatically
+    npm audit fix
+
+breaking_changes:
+  - dependency: Next.js 14
+    migration_date: "2024-10-15"
+    breaking_change: App Router is now default
+    impact: Changed routing and data fetching patterns
+    resolution: Migrated all pages to App Router
+
+  - dependency: React 18
+    migration_date: "2024-06-01"
+    breaking_change: Automatic batching, new APIs
+    impact: Updated state management patterns
+    resolution: Tested and verified all components
+
+service_status:
+  monitoring: |
+    Check service status pages for external dependencies:
+    - GitHub: https://www.githubstatus.com
+    - Vercel: https://www.vercel-status.com
+    - Stripe: https://status.stripe.com
+
+  incident_response: |
+    1. Check service status page
+    2. Implement fallback if available
+    3. Display user-friendly error message
+    4. Log incident for post-mortem
+    5. Monitor for resolution
+
+integration_testing:
+  approach: |
+    - Mock external APIs in unit tests
+    - Use real services in integration tests (with test accounts)
+    - Record/replay HTTP interactions for deterministic tests
+
+  test_accounts:
+    - GitHub: test-user-github@example.com
+    - Google: test-user-google@example.com
+    - Stripe: Use test mode keys
+
+cost_management:
+  monitoring: |
+    Track usage and costs for paid services:
+    - Vercel: Function invocations, bandwidth
+    - Database: Storage, compute time
+    - Redis: Memory usage
+    - SendGrid: Email sends
+    - Stripe: Transaction volume
+
+  budgets:
+    - Monthly budget alerts set up
+    - Auto-scaling limits configured
+    - Cost optimization reviews quarterly

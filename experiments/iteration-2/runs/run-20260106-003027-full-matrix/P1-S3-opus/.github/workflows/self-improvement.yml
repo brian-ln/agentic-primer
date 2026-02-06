@@ -1,0 +1,303 @@
+name: Self-Improvement Analyzer
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Daily at 6 AM UTC
+  workflow_dispatch:
+    inputs:
+      min_issues:
+        description: 'Minimum issues to analyze'
+        required: false
+        default: '5'
+      create_prs:
+        description: 'Create improvement PRs'
+        required: false
+        default: 'true'
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: read
+
+env:
+  IMPROVEMENT_BRANCH_PREFIX: improvement/auto-
+  MIN_CONFIDENCE: 0.7
+
+jobs:
+  analyze-logs:
+    name: Analyze Issue and PR Logs
+    runs-on: ubuntu-latest
+    outputs:
+      improvements_found: ${{ steps.analyze.outputs.improvements_found }}
+      improvements_json: ${{ steps.analyze.outputs.improvements_json }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pandas numpy
+
+      - name: Analyze logs for patterns
+        id: analyze
+        run: |
+          python3 << 'PYTHON_SCRIPT'
+          import json
+          import os
+          from datetime import datetime, timedelta
+          from pathlib import Path
+          import sys
+
+          def load_jsonl(filepath):
+              """Load JSONL file into list of dicts."""
+              entries = []
+              if Path(filepath).exists():
+                  with open(filepath) as f:
+                      for line in f:
+                          line = line.strip()
+                          if line:
+                              try:
+                                  entries.append(json.loads(line))
+                              except json.JSONDecodeError:
+                                  pass
+              return entries
+
+          def analyze_issues(issues):
+              """Analyze issue patterns."""
+              insights = []
+
+              if len(issues) < 5:
+                  return insights
+
+              # Calculate average time to ready
+              ready_times = []
+              for issue in issues:
+                  if issue.get('status') == 'ready' and 'timestamp' in issue:
+                      # Simplified - in real implementation, track state transitions
+                      ready_times.append(1)  # Placeholder
+
+              # Identify common patterns
+              titles = [i.get('title', '') for i in issues]
+              common_words = {}
+              for title in titles:
+                  for word in title.lower().split():
+                      if len(word) > 3:
+                          common_words[word] = common_words.get(word, 0) + 1
+
+              top_words = sorted(common_words.items(), key=lambda x: -x[1])[:5]
+              if top_words and top_words[0][1] >= 3:
+                  insights.append({
+                      'type': 'pattern',
+                      'category': 'issue-template',
+                      'description': f"Common task type detected: '{top_words[0][0]}' appears {top_words[0][1]} times",
+                      'recommendation': f"Consider adding a specialized template for '{top_words[0][0]}' tasks",
+                      'confidence': min(0.5 + top_words[0][1] * 0.1, 0.95)
+                  })
+
+              return insights
+
+          def analyze_prs(prs):
+              """Analyze PR patterns."""
+              insights = []
+
+              if len(prs) < 3:
+                  return insights
+
+              # Check for PRs without linked issues
+              unlinked = sum(1 for pr in prs if not pr.get('linked_issue'))
+              if unlinked > len(prs) * 0.3:
+                  insights.append({
+                      'type': 'process',
+                      'category': 'workflow',
+                      'description': f"{unlinked}/{len(prs)} PRs have no linked issue",
+                      'recommendation': "Enforce issue linking in PR template",
+                      'confidence': 0.85
+                  })
+
+              return insights
+
+          def main():
+              # Load log files
+              issues_log = 'docs/knowledge/insights/logs/issues.jsonl'
+              prs_log = 'docs/knowledge/insights/logs/prs.jsonl'
+
+              issues = load_jsonl(issues_log)
+              prs = load_jsonl(prs_log)
+
+              # Analyze patterns
+              improvements = []
+              improvements.extend(analyze_issues(issues))
+              improvements.extend(analyze_prs(prs))
+
+              # Filter by confidence
+              min_confidence = float(os.environ.get('MIN_CONFIDENCE', 0.7))
+              improvements = [i for i in improvements if i.get('confidence', 0) >= min_confidence]
+
+              # Output results
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                  f.write(f"improvements_found={len(improvements)}\n")
+                  f.write(f"improvements_json={json.dumps(improvements)}\n")
+
+              print(f"Found {len(improvements)} improvement opportunities")
+              for imp in improvements:
+                  print(f"  - [{imp['category']}] {imp['description']}")
+
+          if __name__ == '__main__':
+              main()
+          PYTHON_SCRIPT
+
+  create-improvement-prs:
+    name: Create Improvement PRs
+    needs: analyze-logs
+    if: needs.analyze-logs.outputs.improvements_found > 0 && github.event.inputs.create_prs != 'false'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        improvement_index: [0, 1, 2]  # Create up to 3 PRs
+      max-parallel: 1
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check if improvement exists
+        id: check
+        run: |
+          IMPROVEMENTS='${{ needs.analyze-logs.outputs.improvements_json }}'
+          INDEX=${{ matrix.improvement_index }}
+          IMPROVEMENT=$(echo "$IMPROVEMENTS" | jq -r ".[$INDEX] // empty")
+
+          if [ -z "$IMPROVEMENT" ]; then
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "category=$(echo "$IMPROVEMENT" | jq -r '.category')" >> "$GITHUB_OUTPUT"
+            echo "description=$(echo "$IMPROVEMENT" | jq -r '.description')" >> "$GITHUB_OUTPUT"
+            echo "recommendation=$(echo "$IMPROVEMENT" | jq -r '.recommendation')" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create improvement branch
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          BRANCH="${{ env.IMPROVEMENT_BRANCH_PREFIX }}${{ steps.check.outputs.category }}-$(date +%Y%m%d)"
+          git checkout -b "$BRANCH"
+          echo "BRANCH_NAME=$BRANCH" >> "$GITHUB_ENV"
+
+      - name: Apply improvement
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          # Log the improvement
+          mkdir -p docs/knowledge/insights/improvements
+          cat >> docs/knowledge/insights/improvements/applied.jsonl << EOF
+          {"timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)", "category": "${{ steps.check.outputs.category }}", "description": "${{ steps.check.outputs.description }}", "recommendation": "${{ steps.check.outputs.recommendation }}", "status": "proposed"}
+          EOF
+
+          # Add to patterns if it's a workflow improvement
+          if [ "${{ steps.check.outputs.category }}" = "workflow" ]; then
+            cat >> docs/knowledge/patterns/workflow-improvements.md << EOF
+
+          ## Improvement: $(date +%Y-%m-%d)
+
+          **Issue:** ${{ steps.check.outputs.description }}
+          **Recommendation:** ${{ steps.check.outputs.recommendation }}
+          EOF
+          fi
+
+      - name: Commit and push
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "improvement(${{ steps.check.outputs.category }}): ${{ steps.check.outputs.recommendation }}"
+          git push -u origin "$BRANCH_NAME"
+
+      - name: Create Pull Request
+        if: steps.check.outputs.exists == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[Auto-Improvement] ${{ steps.check.outputs.recommendation }}`,
+              head: process.env.BRANCH_NAME,
+              base: 'main',
+              body: `## Self-Improvement PR
+
+            **Category:** ${{ steps.check.outputs.category }}
+
+            **Issue Detected:**
+            ${{ steps.check.outputs.description }}
+
+            **Recommendation:**
+            ${{ steps.check.outputs.recommendation }}
+
+            ---
+            This PR was automatically generated by the self-improvement analyzer.
+            Review the changes and merge if appropriate.
+
+            Closes: N/A (automated improvement)`
+            });
+
+            // Add labels
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              labels: ['auto-improvement', 'copilot-pr']
+            });
+
+            console.log(`Created PR #${pr.number}: ${pr.html_url}`);
+
+  update-metrics:
+    name: Update Performance Metrics
+    needs: analyze-logs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Update metrics file
+        run: |
+          mkdir -p docs/knowledge/insights
+          METRICS_FILE="docs/knowledge/insights/agent-performance.md"
+
+          cat > "$METRICS_FILE" << EOF
+          # Agent Performance Metrics
+
+          Last updated: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          ## Summary
+
+          - Improvements found: ${{ needs.analyze-logs.outputs.improvements_found }}
+          - Analysis run: Scheduled daily
+
+          ## Recent Improvements
+
+          See \`docs/knowledge/insights/improvements/applied.jsonl\` for full history.
+
+          ## Metrics
+
+          | Metric | Value | Target |
+          |--------|-------|--------|
+          | Issue-to-PR Time | TBD | < 1 hour |
+          | PR Success Rate | TBD | > 90% |
+          | Review Time | TBD | < 30 min |
+
+          ---
+          Generated by self-improvement workflow.
+          EOF
+
+      - name: Commit metrics update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/knowledge/insights/agent-performance.md
+          git diff --staged --quiet || git commit -m "chore: update agent performance metrics"
+          git push || echo "Push failed"

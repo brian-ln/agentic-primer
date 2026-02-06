@@ -1,0 +1,188 @@
+name: Knowledge Capture
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main, master]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  extract-patterns:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.base.ref }}
+
+      - name: Get PR Details
+        id: pr_details
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            return {
+              number: pr.number,
+              title: pr.title,
+              body: pr.body || '',
+              author: pr.user.login,
+              labels: pr.labels.map(l => l.name),
+              files_changed: pr.changed_files,
+              additions: pr.additions,
+              deletions: pr.deletions
+            };
+
+      - name: Extract Patterns from PR
+        run: |
+          echo "=== Extracting patterns from PR #${{ github.event.pull_request.number }} ==="
+
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_AUTHOR="${{ github.event.pull_request.user.login }}"
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          # Create knowledge directories if they don't exist
+          mkdir -p docs/knowledge/patterns
+          mkdir -p docs/knowledge/insights
+          mkdir -p docs/knowledge/decisions
+
+          # Extract code patterns
+          PATTERN_FILE="docs/knowledge/patterns/pr-${PR_NUMBER}-patterns.md"
+          cat > "$PATTERN_FILE" <<EOF
+          # Patterns from PR #${PR_NUMBER}
+
+          **Title**: ${PR_TITLE}
+          **Author**: ${PR_AUTHOR}
+          **Date**: ${TIMESTAMP}
+          **PR**: https://github.com/${{ github.repository }}/pull/${PR_NUMBER}
+
+          ## Changes Summary
+
+          - Files changed: ${{ github.event.pull_request.changed_files }}
+          - Additions: +${{ github.event.pull_request.additions }}
+          - Deletions: -${{ github.event.pull_request.deletions }}
+
+          ## Code Patterns Introduced
+
+          EOF
+
+          # Analyze file changes for patterns
+          git diff HEAD~1 HEAD --name-only | while read -r file; do
+            if [[ "$file" =~ \.(js|ts|py|sh|yml|yaml)$ ]]; then
+              echo "### Pattern: \`$file\`" >> "$PATTERN_FILE"
+              echo "" >> "$PATTERN_FILE"
+              echo "File modified in this PR. Consider extracting reusable patterns." >> "$PATTERN_FILE"
+              echo "" >> "$PATTERN_FILE"
+            fi
+          done
+
+          echo "✓ Patterns extracted to $PATTERN_FILE"
+
+          # Extract insights from commit messages
+          INSIGHT_FILE="docs/knowledge/insights/pr-${PR_NUMBER}-insights.md"
+          cat > "$INSIGHT_FILE" <<EOF
+          # Insights from PR #${PR_NUMBER}
+
+          **Title**: ${PR_TITLE}
+          **Author**: ${PR_AUTHOR}
+          **Date**: ${TIMESTAMP}
+
+          ## Key Learnings
+
+          EOF
+
+          # Get commit messages from this PR
+          git log --format="- %s" HEAD~1..HEAD >> "$INSIGHT_FILE"
+
+          echo "" >> "$INSIGHT_FILE"
+          echo "## Tags" >> "$INSIGHT_FILE"
+          echo "" >> "$INSIGHT_FILE"
+          echo "- author:${PR_AUTHOR}" >> "$INSIGHT_FILE"
+          echo "- pr:${PR_NUMBER}" >> "$INSIGHT_FILE"
+
+          # Add labels as tags
+          echo '${{ toJSON(github.event.pull_request.labels) }}' | \
+            jq -r '.[].name' | \
+            awk '{print "- label:" $0}' >> "$INSIGHT_FILE" || true
+
+          echo "✓ Insights extracted to $INSIGHT_FILE"
+
+      - name: Update Knowledge Index
+        run: |
+          echo "=== Updating knowledge base index ==="
+
+          # Update patterns index
+          if [ -f "docs/knowledge/patterns/README.md" ]; then
+            PATTERN_COUNT=$(find docs/knowledge/patterns -name "*.md" ! -name "README.md" | wc -l)
+            sed -i.bak "s/Total Patterns: [0-9]*/Total Patterns: $PATTERN_COUNT/" \
+              docs/knowledge/patterns/README.md || true
+          fi
+
+          # Update insights index
+          if [ -f "docs/knowledge/insights/README.md" ]; then
+            INSIGHT_COUNT=$(find docs/knowledge/insights -name "*.md" ! -name "README.md" | wc -l)
+            sed -i.bak "s/Total Insights: [0-9]*/Total Insights: $INSIGHT_COUNT/" \
+              docs/knowledge/insights/README.md || true
+          fi
+
+          echo "✓ Knowledge base indexes updated"
+
+      - name: Commit Knowledge Updates
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "docs: Extract knowledge from PR #${{ github.event.pull_request.number }}"
+          file_pattern: "docs/knowledge/**/*.md"
+          commit_user_name: "github-actions[bot]"
+          commit_user_email: "github-actions[bot]@users.noreply.github.com"
+          skip_dirty_check: false
+
+      - name: Create Improvement Issue
+        if: contains(github.event.pull_request.labels.*.name, 'enhancement')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const prTitle = context.payload.pull_request.title;
+
+            // Check if there are any patterns worth improving
+            const issueBody = `
+            ## Improvement Opportunity
+
+            This issue was automatically created after merging PR #${prNumber}: "${prTitle}"
+
+            ## Suggested Improvements
+
+            - [ ] Review extracted patterns for reusability
+            - [ ] Consider abstracting common code
+            - [ ] Update documentation if needed
+            - [ ] Add tests for new patterns
+
+            ## References
+
+            - Source PR: #${prNumber}
+            - Knowledge: \`docs/knowledge/patterns/pr-${prNumber}-patterns.md\`
+            - Insights: \`docs/knowledge/insights/pr-${prNumber}-insights.md\`
+
+            ## Assignee
+
+            @copilot - Please review and implement improvements.
+            `;
+
+            try {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `[Auto] Improve patterns from PR #${prNumber}`,
+                body: issueBody,
+                labels: ['auto-generated', 'improvement', 'copilot']
+              });
+
+              console.log(`✓ Created improvement issue for PR #${prNumber}`);
+            } catch (error) {
+              console.log(`Note: Could not create improvement issue: ${error.message}`);
+            }

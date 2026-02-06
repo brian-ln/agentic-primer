@@ -1,0 +1,259 @@
+# Specification Creation Formula v1
+#
+# Create comprehensive specifications (BDD, State Machine, FIT) for a system
+# using parallel agents with type-based organization.
+#
+# Based on: Event System specification workflow (6,157 lines in 10 minutes)
+# Pattern: Type-based parallel organization (not component-based)
+# Agents: 3 parallel background agents, one per specification type
+#
+# Usage:
+# ```bash
+# bd mol wisp spec-creation \
+#   --var system_name="Event System actors" \
+#   --var component_count=6 \
+#   --var components="EventLogActor,HTTPServerActor,PatternMatcherActor,..." \
+#   --var spec_output_dir=".wt/event-system/specs" \
+#   --var source_dir="src/actors"
+# ```
+
+formula = "spec-creation"
+description = """
+Specification creation workflow for comprehensive system documentation.
+
+Creates three types of specifications in parallel:
+1. BDD Scenarios (Gherkin .feature files)
+2. State Machine Specifications (transition tables)
+3. FIT Decision Tables (executable test tables)
+
+Organization: Type-based (not component-based) enables parallel execution
+by specialized agents, resulting in better quality and consistency.
+
+Result: Complete executable specifications for all system components.
+"""
+type = "workflow"
+version = 1
+
+[vars.system_name]
+description = "Name of the system being specified (e.g., 'Event System actors')"
+required = true
+
+[vars.component_count]
+description = "Number of components to specify"
+default = "6"
+
+[vars.components]
+description = "Comma-separated list of components to specify"
+required = true
+
+[vars.spec_output_dir]
+description = "Directory for specification output"
+required = true
+
+[vars.source_dir]
+description = "Directory containing source code to analyze"
+required = true
+
+# =============================================================================
+# Epic: Parent for all specification work
+# =============================================================================
+
+[[steps]]
+id = "epic"
+title = "Add proper specifications to {{system_name}}"
+description = """
+Comprehensive implementation plan to add BDD scenarios, state machine specs,
+FIT fixtures, and natural language runners to {{system_name}}.
+
+Goal: Create PROPER specifications that are executable, example-driven,
+declarative, and verifiable.
+"""
+
+# =============================================================================
+# Phase 1: Parallel Specification Creation (P0)
+# These three tasks run in parallel by different agents
+# =============================================================================
+
+[[steps]]
+id = "bdd-scenarios"
+title = "Create BDD scenarios for all {{component_count}} components (Gherkin .feature files)"
+needs = ["epic"]
+description = """
+Create comprehensive Gherkin .feature files for each component covering:
+- Lifecycle transitions (start/stop/status)
+- Happy paths (successful operations)
+- Error paths (failures, edge cases)
+- Concurrent operations
+- Resource management
+
+Components to cover:
+{{components}}
+
+File locations: {{spec_output_dir}}/features/
+Example files: component-name.feature
+
+Success criteria:
+- All {{component_count}} components have .feature files
+- Each file has minimum 5 scenarios covering lifecycle and core operations
+- Scenarios use proper Given/When/Then format
+- All scenarios are concrete and testable
+
+Agent workflow:
+1. Read source code from {{source_dir}}
+2. Identify component behaviors and APIs
+3. Create .feature files with concrete scenarios
+4. Commit changes: `git add {{spec_output_dir}}/features && git commit -m "feat: Add BDD scenarios for {{system_name}}"`
+5. Close bead: `bd close <bead-id>`
+"""
+
+[[steps]]
+id = "state-machines"
+title = "Create state machine specifications with complete transition tables"
+needs = ["epic"]
+description = """
+Create complete state machine specifications for each component with:
+- Complete state transition tables (markdown format)
+- Transition guards/conditions
+- State invariants
+- Entry/exit actions
+- Error states
+
+Components to specify:
+{{components}}
+
+File locations: {{spec_output_dir}}/state-machines/
+Example files: component-name-state-machine.md
+
+Table format:
+| Current State | Event | Guards | Next State | Actions | Error Handling |
+
+Success criteria:
+- All {{component_count}} components have complete state machine specifications
+- All transitions documented with guards and actions
+- Error states and recovery paths specified
+- Invariants documented for each state
+
+Agent workflow:
+1. Read source code from {{source_dir}}
+2. Identify all states and transitions
+3. Create state machine .md files with complete tables
+4. Commit changes: `git add {{spec_output_dir}}/state-machines && git commit -m "feat: Add state machines for {{system_name}}"`
+5. Close bead: `bd close <bead-id>`
+"""
+
+[[steps]]
+id = "fit-tables"
+title = "Create FIT/SLIM decision tables for all components"
+needs = ["epic"]
+description = """
+Create FIT-style decision tables for testing component behavior declaratively:
+
+Decision tables needed per component:
+- Lifecycle state transitions (start/stop/getStatus)
+- Core operation input/output tables
+- Error condition tables
+- Integration scenario tables
+
+Components to cover:
+{{components}}
+
+File locations: {{spec_output_dir}}/fit-fixtures/
+Example files: component-name.fit.md
+
+Table format:
+| Input State | Action | Input Data | Expected State | Expected Output | Success |
+
+Success criteria:
+- All {{component_count}} components have FIT decision tables
+- Minimum 3 tables per component (lifecycle, happy path, error path)
+- All tables are executable format
+- Tables cover edge cases and boundaries
+
+Agent workflow:
+1. Read source code from {{source_dir}}
+2. Identify testable behaviors and edge cases
+3. Create FIT decision table .fit.md files
+4. Commit changes: `git add {{spec_output_dir}}/fit-fixtures && git commit -m "feat: Add FIT tables for {{system_name}}"`
+5. Close bead: `bd close <bead-id>`
+"""
+
+# =============================================================================
+# Phase 2: Test Runners (P1)
+# Depends on specification completion
+# =============================================================================
+
+[[steps]]
+id = "test-runners"
+title = "Implement test runners for BDD and FIT specifications"
+needs = ["bdd-scenarios", "fit-tables"]
+description = """
+Create executable test runners that can validate specifications against implementations:
+
+- BDD runner: Execute .feature files using Cucumber/Gherkin runner
+- FIT runner: Execute decision tables using FIT/SLIM framework
+- Integration: Wire up step definitions and fixtures
+- Reporting: Generate test results and coverage reports
+
+Success criteria:
+- BDD scenarios are executable
+- FIT tables are executable
+- All tests pass against current implementation
+- CI integration ready
+"""
+
+# =============================================================================
+# Phase 3: Integration & Documentation (P1-P2)
+# =============================================================================
+
+[[steps]]
+id = "integration"
+title = "Integrate and validate all specifications pass with existing components"
+needs = ["test-runners"]
+description = """
+Validate that all specifications are correct and pass against the actual implementation:
+
+- Run BDD scenarios against implementation
+- Run FIT tables against implementation
+- Verify state machines match actual behavior
+- Fix any discrepancies (specs or implementation)
+- Document coverage gaps
+
+Success criteria:
+- All specifications validated
+- All tests passing
+- Coverage report generated
+- Issues documented
+"""
+
+[[steps]]
+id = "documentation"
+title = "Document specification maintenance and contribution guidelines"
+needs = ["integration"]
+description = """
+Create documentation for maintaining and contributing to specifications:
+
+- How to write BDD scenarios
+- How to create state machine specs
+- How to write FIT decision tables
+- How to run tests locally
+- How to update specs when implementation changes
+- Contribution workflow
+
+Success criteria:
+- README in specs directory
+- CONTRIBUTING guide
+- Examples and templates
+- CI/CD integration documented
+
+**Specification workflow complete!**
+
+Summary:
+- BDD scenarios created (Gherkin .feature files)
+- State machine specs created (transition tables)
+- FIT decision tables created (executable tests)
+- Test runners implemented
+- All specifications validated
+- Documentation complete
+
+The system now has comprehensive, executable specifications.
+"""

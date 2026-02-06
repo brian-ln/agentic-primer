@@ -1,0 +1,19 @@
+# CODEOWNERS - Auto-assign reviewers for pull requests
+#
+# This file defines who is automatically requested for review
+# when pull requests modify specific files or directories.
+#
+# Format: <pattern> <owners>
+# Owners can be @username, @org/team-name, or email addresses
+
+# Default owner for all files
+* @owner
+
+# GitHub configuration files
+.github/ @owner
+
+# Documentation requires owner review
+docs/ @owner
+
+# Scripts require owner review
+scripts/ @owner

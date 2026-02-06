@@ -1,0 +1,30 @@
+# CODEOWNERS File for Automatic PR Review Assignment
+#
+# This file defines who should review changes in different parts of the codebase.
+# GitHub will automatically request review from these owners when a PR is created.
+#
+# Format: <file_pattern> <@username|@team>
+# Paths are matched from top to bottom, first match wins
+#
+# IMPORTANT: Replace @owner with your actual GitHub username before using!
+# Example: * @alice  (not * @owner)
+
+# Default: all files require review from repository owner
+* @owner
+
+# Uncomment and customize these lines for team-based review:
+# Frontend code
+# client/**  @frontend-team
+#
+# Backend code
+# server/**  @backend-team
+#
+# DevOps and infrastructure
+# .github/**  @devops-team
+# terraform/**  @devops-team
+#
+# Documentation
+# docs/**  @documentation-team
+#
+# Tests
+# **/*.test.* @qa-team

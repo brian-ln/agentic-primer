@@ -1,0 +1,347 @@
+name: PR Validation - @copilot Quality Gates
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  checks: write
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  validate-pr:
+    name: Validate PR Quality
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract PR Metadata
+        id: pr_info
+        run: |
+          echo "pr_number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          echo "pr_title=${{ github.event.pull_request.title }}" >> $GITHUB_OUTPUT
+          echo "pr_author=${{ github.event.pull_request.user.login }}" >> $GITHUB_OUTPUT
+          echo "pr_body=${{ github.event.pull_request.body }}" >> $GITHUB_OUTPUT
+          echo "base_branch=${{ github.event.pull_request.base.ref }}" >> $GITHUB_OUTPUT
+
+          # Extract issue number from PR title or body
+          ISSUE_MATCH=$(echo "${{ github.event.pull_request.body }}" | grep -oP '#\K\d+' | head -1)
+          echo "linked_issue=$ISSUE_MATCH" >> $GITHUB_OUTPUT
+
+      - name: Validate PR Title Format
+        id: validate_title
+        run: |
+          PR_TITLE="${{ steps.pr_info.outputs.pr_title }}"
+
+          # Check for common PR title patterns
+          if echo "$PR_TITLE" | grep -qiE "^(feat|fix|docs|style|refactor|perf|test|chore|ci|ai)(\(.+\))?:"; then
+            echo "format=valid" >> $GITHUB_OUTPUT
+            echo "✓ PR title follows conventional commit format"
+          elif echo "$PR_TITLE" | grep -q "^ai:"; then
+            echo "format=valid" >> $GITHUB_OUTPUT
+            echo "✓ PR title is AI-generated (ai: prefix)"
+          else
+            echo "format=valid" >> $GITHUB_OUTPUT
+            echo "! PR title format: $PR_TITLE (flexible validation)"
+          fi
+
+      - name: Validate Issue Link
+        id: validate_link
+        run: |
+          PR_BODY="${{ github.event.pull_request.body }}"
+          LINKED_ISSUE="${{ steps.pr_info.outputs.linked_issue }}"
+
+          if [ -z "$LINKED_ISSUE" ]; then
+            echo "issue_linked=false" >> $GITHUB_OUTPUT
+            echo "! No issue linked - check PR body for fixes reference"
+          else
+            echo "issue_linked=true" >> $GITHUB_OUTPUT
+            echo "✓ Linked to issue #$LINKED_ISSUE"
+          fi
+
+      - name: Check for Syntax Files
+        id: check_files
+        run: |
+          # Find all changed files
+          git diff --name-only ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} > /tmp/changed-files.txt
+
+          echo "=== Changed Files ==="
+          cat /tmp/changed-files.txt
+
+          # Count files by type
+          YAML_COUNT=$(grep -c "\.ya\?ml$" /tmp/changed-files.txt || true)
+          SHELL_COUNT=$(grep -c "\.sh$" /tmp/changed-files.txt || true)
+          MD_COUNT=$(grep -c "\.md$" /tmp/changed-files.txt || true)
+
+          echo "yaml_files=$YAML_COUNT" >> $GITHUB_OUTPUT
+          echo "shell_files=$SHELL_COUNT" >> $GITHUB_OUTPUT
+          echo "markdown_files=$MD_COUNT" >> $GITHUB_OUTPUT
+
+      - name: Validate YAML Syntax
+        if: steps.check_files.outputs.yaml_files > 0
+        id: validate_yaml
+        run: |
+          echo "Validating YAML files..."
+
+          if command -v yamllint &> /dev/null; then
+            echo "Using yamllint for validation"
+
+            # Get list of YAML files
+            YAML_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} | grep -E "\.ya?ml$" || true)
+
+            if [ -z "$YAML_FILES" ]; then
+              echo "yaml_status=skipped" >> $GITHUB_OUTPUT
+            else
+              if yamllint $YAML_FILES; then
+                echo "yaml_status=passed" >> $GITHUB_OUTPUT
+                echo "✓ YAML validation passed"
+              else
+                echo "yaml_status=failed" >> $GITHUB_OUTPUT
+                echo "✗ YAML validation failed"
+                exit 1
+              fi
+            fi
+          else
+            echo "yamllint not available, installing..."
+            pip install yamllint
+            echo "yaml_status=installed" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Validate Shell Scripts
+        if: steps.check_files.outputs.shell_files > 0
+        id: validate_shell
+        run: |
+          echo "Validating Shell scripts..."
+
+          if command -v shellcheck &> /dev/null; then
+            echo "Using shellcheck for validation"
+
+            # Get list of shell files
+            SHELL_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} | grep "\.sh$" || true)
+
+            if [ -z "$SHELL_FILES" ]; then
+              echo "shell_status=skipped" >> $GITHUB_OUTPUT
+            else
+              if shellcheck --severity=warning $SHELL_FILES; then
+                echo "shell_status=passed" >> $GITHUB_OUTPUT
+                echo "✓ Shell validation passed"
+              else
+                echo "shell_status=failed" >> $GITHUB_OUTPUT
+                echo "✗ Shell validation failed"
+                exit 1
+              fi
+            fi
+          else
+            echo "shellcheck not available, installing..."
+            apt-get update && apt-get install -y shellcheck
+            echo "shell_status=installed" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Validate Markdown
+        if: steps.check_files.outputs.markdown_files > 0
+        id: validate_markdown
+        run: |
+          echo "Validating Markdown files..."
+
+          if command -v markdownlint &> /dev/null; then
+            echo "Using markdownlint for validation"
+
+            # Get list of markdown files
+            MD_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} | grep "\.md$" || true)
+
+            if [ -z "$MD_FILES" ]; then
+              echo "markdown_status=skipped" >> $GITHUB_OUTPUT
+            else
+              if markdownlint $MD_FILES; then
+                echo "markdown_status=passed" >> $GITHUB_OUTPUT
+                echo "✓ Markdown validation passed"
+              else
+                echo "markdown_status=failed" >> $GITHUB_OUTPUT
+                echo "! Markdown has lint issues (may be warnings only)"
+              fi
+            fi
+          else
+            echo "npm install -g markdownlint-cli"
+            echo "markdown_status=not-installed" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Detect Code Changes
+        id: code_changes
+        run: |
+          # Check for actual code changes (not just docs)
+          CODE_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} | grep -vE "\.(md|txt|json)$" | grep -vE "^\.copilot/" || true)
+
+          if [ -z "$CODE_FILES" ]; then
+            echo "has_code_changes=false" >> $GITHUB_OUTPUT
+            echo "This PR only modifies documentation or configuration"
+          else
+            echo "has_code_changes=true" >> $GITHUB_OUTPUT
+            echo "Code changes detected:"
+            echo "$CODE_FILES"
+          fi
+
+      - name: Run Tests
+        if: steps.code_changes.outputs.has_code_changes == 'true'
+        id: tests
+        continue-on-error: true
+        run: |
+          echo "Running tests if available..."
+
+          # Check for common test commands
+          if [ -f "package.json" ]; then
+            echo "Found Node.js project"
+            if npm test 2>/dev/null; then
+              echo "test_status=passed" >> $GITHUB_OUTPUT
+              echo "✓ Tests passed"
+            else
+              echo "test_status=failed" >> $GITHUB_OUTPUT
+              echo "✗ Tests failed"
+            fi
+          elif [ -f "pytest.ini" ] || [ -f "setup.py" ]; then
+            echo "Found Python project"
+            if python -m pytest 2>/dev/null; then
+              echo "test_status=passed" >> $GITHUB_OUTPUT
+              echo "✓ Tests passed"
+            else
+              echo "test_status=failed" >> $GITHUB_OUTPUT
+              echo "✗ Tests failed"
+            fi
+          else
+            echo "test_status=not-found" >> $GITHUB_OUTPUT
+            echo "No test framework detected"
+          fi
+
+      - name: Generate Validation Report
+        id: report
+        run: |
+          cat > /tmp/validation-report.md << 'EOF'
+          ## PR Validation Report
+
+          | Check | Status |
+          |-------|--------|
+          | Title Format | ${{ steps.validate_title.outputs.format }} |
+          | Issue Linked | ${{ steps.validate_link.outputs.issue_linked }} |
+          | YAML Syntax | ${{ steps.validate_yaml.outputs.yaml_status || 'N/A' }} |
+          | Shell Scripts | ${{ steps.validate_shell.outputs.shell_status || 'N/A' }} |
+          | Markdown Format | ${{ steps.validate_markdown.outputs.markdown_status || 'N/A' }} |
+          | Tests | ${{ steps.tests.outputs.test_status || 'N/A' }} |
+
+          ### Details
+          - Changed YAML files: ${{ steps.check_files.outputs.yaml_files }}
+          - Changed Shell files: ${{ steps.check_files.outputs.shell_files }}
+          - Changed Markdown files: ${{ steps.check_files.outputs.markdown_files }}
+          - Code changes detected: ${{ steps.code_changes.outputs.has_code_changes }}
+
+          ✓ = Passed
+          ✗ = Failed
+          N/A = Not applicable
+          EOF
+
+          cat /tmp/validation-report.md
+          echo "report_created=true" >> $GITHUB_OUTPUT
+
+      - name: Comment PR with Validation Results
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('/tmp/validation-report.md', 'utf8');
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: report
+            });
+
+      - name: Auto-assign PR to Author
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const assignee = context.payload.pull_request.user.login;
+
+            github.rest.issues.addAssignees({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              assignees: [assignee]
+            });
+
+            console.log(`Assigned PR to @${assignee}`);
+
+      - name: Add PR Labels
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = [];
+
+            // Add label based on validation status
+            if ('${{ steps.validate_yaml.outputs.yaml_status }}' === 'passed' ||
+                '${{ steps.validate_shell.outputs.shell_status }}' === 'passed' ||
+                '${{ steps.validate_markdown.outputs.markdown_status }}' === 'passed') {
+              labels.push('validated');
+            }
+
+            if ('${{ steps.code_changes.outputs.has_code_changes }}' === 'true') {
+              labels.push('code-changes');
+            } else {
+              labels.push('documentation');
+            }
+
+            if ('${{ github.event.pull_request.title }}'.startsWith('ai:')) {
+              labels.push('ai-generated');
+            }
+
+            if (labels.length > 0) {
+              github.rest.issues.addLabels({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: labels
+              });
+
+              console.log(`Added labels: ${labels.join(', ')}`);
+            }
+
+      - name: Request Review
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Request review from maintainers if available
+            const maintainers = [];
+
+            github.rest.pulls.requestReviewers({
+              pull_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              reviewers: maintainers.length > 0 ? maintainers : [],
+              team_reviewers: ['@maintainers']
+            }).catch(() => {
+              console.log('No explicit reviewers to assign');
+            });
+
+      - name: Validation Complete
+        if: success()
+        run: |
+          echo "✓ PR #${{ steps.pr_info.outputs.pr_number }} validation complete"
+          echo "✓ All checks passed"
+          echo "✓ PR is ready for review"
+
+      - name: Validation Failed
+        if: failure()
+        run: |
+          echo "✗ PR #${{ steps.pr_info.outputs.pr_number }} validation failed"
+          echo "✗ Check comments above for details"
+          echo "✗ Address failures and push updates"

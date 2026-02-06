@@ -1,0 +1,100 @@
+validation_rules:
+  syntax:
+    typescript:
+      enabled: true
+      rules:
+        - no-any: error
+        - no-implicit-any: error
+        - strict: true
+        - esm-interop: true
+    yaml:
+      enabled: true
+      rules:
+        - indentation: 2
+        - trailing-spaces: true
+        - line-length: 120
+    markdown:
+      enabled: true
+      rules:
+        - no-hard-tabs: true
+        - no-trailing-punctuation: true
+        - proper-names: true
+    shell:
+      enabled: true
+      rules:
+        - shellcheck: SC2086
+
+  tests:
+    requirements:
+      minimum_coverage: 90
+      minimum_passing_rate: 100
+      frameworks:
+        - jest
+        - vitest
+        - mocha
+    patterns:
+      - must_have_describe_blocks: true
+      - must_have_beforeEach_cleanup: true
+      - must_have_tearDown: true
+
+  security:
+    rules:
+      - no_hardcoded_credentials: true
+      - no_sql_concatenation: true
+      - validate_input_validation: true
+      - check_dependency_vulnerabilities: true
+      - enforce_https: true
+      - check_authentication: true
+      - check_authorization: true
+
+  documentation:
+    rules:
+      - all_public_apis_documented: true
+      - examples_included: true
+      - error_cases_documented: true
+      - assumptions_listed: true
+      - minimum_readme_sections:
+          - Installation
+          - Usage
+          - Testing
+          - Contributing
+
+  code_quality:
+    complexity:
+      cyclomatic_max: 10
+      cognitive_max: 15
+      nesting_max: 4
+    size:
+      max_function_lines: 50
+      max_file_lines: 300
+      max_parameters: 5
+    style:
+      naming:
+        - variables: camelCase
+        - classes: PascalCase
+        - constants: UPPER_SNAKE_CASE
+        - files: kebab-case
+      enforce_prettier: true
+      enforce_eslint: true
+
+  performance:
+    checks:
+      - no_n_plus_one_queries: true
+      - connection_pooling_used: true
+      - caching_for_repeated_access: true
+      - async_operations_used: true
+      - no_synchronous_file_io: true
+
+  git_commit:
+    rules:
+      - meaningful_messages: true
+      - reference_issue_number: true
+      - maximum_line_length: 72
+      - conventional_commits: true
+
+pass_criteria:
+  all_checks: true
+  minimum_score: 85
+  failing_threshold:
+    critical: 0
+    warning: 5

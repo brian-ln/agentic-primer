@@ -1,0 +1,107 @@
+name: Development Task
+description: Task for @copilot to analyze and implement
+labels: [copilot-task]
+body:
+  - type: input
+    id: title
+    attributes:
+      label: Task Title
+      placeholder: "What needs to be done?"
+      description: "Clear, actionable title (e.g., 'Add caching to API responses')"
+    validations:
+      required: true
+      max_length: 100
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      placeholder: "Provide context and details"
+      description: "Detailed explanation of what needs to be done and why"
+      value: |
+        ## Background
+        Why is this task needed? What's the context?
+
+        ## What needs to be done
+        Step-by-step description of the work
+
+        ## Context
+        Any relevant links, constraints, or related issues
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria
+      placeholder: "How to verify this is complete"
+      description: "Observable criteria that define success"
+      value: |
+        - [ ] Requirement 1
+        - [ ] Requirement 2
+        - [ ] Requirement 3
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: "Urgency and impact"
+      options:
+        - "P0 (Critical - blocks deployment)"
+        - "P1 (High - needed soon)"
+        - "P2 (Medium - can wait)"
+        - "P3 (Low - nice to have)"
+      default: 1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: effort
+    attributes:
+      label: Estimated Effort
+      description: "How much time to complete"
+      options:
+        - "1-2 hours"
+        - "3-8 hours"
+        - "1-2 days"
+        - "3-5 days"
+        - "> 1 week"
+      default: 1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: skills
+    attributes:
+      label: Skills Required
+      description: "Type of work"
+      options:
+        - "Frontend (UI/UX)"
+        - "Backend (APIs/Logic)"
+        - "DevOps (Infrastructure)"
+        - "Testing"
+        - "Documentation"
+        - "Multiple"
+      default: 5
+    validations:
+      required: true
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies & Blockers
+      placeholder: "Leave blank if none"
+      description: "Other tasks that must complete first, or external dependencies"
+    validations:
+      required: false
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional Notes
+      placeholder: "Links, references, constraints"
+      description: "Any extra context that might help"
+    validations:
+      required: false

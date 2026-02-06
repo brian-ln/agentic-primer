@@ -1,0 +1,8 @@
+# CODEOWNERS for automatic PR assignment
+
+# Default: Assign all PRs to repository owner
+* @github/developers
+
+# GitHub Copilot generated files go to the issue creator
+# This is overridden in workflow via assignees parameter
+src/features/ @issue-creator

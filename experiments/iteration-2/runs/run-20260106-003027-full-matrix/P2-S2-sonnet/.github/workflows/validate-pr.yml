@@ -1,0 +1,196 @@
+name: PR Validation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  validate-syntax:
+    name: Syntax Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install validation tools
+        run: |
+          # Install yamllint
+          pip install yamllint
+
+          # shellcheck is pre-installed on ubuntu-latest
+          shellcheck --version
+
+      - name: Validate YAML files
+        id: yaml_validation
+        continue-on-error: true
+        run: |
+          echo "Validating YAML files..."
+          if find . -type f \( -name "*.yml" -o -name "*.yaml" \) | grep -q .; then
+            find . -type f \( -name "*.yml" -o -name "*.yaml" \) -print0 | \
+              xargs -0 yamllint -f parsable -d "{extends: relaxed, rules: {line-length: {max: 120}}}"
+            echo "yaml_status=success" >> $GITHUB_OUTPUT
+          else
+            echo "No YAML files found"
+            echo "yaml_status=skipped" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Validate shell scripts
+        id: shell_validation
+        continue-on-error: true
+        run: |
+          echo "Validating shell scripts..."
+          if find . -type f -name "*.sh" | grep -q .; then
+            find . -type f -name "*.sh" -print0 | \
+              xargs -0 shellcheck -S warning
+            echo "shell_status=success" >> $GITHUB_OUTPUT
+          else
+            echo "No shell scripts found"
+            echo "shell_status=skipped" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check for syntax errors
+        run: |
+          YAML_STATUS="${{ steps.yaml_validation.outcome }}"
+          SHELL_STATUS="${{ steps.shell_validation.outcome }}"
+
+          echo "YAML validation: $YAML_STATUS"
+          echo "Shell validation: $SHELL_STATUS"
+
+          if [ "$YAML_STATUS" = "failure" ] || [ "$SHELL_STATUS" = "failure" ]; then
+            echo "❌ Syntax validation failed"
+            exit 1
+          else
+            echo "✅ Syntax validation passed"
+          fi
+
+      - name: Comment validation results
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const yamlStatus = '${{ steps.yaml_validation.outcome }}';
+            const shellStatus = '${{ steps.shell_validation.outcome }}';
+
+            const yamlIcon = yamlStatus === 'success' ? '✅' : yamlStatus === 'failure' ? '❌' : '⏭️';
+            const shellIcon = shellStatus === 'success' ? '✅' : shellStatus === 'failure' ? '❌' : '⏭️';
+
+            const body = `## Validation Results
+
+            | Check | Status |
+            |-------|--------|
+            | YAML Syntax | ${yamlIcon} ${yamlStatus} |
+            | Shell Scripts | ${shellIcon} ${shellStatus} |
+
+            ${yamlStatus === 'failure' || shellStatus === 'failure' ? '⚠️ Please fix syntax errors before merging.' : '✅ All validation checks passed!'}
+            `;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body
+            });
+
+  check-knowledge-updates:
+    name: Check Knowledge Base Updates
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for knowledge base changes
+        id: knowledge_check
+        run: |
+          echo "Checking for knowledge base updates..."
+
+          # Check if docs/knowledge was modified
+          if git diff --name-only origin/main...HEAD | grep -q "^docs/knowledge/"; then
+            echo "knowledge_updated=true" >> $GITHUB_OUTPUT
+            echo "✅ Knowledge base was updated"
+          else
+            echo "knowledge_updated=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ No knowledge base updates in this PR"
+          fi
+
+      - name: Suggest knowledge updates
+        if: steps.knowledge_check.outputs.knowledge_updated == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `## 📚 Knowledge Base Suggestion
+
+            This PR doesn't include knowledge base updates. Consider documenting:
+
+            - **New Patterns** → \`docs/knowledge/patterns/\`
+              - Reusable solutions or approaches introduced
+              - Best practices discovered
+
+            - **Decisions** → \`docs/knowledge/decisions/\`
+              - Important architectural or technical choices
+              - Trade-offs and rationale
+
+            - **Insights** → \`docs/knowledge/insights/\`
+              - Unexpected behaviors or learnings
+              - Performance observations
+              - Tips for future work
+
+            *This is a suggestion, not a requirement. Skip if not applicable.*`
+            });
+
+  verify-issue-link:
+    name: Verify Issue Link
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check for issue reference
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request.body || '';
+            const title = context.payload.pull_request.title || '';
+
+            // Check for issue references like #123, Fixes #123, Closes #123
+            const issuePattern = /#\d+/;
+            const closesPattern = /(closes|fixes|resolves)\s+#\d+/i;
+
+            const hasIssueRef = issuePattern.test(body) || issuePattern.test(title);
+            const hasClosesRef = closesPattern.test(body);
+
+            if (!hasIssueRef) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `## ⚠️ Missing Issue Reference
+
+                This PR doesn't appear to reference an issue. Consider:
+                - Adding \`Closes #123\` to the PR description
+                - Creating an issue first to track the work
+                - Updating the PR title to include the issue number
+
+                Linking issues helps maintain traceability and project context.`
+              });
+            } else if (hasIssueRef && !hasClosesRef) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `## 💡 Tip: Auto-close Issues
+
+                This PR references an issue but doesn't use auto-close keywords.
+                Add \`Closes #123\` or \`Fixes #123\` to automatically close the issue when this PR is merged.`
+              });
+            }

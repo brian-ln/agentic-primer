@@ -1,0 +1,95 @@
+name: Copilot Task
+description: Create a task for @copilot to execute autonomously
+title: "[Copilot Task]: "
+labels: ["copilot"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Task for @copilot
+        Fill out this form to create a task that @copilot will process automatically.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Background information and why this task is needed
+      placeholder: |
+        Describe the current state and why this change is needed.
+        Include links to related issues, PRs, or documentation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: task
+    attributes:
+      label: Task Description
+      description: What specifically needs to be done
+      placeholder: |
+        1. Create file X with function Y
+        2. Update file Z to import Y
+        3. Add tests for Y
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria
+      description: How we know the task is complete
+      placeholder: |
+        - [ ] Function Y exists and is exported
+        - [ ] All tests pass
+        - [ ] No linting errors
+    validations:
+      required: true
+
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints
+      description: Limitations, requirements, or things to avoid
+      placeholder: |
+        - Must not break existing API
+        - Must use TypeScript
+        - Avoid external dependencies
+    validations:
+      required: false
+
+  - type: textarea
+    id: knowledge_refs
+    attributes:
+      label: Knowledge References
+      description: Relevant patterns, decisions, or insights from docs/knowledge/
+      placeholder: |
+        - See docs/knowledge/patterns/error-handling.md
+        - Follow docs/knowledge/decisions/ADR-001-api-design.md
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: Task priority level
+      options:
+        - Low
+        - Medium
+        - High
+        - Critical
+      default: 1
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Confirmation
+      description: Confirm this task is ready for @copilot
+      options:
+        - label: I have provided enough context for @copilot to complete this task
+          required: true
+        - label: I have defined clear acceptance criteria
+          required: true

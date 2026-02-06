@@ -1,0 +1,236 @@
+// Agentic Primer Event Protocol
+// Universal event envelope and pub/sub protocol for event-driven integration
+// across Signal Hub, Convergence Framework, and AI capacity tracking
+
+package agentic-primer:event@0.1.0;
+
+interface types {
+    /// Error severity levels
+    enum error-severity {
+        info,
+        warning,
+        error,
+        critical,
+    }
+
+    /// Error categories
+    enum error-category {
+        configuration,
+        validation,
+        transport,
+        routing,
+        protocol,
+        resources,
+        authentication,
+        authorization,
+        timeout,
+        unknown,
+    }
+
+    /// Retry strategy information
+    record retry-info {
+        retryable: bool,
+        retry-after-ms: option<u64>,
+        max-attempts: option<u32>,
+    }
+
+    /// Detailed error information
+    record error-info {
+        code: string,
+        message: string,
+        severity: error-severity,
+        category: error-category,
+        details: option<string>,
+        timestamp: string,
+        correlation-id: option<string>,
+        retry-info: option<retry-info>,
+    }
+
+    /// Telemetry/tracing span information
+    record span-context {
+        trace-id: string,
+        span-id: string,
+        parent-span-id: option<string>,
+        trace-flags: u8,
+        baggage: list<tuple<string, string>>,
+    }
+}
+
+/// Core event protocol interface
+interface event {
+    use types.{error-info, span-context};
+
+    /// Event types for classification
+    enum event-type {
+        /// User interaction events
+        user-message,
+        agent-response,
+
+        /// Signal Hub events
+        signal-created,
+        signal-triaged,
+        action-required,
+
+        /// Convergence events
+        iteration-started,
+        iteration-completed,
+        convergence-detected,
+        divergence-detected,
+
+        /// Usage tracking events
+        usage-tracked,
+        quota-exceeded,
+
+        /// System events
+        system-health,
+        system-error,
+
+        /// Custom event type
+        custom,
+    }
+
+    /// Event priority levels
+    enum priority {
+        low,
+        normal,
+        high,
+        critical,
+    }
+
+    /// Universal event envelope
+    record event-envelope {
+        /// Event ID (UUID v7, time-sortable)
+        id: string,
+
+        /// Event type
+        event-type: event-type,
+
+        /// ISO 8601 timestamp
+        timestamp: string,
+
+        /// Source node/component ID
+        source: string,
+
+        /// Serialized event payload (JSON)
+        payload: string,
+
+        /// Optional correlation ID for request tracing
+        correlation-id: option<string>,
+
+        /// Optional trace context for distributed tracing
+        trace-context: option<span-context>,
+
+        /// Event priority
+        priority: priority,
+
+        /// Event metadata (key-value pairs)
+        metadata: list<tuple<string, string>>,
+    }
+
+    /// Handler capabilities
+    record handler-capabilities {
+        /// Event types this handler can process
+        supported-types: list<event-type>,
+
+        /// Can produce derived events
+        produces-events: bool,
+
+        /// Supports async processing
+        async-processing: bool,
+
+        /// Handler priority for ordering
+        handler-priority: u32,
+    }
+
+    /// Subscription filter
+    record subscription-filter {
+        /// Event types to receive
+        event-types: list<event-type>,
+
+        /// Optional source filter (only events from these sources)
+        sources: option<list<string>>,
+
+        /// Optional priority filter (minimum priority)
+        min-priority: option<priority>,
+
+        /// Optional metadata filters (key-value matches)
+        metadata-filters: list<tuple<string, string>>,
+    }
+}
+
+/// Event handler interface
+interface handler {
+    use types.{error-info};
+    use event.{event-envelope, event-type, handler-capabilities};
+
+    /// Handle an event
+    /// Returns optional derived event to be published
+    handle: func(event: event-envelope) -> result<option<event-envelope>, error-info>;
+
+    /// Check if this handler can process an event type
+    can-handle: func(event-type: event-type) -> bool;
+
+    /// Get handler capabilities
+    capabilities: func() -> handler-capabilities;
+
+    /// Initialize handler
+    init: func(config: string) -> result<_, error-info>;
+
+    /// Shutdown handler
+    shutdown: func() -> result<_, error-info>;
+}
+
+/// Event bus pub/sub interface
+interface bus {
+    use types.{error-info};
+    use event.{event-envelope, subscription-filter};
+
+    /// Subscription ID
+    type subscription-id = string;
+
+    /// Publish an event to the bus
+    /// Returns event ID for tracking
+    publish: func(event: event-envelope) -> result<string, error-info>;
+
+    /// Publish multiple events in batch
+    publish-batch: func(events: list<event-envelope>) -> result<list<string>, error-info>;
+
+    /// Subscribe to events with filter
+    /// Returns subscription ID for management
+    subscribe: func(handler-id: string, filter: subscription-filter) -> result<subscription-id, error-info>;
+
+    /// Unsubscribe from events
+    unsubscribe: func(subscription-id: subscription-id) -> result<_, error-info>;
+
+    /// Get active subscriptions for a handler
+    list-subscriptions: func(handler-id: string) -> list<subscription-id>;
+
+    /// Check if event matches filter
+    matches-filter: func(event: event-envelope, filter: subscription-filter) -> bool;
+}
+
+/// Event store interface for persistence
+interface store {
+    use types.{error-info};
+    use event.{event-envelope, event-type};
+
+    /// Store an event
+    store-event: func(event: event-envelope) -> result<_, error-info>;
+
+    /// Retrieve event by ID
+    get-event: func(id: string) -> result<event-envelope, error-info>;
+
+    /// Query events by type and time range
+    query-events: func(
+        event-types: list<event-type>,
+        start-time: string,
+        end-time: string,
+        limit: u32
+    ) -> result<list<event-envelope>, error-info>;
+
+    /// Get events by correlation ID
+    get-correlated-events: func(correlation-id: string) -> result<list<event-envelope>, error-info>;
+
+    /// Get events by source
+    get-events-by-source: func(source: string, limit: u32) -> result<list<event-envelope>, error-info>;
+}

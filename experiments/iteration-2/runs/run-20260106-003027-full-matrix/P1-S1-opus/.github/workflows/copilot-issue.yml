@@ -1,0 +1,68 @@
+name: Copilot Issue Automation
+
+on:
+  issues:
+    types: [opened, labeled]
+
+# Scoped permissions - principle of least privilege
+permissions:
+  issues: write
+
+jobs:
+  prepare-copilot-issue:
+    name: Prepare issue for @copilot
+    runs-on: ubuntu-latest
+    if: contains(github.event.issue.labels.*.name, 'copilot')
+
+    steps:
+      - name: Log issue details
+        run: |
+          echo "Issue #${{ github.event.issue.number }} labeled for @copilot"
+          echo "Title: ${{ github.event.issue.title }}"
+          echo "Author: ${{ github.event.issue.user.login }}"
+          echo "URL: ${{ github.event.issue.html_url }}"
+
+      - name: Add preparation comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issueNumber = context.issue.number;
+            const issueTitle = context.payload.issue.title;
+
+            // Check if @copilot is already assigned
+            const assignees = context.payload.issue.assignees.map(a => a.login);
+            const copilotAssigned = assignees.some(a => a.toLowerCase() === 'copilot');
+
+            let message;
+            if (copilotAssigned) {
+              message = `This issue is ready for @copilot processing.
+
+              **Status:** @copilot has been assigned and will begin working on this issue.
+
+              A pull request will be created when the implementation is complete.`;
+            } else {
+              message = `This issue is tagged for @copilot automation.
+
+              **Next Step:** Assign @copilot as an assignee to begin processing.
+
+              Once assigned, @copilot will:
+              1. Analyze the task description and acceptance criteria
+              2. Create a branch and implement the solution
+              3. Submit a pull request for review
+
+              ---
+              *To assign @copilot: Click "Assignees" in the sidebar and select @copilot*`;
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: message
+            });
+
+            console.log(`Comment added to issue #${issueNumber}`);
+
+  # Note: Actual @copilot processing occurs through GitHub Copilot Workspace
+  # when @copilot is manually assigned to the issue. This workflow only
+  # prepares the issue and adds guidance comments.

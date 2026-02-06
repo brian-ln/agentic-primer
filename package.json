@@ -1,0 +1,23 @@
+{
+  "name": "agentic-primer-wit",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "generate:types": "tsx scripts/generate-domain-types.ts",
+    "validate:domain": "tsx core/wit/domain/validation-test.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm validate:domain && pnpm typecheck"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.11.0",
+  "devDependencies": {
+    "@types/node": "^25.2.1",
+    "json-schema-to-typescript": "^15.0.4",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "zod": "^4.3.6"
+  }
+}

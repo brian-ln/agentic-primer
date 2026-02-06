@@ -1,0 +1,64 @@
+name: "@copilot Task"
+description: "Create a task for @copilot automation agent to process"
+title: "[Task] "
+labels: ["copilot-task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        # @copilot Task Template
+
+        Use this template to create tasks that @copilot will automatically process. Provide clear acceptance criteria so the agent can verify completion.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "Task Description"
+      description: "What work needs to be done? Be specific and actionable."
+      placeholder: "Implement user authentication endpoints with JWT tokens for the API service. Should handle login, logout, and token refresh."
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: "Acceptance Criteria"
+      description: "List the criteria that define when this task is complete. One per line."
+      placeholder: |
+        - POST /api/auth/login accepts email/password
+        - Returns JWT token on success
+        - Includes test coverage >= 80%
+        - All linting passes (eslint, prettier)
+      required: true
+
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: "Complexity Level"
+      description: "How complex is this task?"
+      options:
+        - "simple"
+        - "moderate"
+        - "complex"
+      default: 0
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: "Additional Context"
+      description: "Any additional information that would help @copilot process this task. Links, patterns to follow, constraints, etc."
+      placeholder: "See docs/knowledge/patterns/api-design.md for API conventions. Must integrate with existing auth service."
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: "Pre-processing Checks"
+      description: "Confirm these before @copilot starts work"
+      options:
+        - label: "This task aligns with project roadmap"
+          required: true
+        - label: "All required context is provided above"
+          required: true
+        - label: "Success criteria are measurable and verifiable"
+          required: true

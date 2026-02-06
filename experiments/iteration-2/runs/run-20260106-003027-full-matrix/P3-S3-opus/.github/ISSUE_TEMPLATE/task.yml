@@ -1,0 +1,107 @@
+name: Copilot Task
+description: Create a task for @copilot to implement autonomously
+title: "[TASK]: "
+labels: ["copilot", "automated"]
+assignees:
+  - copilot
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Copilot Task Request
+        Fill out this form to create a task for @copilot. Be specific and include
+        success criteria for best results.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Task Description
+      description: What should @copilot implement? Be specific about the expected outcome.
+      placeholder: |
+        Implement a function that validates email addresses.
+        The function should:
+        - Accept a string input
+        - Return true if valid email format
+        - Return false otherwise
+    validations:
+      required: true
+
+  - type: textarea
+    id: success-criteria
+    attributes:
+      label: Success Criteria
+      description: How will we know the task is complete? List observable outcomes.
+      placeholder: |
+        1. Function passes all test cases
+        2. Code coverage above 90%
+        3. No linting errors
+        4. Documentation added
+    validations:
+      required: true
+
+  - type: textarea
+    id: context-files
+    attributes:
+      label: Context Files
+      description: List existing files that provide context for this task.
+      placeholder: |
+        - src/utils/validation.ts
+        - tests/validation.test.ts
+        - docs/api.md
+    validations:
+      required: false
+
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints
+      description: Any limitations or things to avoid?
+      placeholder: |
+        - Do not modify existing API signatures
+        - Must be backward compatible
+        - No new dependencies
+    validations:
+      required: false
+
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Agent
+      description: Which AI agent should handle this task?
+      options:
+        - copilot (default)
+        - claude-opus
+        - claude-sonnet
+        - claude-haiku
+        - auto-select
+      default: 0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How urgent is this task?
+      options:
+        - low
+        - medium
+        - high
+        - critical
+      default: 1
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: requirements
+    attributes:
+      label: Requirements Checklist
+      description: Confirm that this task meets the requirements for automation.
+      options:
+        - label: Task is well-defined with clear success criteria
+          required: true
+        - label: I have reviewed existing code and documentation
+          required: true
+        - label: This task can be completed without external access
+          required: false

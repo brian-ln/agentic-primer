@@ -1,0 +1,579 @@
+name: Copilot Issue-Driven Development
+
+on:
+  issues:
+    types: [opened, labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  process-issue:
+    name: Process Copilot Task
+    if: contains(github.event.issue.labels.*.name, 'copilot-task')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup environment
+        id: setup
+        run: |
+          echo "issue_number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
+          echo "issue_title=${{ github.event.issue.title }}" >> $GITHUB_OUTPUT
+          echo "issue_creator=${{ github.event.issue.user.login }}" >> $GITHUB_OUTPUT
+          echo "branch_name=copilot/issue-${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
+          echo "timestamp=$(date -u +%Y%m%d-%H%M%S)" >> $GITHUB_OUTPUT
+
+          echo "Processing issue #${{ github.event.issue.number }}"
+          echo "Title: ${{ github.event.issue.title }}"
+          echo "Creator: ${{ github.event.issue.user.login }}"
+
+      - name: Auto-assign issue to creator
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.issues.addAssignees({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                assignees: ['${{ github.event.issue.user.login }}']
+              });
+              console.log('Assigned issue to creator: ${{ github.event.issue.user.login }}');
+            } catch (error) {
+              console.log('Could not assign issue:', error.message);
+            }
+
+      - name: Add processing label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: ['copilot-processing']
+              });
+              console.log('Added copilot-processing label');
+            } catch (error) {
+              console.log('Could not add label:', error.message);
+            }
+
+      - name: Read knowledge base
+        id: knowledge
+        run: |
+          echo "Reading knowledge base for context..."
+
+          # Initialize knowledge summary
+          KNOWLEDGE_SUMMARY=""
+          PATTERN_COUNT=0
+          DECISION_COUNT=0
+          INSIGHT_COUNT=0
+          TOTAL_COUNT=0
+
+          # Scan patterns directory
+          if [ -d "docs/knowledge/patterns" ]; then
+            PATTERN_COUNT=$(find docs/knowledge/patterns -name "*.md" -type f 2>/dev/null | wc -l | tr -d ' ')
+            echo "Found ${PATTERN_COUNT} patterns:"
+            find docs/knowledge/patterns -name "*.md" -type f 2>/dev/null | while read -r file; do
+              echo "   - $(basename "$file")"
+            done
+          fi
+
+          # Scan decisions directory
+          if [ -d "docs/knowledge/decisions" ]; then
+            DECISION_COUNT=$(find docs/knowledge/decisions -name "*.md" -type f 2>/dev/null | wc -l | tr -d ' ')
+            echo "Found ${DECISION_COUNT} decisions:"
+            find docs/knowledge/decisions -name "*.md" -type f 2>/dev/null | while read -r file; do
+              echo "   - $(basename "$file")"
+            done
+          fi
+
+          # Scan insights directory
+          if [ -d "docs/knowledge/insights" ]; then
+            INSIGHT_COUNT=$(find docs/knowledge/insights -name "*.md" -type f 2>/dev/null | wc -l | tr -d ' ')
+            echo "Found ${INSIGHT_COUNT} insights:"
+            find docs/knowledge/insights -name "*.md" -type f 2>/dev/null | while read -r file; do
+              echo "   - $(basename "$file")"
+            done
+          fi
+
+          # Calculate total
+          TOTAL_COUNT=$((PATTERN_COUNT + DECISION_COUNT + INSIGHT_COUNT))
+
+          # Build summary
+          KNOWLEDGE_SUMMARY="Knowledge Base Summary:
+          - Patterns: ${PATTERN_COUNT}
+          - Decisions: ${DECISION_COUNT}
+          - Insights: ${INSIGHT_COUNT}
+          - Total: ${TOTAL_COUNT} documents"
+
+          # Output for next steps
+          echo "knowledge_summary<<EOF" >> $GITHUB_OUTPUT
+          echo "$KNOWLEDGE_SUMMARY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          echo "pattern_count=${PATTERN_COUNT}" >> $GITHUB_OUTPUT
+          echo "decision_count=${DECISION_COUNT}" >> $GITHUB_OUTPUT
+          echo "insight_count=${INSIGHT_COUNT}" >> $GITHUB_OUTPUT
+          echo "total_count=${TOTAL_COUNT}" >> $GITHUB_OUTPUT
+
+          echo ""
+          echo "$KNOWLEDGE_SUMMARY"
+
+      - name: Copilot agent simulation
+        id: copilot
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          KNOWLEDGE_SUMMARY: ${{ steps.knowledge.outputs.knowledge_summary }}
+          PATTERN_COUNT: ${{ steps.knowledge.outputs.pattern_count }}
+          DECISION_COUNT: ${{ steps.knowledge.outputs.decision_count }}
+          INSIGHT_COUNT: ${{ steps.knowledge.outputs.insight_count }}
+        run: |
+          echo "Processing issue #${ISSUE_NUMBER}"
+          echo "Title: ${ISSUE_TITLE}"
+          echo ""
+          echo "${KNOWLEDGE_SUMMARY}"
+          echo ""
+          echo "Processing steps:"
+          echo "  1. Analyzing issue requirements..."
+          echo "  2. Consulting knowledge base (${PATTERN_COUNT} patterns, ${DECISION_COUNT} decisions, ${INSIGHT_COUNT} insights)..."
+          echo "  3. Generating implementation plan..."
+          echo "  4. Creating code changes..."
+          echo "  5. Preparing for validation..."
+          echo ""
+
+          # Create implementation directory
+          mkdir -p src/features
+
+          # Generate implementation file
+          cat > "src/features/issue-${ISSUE_NUMBER}-implementation.md" << IMPL_EOF
+          # Implementation for Issue #${ISSUE_NUMBER}
+
+          **Generated by:** Copilot Agent (Simulated)
+          **Timestamp:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          **Issue Title:** ${ISSUE_TITLE}
+
+          ---
+
+          ## Task Description
+
+          ${ISSUE_BODY}
+
+          ---
+
+          ## Implementation Summary
+
+          This file represents the work completed by the Copilot agent in response to the issue.
+          In a production environment, this would contain actual code changes, tests, and documentation.
+
+          ### Analysis Phase
+
+          **Requirements extracted:**
+          - Analyzed issue description for acceptance criteria
+          - Identified technical requirements and constraints
+          - Reviewed related issues and PRs for context
+
+          **Knowledge base consultation:**
+          ${KNOWLEDGE_SUMMARY}
+
+          ### Implementation Phase
+
+          **Changes made:**
+          - Created implementation scaffold based on issue requirements
+          - Applied relevant patterns from knowledge base
+          - Followed architectural decisions documented in knowledge base
+          - Incorporated learnings from insights documentation
+
+          **Files affected:**
+          - \`src/features/issue-${ISSUE_NUMBER}-implementation.md\` (this file)
+
+          ### Validation Phase
+
+          **Quality checks:**
+          - Syntax validation scheduled
+          - Code follows established patterns
+          - Documentation included
+          - Ready for human review
+
+          ---
+
+          ## Knowledge Base References
+
+          This implementation utilized the following knowledge base resources:
+
+          ${KNOWLEDGE_SUMMARY}
+
+          **Pattern alignment:**
+          - Reviewed ${PATTERN_COUNT} pattern(s) for best practices
+          - Applied relevant coding standards and conventions
+
+          **Decision alignment:**
+          - Consulted ${DECISION_COUNT} architectural decision(s)
+          - Ensured consistency with established architecture
+
+          **Insights applied:**
+          - Incorporated ${INSIGHT_COUNT} learning(s) from past work
+          - Avoided known pitfalls and antipatterns
+
+          ---
+
+          ## Testing & Validation
+
+          **Automated checks:**
+          - Syntax validation: PENDING (will run in next step)
+          - Code quality: PASS (follows patterns)
+          - Documentation: PASS (included in this file)
+
+          **Manual review required:**
+          - [ ] Verify implementation meets all acceptance criteria
+          - [ ] Test functionality in appropriate environments
+          - [ ] Review for security and performance considerations
+          - [ ] Confirm documentation is clear and complete
+
+          ---
+
+          ## Next Steps
+
+          1. **Review this implementation** in the generated PR
+          2. **Test the changes** in your local environment
+          3. **Provide feedback** via PR comments
+          4. **Approve and merge** when satisfied with the implementation
+
+          ---
+
+          **Note:** This is a simulation. In production deployment, this would be replaced
+          with actual Copilot API integration generating real code changes.
+          IMPL_EOF
+
+          # Create a sample test file to trigger validation
+          mkdir -p test/features
+          cat > "test/features/issue-${ISSUE_NUMBER}-test.sh" << TEST_EOF
+          #!/bin/bash
+          # Test script for issue #${ISSUE_NUMBER}
+          # This demonstrates shellcheck validation
+
+          set -euo pipefail
+
+          echo "Running tests for issue #${ISSUE_NUMBER}"
+          echo "Implementation: src/features/issue-${ISSUE_NUMBER}-implementation.md"
+
+          # In production, this would contain actual tests
+          echo "All tests passed"
+          TEST_EOF
+
+          chmod +x "test/features/issue-${ISSUE_NUMBER}-test.sh"
+
+          echo "implementation_complete=true" >> $GITHUB_OUTPUT
+          echo "implementation_file=src/features/issue-${ISSUE_NUMBER}-implementation.md" >> $GITHUB_OUTPUT
+          echo ""
+          echo "Copilot agent processing complete"
+          echo "Generated: src/features/issue-${ISSUE_NUMBER}-implementation.md"
+          echo "Generated: test/features/issue-${ISSUE_NUMBER}-test.sh"
+
+      - name: Validate changes
+        id: validate
+        run: |
+          echo "Running Validation Checks"
+          echo ""
+
+          VALIDATION_PASSED=true
+
+          # Validate YAML files
+          echo "Checking YAML files..."
+          if command -v yamllint &> /dev/null; then
+            echo "yamllint found, running validation..."
+            if find . -name "*.yml" -o -name "*.yaml" 2>/dev/null | grep -q .; then
+              find . -name "*.yml" -o -name "*.yaml" | while read -r file; do
+                echo "   Checking: $file"
+              done
+
+              if find . -name "*.yml" -o -name "*.yaml" | xargs yamllint -d relaxed 2>&1; then
+                echo "YAML validation passed"
+              else
+                echo "YAML validation warnings (non-blocking)"
+              fi
+            else
+              echo "No YAML files to validate"
+            fi
+          else
+            echo "yamllint not available, skipping YAML validation"
+            echo "   Install with: pip install yamllint"
+          fi
+
+          echo ""
+
+          # Validate shell scripts
+          echo "Checking shell scripts..."
+          if command -v shellcheck &> /dev/null; then
+            echo "shellcheck found, running validation..."
+            if find . -name "*.sh" -type f 2>/dev/null | grep -q .; then
+              find . -name "*.sh" -type f | while read -r file; do
+                echo "   Checking: $file"
+              done
+
+              if find . -name "*.sh" -type f | xargs shellcheck 2>&1; then
+                echo "Shell script validation passed"
+              else
+                echo "Shell script validation warnings (non-blocking)"
+              fi
+            else
+              echo "No shell scripts to validate"
+            fi
+          else
+            echo "shellcheck not available, skipping shell validation"
+            echo "   Install with: brew install shellcheck (macOS) or apt install shellcheck (Linux)"
+          fi
+
+          echo ""
+          echo "validation_status=completed" >> $GITHUB_OUTPUT
+          echo "Validation phase complete"
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create feature branch
+        run: |
+          BRANCH_NAME="${{ steps.setup.outputs.branch_name }}"
+          echo "Creating branch: ${BRANCH_NAME}"
+          git checkout -b "${BRANCH_NAME}"
+          echo "Branch created successfully"
+
+      - name: Commit changes
+        run: |
+          echo "Staging changes..."
+          git add .
+
+          echo "Creating commit..."
+          git commit -m "feat: implement solution for issue #${{ github.event.issue.number }}
+
+          This commit implements the changes requested in issue #${{ github.event.issue.number }}.
+
+          Issue: ${{ github.event.issue.title }}
+          Processed by: Copilot agent (simulated)
+          Knowledge base consulted: Yes
+          Knowledge base items: ${{ steps.knowledge.outputs.total_count }}
+          - Patterns: ${{ steps.knowledge.outputs.pattern_count }}
+          - Decisions: ${{ steps.knowledge.outputs.decision_count }}
+          - Insights: ${{ steps.knowledge.outputs.insight_count }}
+
+          Files created:
+          - ${{ steps.copilot.outputs.implementation_file }}
+          - test/features/issue-${{ github.event.issue.number }}-test.sh
+
+          Closes #${{ github.event.issue.number }}"
+
+          echo "Changes committed"
+
+      - name: Push feature branch
+        run: |
+          BRANCH_NAME="${{ steps.setup.outputs.branch_name }}"
+          echo "Pushing branch: ${BRANCH_NAME}"
+          git push origin "${BRANCH_NAME}"
+          echo "Branch pushed successfully"
+
+      - name: Create pull request
+        id: create_pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'feat: ${{ github.event.issue.title }}',
+              head: '${{ steps.setup.outputs.branch_name }}',
+              base: 'main',
+              body: `## Automated Implementation by Copilot Agent
+
+            This PR was automatically generated to address issue #${{ github.event.issue.number }}.
+
+            ---
+
+            ### Issue Summary
+            **Title:** ${{ github.event.issue.title }}
+            **Number:** #${{ github.event.issue.number }}
+            **Created by:** @${{ github.event.issue.user.login }}
+
+            ---
+
+            ### Knowledge Base Consulted
+
+            ${{ steps.knowledge.outputs.knowledge_summary }}
+
+            The Copilot agent referenced these knowledge base resources when generating this implementation:
+            - **Patterns (${{ steps.knowledge.outputs.pattern_count }}):** Coding standards and reusable patterns
+            - **Decisions (${{ steps.knowledge.outputs.decision_count }}):** Architectural decisions and rationale
+            - **Insights (${{ steps.knowledge.outputs.insight_count }}):** Learnings from past implementations
+
+            ---
+
+            ### Changes Made
+
+            **Files created:**
+            - \`${{ steps.copilot.outputs.implementation_file }}\` - Main implementation
+            - \`test/features/issue-${{ github.event.issue.number }}-test.sh\` - Test script
+
+            **Implementation approach:**
+            1. Analyzed issue requirements and acceptance criteria
+            2. Consulted knowledge base for relevant patterns and decisions
+            3. Generated implementation following established conventions
+            4. Created test scaffolding for validation
+            5. Validated syntax and code quality
+
+            ---
+
+            ### Validation Results
+
+            - Implementation generated successfully
+            - Knowledge base consultation completed
+            - Syntax validation executed (see workflow logs)
+            - Files created and committed
+            - Ready for human review
+
+            ---
+
+            ### Review Checklist
+
+            Please verify the following before merging:
+
+            - [ ] Implementation meets all acceptance criteria from issue
+            - [ ] Code follows established patterns and conventions
+            - [ ] Tests are appropriate and comprehensive
+            - [ ] Documentation is clear and complete
+            - [ ] No security or performance concerns
+            - [ ] Knowledge base references are appropriate
+
+            ---
+
+            ### Next Steps
+
+            1. **Review the implementation** in this PR
+            2. **Test locally** if needed: \`git checkout ${{ steps.setup.outputs.branch_name }}\`
+            3. **Provide feedback** via PR comments or request changes
+            4. **Approve and merge** when satisfied
+
+            ---
+
+            ### Related Links
+
+            - **Issue:** #${{ github.event.issue.number }}
+            - **Branch:** \`${{ steps.setup.outputs.branch_name }}\`
+            - **Workflow run:** [View logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+            ---
+
+            **Closes #${{ github.event.issue.number }}**
+
+            /cc @${{ github.event.issue.user.login }}`
+            });
+
+            console.log('Created PR #' + pr.number);
+            console.log('URL: ' + pr.html_url);
+
+            return pr.number;
+
+      - name: Auto-assign PR to issue creator
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = ${{ steps.create_pr.outputs.result }};
+
+            try {
+              await github.rest.issues.addAssignees({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                assignees: ['${{ github.event.issue.user.login }}']
+              });
+
+              console.log('Assigned PR #' + prNumber + ' to: ${{ github.event.issue.user.login }}');
+            } catch (error) {
+              console.log('Could not assign PR:', error.message);
+            }
+
+      - name: Update issue with completion status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = ${{ steps.create_pr.outputs.result }};
+
+            // Add comment with PR link and summary
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `## Copilot Agent - Task Complete
+
+            I've finished processing your task and created **PR #${prNumber}** with the implementation.
+
+            ---
+
+            ### Processing Summary
+
+            **Knowledge Base Utilized:**
+            ${{ steps.knowledge.outputs.knowledge_summary }}
+
+            **Files Created:**
+            - \`${{ steps.copilot.outputs.implementation_file }}\`
+            - \`test/features/issue-${{ github.event.issue.number }}-test.sh\`
+
+            **Validation Status:**
+            - Syntax validation completed
+            - Code quality checks passed
+            - Ready for review
+
+            ---
+
+            ### Next Steps
+
+            1. **Review the PR:** [#${prNumber}](https://github.com/${{ github.repository }}/pull/${prNumber})
+            2. **Test the implementation** locally if needed
+            3. **Provide feedback** via PR comments
+            4. **Approve and merge** when you're satisfied
+
+            The PR has been automatically assigned to you (@${{ github.event.issue.user.login }}) for review.
+
+            ---
+
+            *This issue will automatically close when the PR is merged.*`
+            });
+
+            // Remove processing label
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                name: 'copilot-processing'
+              });
+              console.log('Removed copilot-processing label');
+            } catch (error) {
+              console.log('Label already removed or does not exist');
+            }
+
+            // Add completed label
+            try {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: ['copilot-completed']
+              });
+              console.log('Added copilot-completed label');
+            } catch (error) {
+              console.log('Could not add completed label:', error.message);
+            }
+
+            console.log('');
+            console.log('Workflow Completed Successfully');

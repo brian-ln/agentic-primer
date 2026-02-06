@@ -1,0 +1,70 @@
+name: "@copilot Task"
+description: Assign work to @copilot automation agent
+title: "[copilot] "
+labels: ["copilot-task", "automation"]
+assignees: ["copilot-bot"]
+
+body:
+  - type: textarea
+    id: objective
+    attributes:
+      label: "Objective"
+      description: "What should @copilot accomplish?"
+      placeholder: "e.g., Create API endpoint for user authentication"
+      value: ""
+    validations:
+      required: true
+
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: "Complexity Level"
+      description: "Estimate the complexity of this task"
+      options:
+        - "simple"
+        - "moderate"
+        - "complex"
+      default: 0
+    validations:
+      required: true
+
+  - type: textarea
+    id: constraints
+    attributes:
+      label: "Constraints & Requirements"
+      description: "Any specific requirements, dependencies, or limitations"
+      placeholder: "Must use PostgreSQL, follow REST conventions, must support X and Y"
+      value: ""
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: "Acceptance Criteria"
+      description: "How will we verify completion? Use checkboxes."
+      placeholder: |
+        - [ ] Tests passing
+        - [ ] 80%+ coverage
+        - [ ] Documentation complete
+        - [ ] Code reviewed
+      value: ""
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: "Related Knowledge"
+      description: "Link to relevant patterns, decisions, or insights from docs/knowledge/"
+      placeholder: "See docs/knowledge/decisions/api-design.md\nSee docs/knowledge/patterns/rest-api-crud.md"
+      value: ""
+
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: "Confirmation"
+      description: "Please confirm before submitting"
+      options:
+        - label: "I have filled out all required fields"
+          required: true
+        - label: "I understand this will be processed by @copilot automation"
+          required: true

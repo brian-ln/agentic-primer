@@ -1,0 +1,313 @@
+# Coding Standards
+#
+# Code style guidelines, naming conventions, and best practices
+# for this project.
+
+version: "1.0"
+
+description: |
+  Coding standards and style guidelines that should be followed
+  for consistency and maintainability.
+
+general_principles:
+  - principle: Readability First
+    description: Code is read more often than written
+    guidelines:
+      - Use descriptive names
+      - Keep functions small and focused
+      - Add comments for complex logic only
+      - Prefer clarity over cleverness
+
+  - principle: DRY (Don't Repeat Yourself)
+    description: Avoid code duplication
+    guidelines:
+      - Extract common logic into functions
+      - Use shared utilities
+      - Leverage inheritance/composition appropriately
+      - Balance DRY with premature abstraction
+
+  - principle: SOLID Principles
+    description: Object-oriented design principles
+    guidelines:
+      - Single Responsibility Principle
+      - Open/Closed Principle
+      - Liskov Substitution Principle
+      - Interface Segregation Principle
+      - Dependency Inversion Principle
+
+naming_conventions:
+  typescript:
+    files:
+      - Use kebab-case for file names (user-service.ts)
+      - Suffix test files with .test.ts or .spec.ts
+      - Use .tsx extension for React components
+
+    variables:
+      - Use camelCase for variables and functions
+      - Use PascalCase for classes and components
+      - Use UPPER_CASE for constants
+      - Boolean variables should start with is/has/can
+
+    types:
+      - Use PascalCase for interfaces and types
+      - Prefix interfaces with I only if needed for clarity
+      - Use descriptive type names
+
+    examples: |
+      // Good
+      const userName = "John";
+      const isAuthenticated = true;
+      const MAX_RETRY_ATTEMPTS = 3;
+
+      interface User {
+        id: string;
+        name: string;
+      }
+
+      function getUserById(id: string): Promise<User> {
+        // ...
+      }
+
+      // Bad
+      const un = "John";
+      const authenticated = true;
+      const max = 3;
+
+      interface user {
+        ID: string;
+        Name: string;
+      }
+
+code_organization:
+  file_structure:
+    description: How to organize code within files
+    guidelines:
+      - Imports at top (grouped: external, internal, relative)
+      - Type definitions after imports
+      - Constants after types
+      - Helper functions before main logic
+      - Main export at bottom
+      - Maximum file length: 300 lines (guideline, not hard limit)
+
+  function_structure:
+    description: How to write functions
+    guidelines:
+      - One function, one purpose
+      - Maximum function length: 50 lines (guideline)
+      - Early returns for error cases
+      - Avoid nested callbacks (use async/await)
+      - Document complex parameters with JSDoc
+
+    example: |
+      /**
+       * Fetches user data with caching
+       * @param id - User ID
+       * @param options - Fetch options
+       * @returns User object or null if not found
+       */
+      async function getUser(
+        id: string,
+        options?: { skipCache?: boolean }
+      ): Promise<User | null> {
+        // Early return for invalid input
+        if (!id) {
+          throw new Error("User ID is required");
+        }
+
+        // Check cache first
+        if (!options?.skipCache) {
+          const cached = await cache.get(`user:${id}`);
+          if (cached) return cached;
+        }
+
+        // Fetch from database
+        const user = await db.users.findById(id);
+        if (!user) return null;
+
+        // Update cache
+        await cache.set(`user:${id}`, user);
+
+        return user;
+      }
+
+error_handling:
+  approach: |
+    Use typed errors for predictable failure modes.
+    Let unexpected errors bubble up.
+
+  guidelines:
+    - Define custom error classes
+    - Use try/catch for expected failures
+    - Log errors with context
+    - Never swallow errors silently
+    - Return error objects instead of throwing (for some cases)
+
+  example: |
+    // Custom error classes
+    export class ValidationError extends Error {
+      constructor(
+        message: string,
+        public field: string,
+        public value: any
+      ) {
+        super(message);
+        this.name = "ValidationError";
+      }
+    }
+
+    // Error handling
+    async function createUser(data: CreateUserInput): Promise<User> {
+      try {
+        // Validate
+        if (!isValidEmail(data.email)) {
+          throw new ValidationError(
+            "Invalid email format",
+            "email",
+            data.email
+          );
+        }
+
+        // Create
+        return await userRepository.create(data);
+      } catch (error) {
+        if (error instanceof ValidationError) {
+          // Expected error - handle gracefully
+          logger.warn("User creation failed", { error, data });
+          throw error;
+        } else {
+          // Unexpected error - log and rethrow
+          logger.error("Unexpected error creating user", { error, data });
+          throw error;
+        }
+      }
+    }
+
+comments:
+  when_to_comment:
+    - Complex algorithms that aren't immediately obvious
+    - Non-obvious workarounds or hacks
+    - TODO markers for future improvements
+    - API documentation (JSDoc for public functions)
+
+  when_not_to_comment:
+    - Obvious code (the code itself is the documentation)
+    - Restating what the code does
+    - Outdated comments (remove or update)
+
+  example: |
+    // Good: Explains WHY, not WHAT
+    // Use exponential backoff to avoid overwhelming the API
+    // during high traffic periods
+    await retryWithBackoff(apiCall, { maxAttempts: 5 });
+
+    // Bad: Restates the obvious
+    // Increment counter by 1
+    counter++;
+
+typescript_specific:
+  type_safety:
+    - Avoid 'any' type (use 'unknown' if truly needed)
+    - Enable strict mode in tsconfig.json
+    - Define interfaces for all data structures
+    - Use type guards for narrowing
+
+  modern_features:
+    - Use async/await instead of callbacks
+    - Use optional chaining (?.)
+    - Use nullish coalescing (??)
+    - Use template literals instead of concatenation
+    - Use destructuring for objects and arrays
+
+  example: |
+    // Good: Type-safe with modern features
+    interface ApiResponse<T> {
+      data?: T;
+      error?: string;
+    }
+
+    async function fetchData<T>(
+      url: string
+    ): Promise<ApiResponse<T>> {
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
+        return { data: data as T };
+      } catch (error) {
+        const message = error instanceof Error
+          ? error.message
+          : "Unknown error";
+        return { error: message };
+      }
+    }
+
+    // Usage with type safety
+    const result = await fetchData<User>("/api/users/123");
+    const userName = result.data?.name ?? "Unknown";
+
+react_specific:
+  component_structure:
+    - Functional components only (no class components)
+    - Use hooks for state and effects
+    - Keep components small and focused
+    - Extract custom hooks for reusable logic
+
+  example: |
+    // Good: Focused, composable component
+    interface UserProfileProps {
+      userId: string;
+    }
+
+    export function UserProfile({ userId }: UserProfileProps) {
+      const { user, loading, error } = useUser(userId);
+
+      if (loading) return <LoadingSpinner />;
+      if (error) return <ErrorMessage error={error} />;
+      if (!user) return <NotFound />;
+
+      return (
+        <div className="user-profile">
+          <Avatar src={user.avatar} />
+          <h1>{user.name}</h1>
+          <Bio content={user.bio} />
+        </div>
+      );
+    }
+
+linting:
+  tools:
+    - ESLint for JavaScript/TypeScript
+    - Prettier for formatting
+    - TypeScript compiler for type checking
+
+  configuration:
+    - Extends recommended configs
+    - Auto-fix on save (in IDE)
+    - Run linters in pre-commit hook
+    - Fail CI builds on lint errors
+
+imports:
+  order:
+    1. External dependencies (React, Next.js, etc.)
+    2. Internal modules (services, utils)
+    3. Relative imports (./components)
+    4. Type-only imports (import type)
+    5. CSS/style imports
+
+  example: |
+    // External
+    import React, { useState, useEffect } from "react";
+    import { useRouter } from "next/router";
+
+    // Internal
+    import { UserService } from "@/services/user-service";
+    import { formatDate } from "@/utils/date";
+
+    // Relative
+    import { Button } from "./Button";
+    import { Input } from "./Input";
+
+    // Types
+    import type { User } from "@/types";
+
+    // Styles
+    import styles from "./UserProfile.module.css";

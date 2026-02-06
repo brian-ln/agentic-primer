@@ -1,0 +1,187 @@
+name: Copilot Knowledge Base Sync
+
+on:
+  push:
+    paths:
+      - '.github/knowledge-base/**'
+  pull_request:
+    paths:
+      - '.github/knowledge-base/**'
+  schedule:
+    # Run weekly to validate KB integrity
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  validate-knowledge-base:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validate markdown syntax
+        run: |
+          echo "Validating markdown files..."
+
+          # Check for broken links
+          find .github/knowledge-base -name "*.md" -type f | while read file; do
+            echo "Checking $file..."
+
+            # Extract markdown links
+            grep -o '\[.*\]([^)]*)' "$file" | grep -o '([^)]*)' | tr -d '()' | while read link; do
+              # Skip external URLs
+              if [[ "$link" =~ ^https?:// ]]; then
+                continue
+              fi
+
+              # Check if local file exists
+              if [[ ! -f ".github/knowledge-base/$link" ]] && [[ ! -f "$link" ]]; then
+                echo "❌ Broken link in $file: $link"
+                exit 1
+              fi
+            done
+          done
+
+          echo "✅ All markdown files validated"
+
+      - name: Check for required sections
+        run: |
+          echo "Checking required knowledge base sections..."
+
+          required_files=(
+            ".github/knowledge-base/README.md"
+            ".github/knowledge-base/coding-standards.md"
+            ".github/knowledge-base/architecture-patterns.md"
+            ".github/knowledge-base/testing-requirements.md"
+          )
+
+          for file in "${required_files[@]}"; do
+            if [[ ! -f "$file" ]]; then
+              echo "❌ Required file missing: $file"
+              exit 1
+            fi
+          done
+
+          echo "✅ All required sections present"
+
+      - name: Generate knowledge base index
+        run: |
+          cat > .github/knowledge-base/INDEX.json << EOF
+          {
+            "generated": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "files": [
+          EOF
+
+          first=true
+          find .github/knowledge-base -name "*.md" -not -name "README.md" -type f | sort | while read file; do
+            if [ "$first" = false ]; then
+              echo "," >> .github/knowledge-base/INDEX.json
+            fi
+            first=false
+
+            title=$(head -n 1 "$file" | sed 's/^# //')
+            cat >> .github/knowledge-base/INDEX.json << EOF
+              {
+                "path": "$file",
+                "title": "$title",
+                "size": $(wc -c < "$file"),
+                "modified": "$(git log -1 --format=%aI "$file" 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)"
+              }
+          EOF
+          done
+
+          cat >> .github/knowledge-base/INDEX.json << EOF
+
+            ],
+            "total_files": $(find .github/knowledge-base -name "*.md" -type f | wc -l)
+          }
+          EOF
+
+          echo "✅ Knowledge base index generated"
+
+      - name: Calculate knowledge base statistics
+        id: stats
+        run: |
+          total_files=$(find .github/knowledge-base -name "*.md" -type f | wc -l)
+          total_size=$(find .github/knowledge-base -name "*.md" -type f -exec wc -c {} + | tail -1 | awk '{print $1}')
+          total_lines=$(find .github/knowledge-base -name "*.md" -type f -exec wc -l {} + | tail -1 | awk '{print $1}')
+
+          echo "files=$total_files" >> $GITHUB_OUTPUT
+          echo "size=$total_size" >> $GITHUB_OUTPUT
+          echo "lines=$total_lines" >> $GITHUB_OUTPUT
+
+          echo "📊 Knowledge Base Statistics:"
+          echo "  Files: $total_files"
+          echo "  Size: $total_size bytes"
+          echo "  Lines: $total_lines"
+
+      - name: Check for outdated content
+        run: |
+          echo "Checking for potentially outdated content..."
+
+          # Find files not updated in last 90 days
+          cutoff_date=$(date -d '90 days ago' +%s 2>/dev/null || date -v-90d +%s)
+
+          find .github/knowledge-base -name "*.md" -type f | while read file; do
+            last_modified=$(git log -1 --format=%ct "$file" 2>/dev/null || echo 0)
+
+            if [[ $last_modified -lt $cutoff_date ]] && [[ $last_modified -gt 0 ]]; then
+              echo "⚠️  File may be outdated (>90 days): $file"
+            fi
+          done
+
+      - name: Post validation summary
+        if: github.event_name == 'schedule'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const stats = {
+              files: ${{ steps.stats.outputs.files }},
+              size: ${{ steps.stats.outputs.size }},
+              lines: ${{ steps.stats.outputs.lines }}
+            };
+
+            // Check if there's an existing tracking issue
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'knowledge-base,tracking',
+              state: 'open'
+            });
+
+            const body = `## 📚 Knowledge Base Status Report
+
+            **Generated**: ${new Date().toISOString()}
+
+            ### Statistics
+            - **Files**: ${stats.files}
+            - **Total Size**: ${(stats.size / 1024).toFixed(2)} KB
+            - **Total Lines**: ${stats.lines}
+
+            ### Health Check
+            - ✅ All markdown files validated
+            - ✅ All required sections present
+            - ✅ No broken links detected
+
+            ---
+            _Next validation: ${new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}_`;
+
+            if (issues.data.length > 0) {
+              // Update existing issue
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issues.data[0].number,
+                body
+              });
+            }

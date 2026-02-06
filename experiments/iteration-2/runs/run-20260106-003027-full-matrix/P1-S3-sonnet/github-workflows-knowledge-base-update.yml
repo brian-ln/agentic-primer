@@ -1,0 +1,446 @@
+name: Knowledge Base Update
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: read
+  issues: write
+
+jobs:
+  extract-learnings:
+    name: Extract Learnings from Merged PR
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install pyyaml requests
+
+      - name: Extract PR metadata
+        id: extract
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+
+            // Extract key information
+            const title = pr.title;
+            const body = pr.body || '';
+            const labels = pr.labels.map(l => l.name);
+            const author = pr.user.login;
+            const mergedAt = pr.merged_at;
+            const closedIssues = [];
+
+            // Extract linked issues
+            const issueRegex = /#(\d+)/g;
+            let match;
+            while ((match = issueRegex.exec(body)) !== null) {
+              closedIssues.push(match[1]);
+            }
+
+            // Get PR diff
+            const diff = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number,
+              mediaType: {
+                format: 'diff'
+              }
+            });
+
+            // Save metadata
+            core.setOutput('pr_number', pr.number);
+            core.setOutput('title', title);
+            core.setOutput('body', body);
+            core.setOutput('labels', JSON.stringify(labels));
+            core.setOutput('author', author);
+            core.setOutput('merged_at', mergedAt);
+            core.setOutput('closed_issues', JSON.stringify(closedIssues));
+
+            console.log('Extracted PR metadata:', {
+              number: pr.number,
+              title,
+              labels,
+              closedIssues
+            });
+
+      - name: Analyze changes for patterns
+        id: analyze
+        run: |
+          echo "Analyzing PR changes for reusable patterns..."
+
+          # Get PR diff
+          PR_NUMBER="${{ steps.extract.outputs.pr_number }}"
+          gh pr diff $PR_NUMBER > pr_diff.txt || true
+
+          # Analyze file types changed
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+
+          # Initialize categories
+          WORKFLOW_CHANGES=false
+          SCRIPT_CHANGES=false
+          CONFIG_CHANGES=false
+          CODE_CHANGES=false
+
+          # Categorize changes
+          while IFS= read -r file; do
+            case "$file" in
+              .github/workflows/*)
+                WORKFLOW_CHANGES=true
+                ;;
+              scripts/*)
+                SCRIPT_CHANGES=true
+                ;;
+              *.yml|*.yaml|*.json)
+                CONFIG_CHANGES=true
+                ;;
+              *.py|*.js|*.sh)
+                CODE_CHANGES=true
+                ;;
+            esac
+          done <<< "$CHANGED_FILES"
+
+          # Determine knowledge base updates needed
+          KB_UPDATES=""
+
+          if [ "$WORKFLOW_CHANGES" = true ]; then
+            KB_UPDATES="${KB_UPDATES}patterns/github-actions.md "
+          fi
+
+          if [ "$SCRIPT_CHANGES" = true ]; then
+            KB_UPDATES="${KB_UPDATES}patterns/scripting.md "
+          fi
+
+          # Always create an insight entry
+          KB_UPDATES="${KB_UPDATES}insights/$(date +%Y-%m-%d)-pr-$PR_NUMBER.md"
+
+          echo "Knowledge base updates needed: $KB_UPDATES"
+          echo "updates=$KB_UPDATES" >> $GITHUB_OUTPUT
+          echo "workflow_changes=$WORKFLOW_CHANGES" >> $GITHUB_OUTPUT
+          echo "script_changes=$SCRIPT_CHANGES" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create knowledge base directories
+        run: |
+          mkdir -p docs/knowledge/patterns
+          mkdir -p docs/knowledge/decisions
+          mkdir -p docs/knowledge/insights
+
+      - name: Update pattern library
+        if: steps.analyze.outputs.workflow_changes == 'true' || steps.analyze.outputs.script_changes == 'true'
+        run: |
+          echo "Updating pattern library..."
+
+          # Update GitHub Actions patterns if workflows changed
+          if [ "${{ steps.analyze.outputs.workflow_changes }}" = "true" ]; then
+            PATTERN_FILE="docs/knowledge/patterns/github-actions.md"
+
+            if [ ! -f "$PATTERN_FILE" ]; then
+              cat > "$PATTERN_FILE" << 'EOF'
+          # GitHub Actions Patterns
+
+          This document captures reusable GitHub Actions patterns discovered through PR analysis.
+
+          ## Table of Contents
+
+          - [Issue Processing](#issue-processing)
+          - [PR Validation](#pr-validation)
+          - [Knowledge Base Updates](#knowledge-base-updates)
+
+          ---
+
+          EOF
+            fi
+
+            # Append new pattern
+            cat >> "$PATTERN_FILE" << EOF
+
+          ## Pattern: PR #${{ steps.extract.outputs.pr_number }}
+
+          **Title**: ${{ steps.extract.outputs.title }}
+          **Date**: ${{ steps.extract.outputs.merged_at }}
+          **Author**: ${{ steps.extract.outputs.author }}
+
+          ### Description
+
+          ${{ steps.extract.outputs.body }}
+
+          ### Files Modified
+
+          \`\`\`
+          $(git diff --name-only HEAD~1 HEAD | grep '.github/workflows/')
+          \`\`\`
+
+          ---
+
+          EOF
+          fi
+
+          # Update scripting patterns if scripts changed
+          if [ "${{ steps.analyze.outputs.script_changes }}" = "true" ]; then
+            PATTERN_FILE="docs/knowledge/patterns/scripting.md"
+
+            if [ ! -f "$PATTERN_FILE" ]; then
+              cat > "$PATTERN_FILE" << 'EOF'
+          # Scripting Patterns
+
+          This document captures reusable scripting patterns.
+
+          ## Table of Contents
+
+          - [Bash Scripting](#bash-scripting)
+          - [Error Handling](#error-handling)
+          - [Testing](#testing)
+
+          ---
+
+          EOF
+            fi
+
+            # Append new pattern
+            cat >> "$PATTERN_FILE" << EOF
+
+          ## Pattern: PR #${{ steps.extract.outputs.pr_number }}
+
+          **Title**: ${{ steps.extract.outputs.title }}
+          **Date**: ${{ steps.extract.outputs.merged_at }}
+
+          ### Scripts Modified
+
+          \`\`\`
+          $(git diff --name-only HEAD~1 HEAD | grep 'scripts/')
+          \`\`\`
+
+          ---
+
+          EOF
+          fi
+
+      - name: Create insight entry
+        run: |
+          echo "Creating insight entry..."
+
+          INSIGHT_FILE="docs/knowledge/insights/$(date +%Y-%m-%d)-pr-${{ steps.extract.outputs.pr_number }}.md"
+
+          cat > "$INSIGHT_FILE" << 'EOF'
+          # Insight: ${{ steps.extract.outputs.title }}
+
+          **PR**: #${{ steps.extract.outputs.pr_number }}
+          **Merged**: ${{ steps.extract.outputs.merged_at }}
+          **Author**: ${{ steps.extract.outputs.author }}
+          **Labels**: ${{ steps.extract.outputs.labels }}
+
+          ## Summary
+
+          ${{ steps.extract.outputs.body }}
+
+          ## Changes Overview
+
+          ```
+          $(git diff --stat HEAD~1 HEAD)
+          ```
+
+          ## Linked Issues
+
+          ${{ steps.extract.outputs.closed_issues }}
+
+          ## Learnings
+
+          ### What Worked Well
+
+          - Successfully merged PR with automated validation
+          - All quality gates passed
+
+          ### Challenges Encountered
+
+          (To be filled by human review if needed)
+
+          ### Improvements for Future
+
+          (To be filled by human review if needed)
+
+          ## Reusable Patterns
+
+          ### Code Snippets
+
+          (Extract key code patterns here)
+
+          ### Configuration Patterns
+
+          (Extract configuration patterns here)
+
+          ## Related Knowledge
+
+          - See patterns: [GitHub Actions](../patterns/github-actions.md), [Scripting](../patterns/scripting.md)
+          - See decisions: [Architecture Decisions](../decisions/README.md)
+
+          ---
+
+          **Status**: Auto-generated
+          **Review Required**: Yes
+          **Tags**: automated, pr-analysis, ${{ steps.extract.outputs.labels }}
+          EOF
+
+          echo "Created insight: $INSIGHT_FILE"
+
+      - name: Update knowledge base indexes
+        run: |
+          echo "Updating knowledge base indexes..."
+
+          # Update patterns index
+          if [ -f "docs/knowledge/patterns/README.md" ]; then
+            # Add entry to index (simple append for now)
+            echo "- [PR #${{ steps.extract.outputs.pr_number }}] ${{ steps.extract.outputs.title }} ($(date +%Y-%m-%d))" >> docs/knowledge/patterns/README.md
+          fi
+
+          # Update insights index
+          if [ -f "docs/knowledge/insights/README.md" ]; then
+            echo "- [$(date +%Y-%m-%d) PR #${{ steps.extract.outputs.pr_number }}]($(date +%Y-%m-%d)-pr-${{ steps.extract.outputs.pr_number }}.md) - ${{ steps.extract.outputs.title }}" >> docs/knowledge/insights/README.md
+          fi
+
+      - name: Commit knowledge base updates
+        run: |
+          git add docs/knowledge/
+
+          if git diff --staged --quiet; then
+            echo "No knowledge base changes to commit"
+            exit 0
+          fi
+
+          cat > commit_message.txt << 'EOF'
+          docs: Update knowledge base from PR #${{ steps.extract.outputs.pr_number }}
+
+          Auto-extracted learnings from merged PR:
+          Title: ${{ steps.extract.outputs.title }}
+          Author: ${{ steps.extract.outputs.author }}
+          Merged: ${{ steps.extract.outputs.merged_at }}
+
+          Updated:
+          - Pattern library (if applicable)
+          - Insight entries
+          - Knowledge base indexes
+
+          [skip ci]
+          EOF
+
+          git commit -F commit_message.txt
+          rm commit_message.txt
+
+      - name: Push knowledge base updates (SIMULATED)
+        run: |
+          echo "=== SIMULATION MODE ==="
+          echo "Would push knowledge base updates to main branch"
+          echo "Command: git push origin main"
+          echo ""
+          echo "Changes staged:"
+          git diff --staged --stat
+          echo ""
+          echo "Skipping actual push in simulation."
+
+      - name: Analyze for improvement opportunities
+        id: improvements
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Check if PR revealed any systemic issues
+            const title = '${{ steps.extract.outputs.title }}';
+            const body = '${{ steps.extract.outputs.body }}';
+            const labels = JSON.parse('${{ steps.extract.outputs.labels }}');
+
+            const improvementIssues = [];
+
+            // Check for repeated patterns indicating room for automation
+            if (title.toLowerCase().includes('fix') && labels.includes('bug')) {
+              improvementIssues.push({
+                title: 'Prevent bug pattern from PR #${{ steps.extract.outputs.pr_number }}',
+                body: 'This bug fix suggests a pattern that could be prevented with automated checks.'
+              });
+            }
+
+            // Check for documentation needs
+            if (!body.includes('test') && !labels.includes('docs')) {
+              improvementIssues.push({
+                title: 'Add testing documentation based on PR #${{ steps.extract.outputs.pr_number }}',
+                body: 'This PR could benefit from better testing documentation.'
+              });
+            }
+
+            // Store findings
+            core.setOutput('improvement_count', improvementIssues.length);
+            core.setOutput('improvements', JSON.stringify(improvementIssues));
+
+            console.log(`Found ${improvementIssues.length} improvement opportunities`);
+
+      - name: Create improvement issues (SIMULATED)
+        if: steps.improvements.outputs.improvement_count > 0
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const improvements = JSON.parse('${{ steps.improvements.outputs.improvements }}');
+
+            console.log('=== SIMULATION MODE ===');
+            console.log(`Would create ${improvements.length} improvement issues:`);
+
+            improvements.forEach((issue, idx) => {
+              console.log(`\n${idx + 1}. ${issue.title}`);
+              console.log(`   ${issue.body}`);
+
+              // In production, would create actual issues:
+              // await github.rest.issues.create({
+              //   owner: context.repo.owner,
+              //   repo: context.repo.repo,
+              //   title: issue.title,
+              //   body: issue.body,
+              //   labels: ['improvement', 'auto-generated']
+              // });
+            });
+
+            console.log('\nSkipping actual issue creation in simulation.');
+
+      - name: Summary
+        run: |
+          cat << 'EOF' >> $GITHUB_STEP_SUMMARY
+          ## Knowledge Base Update Summary
+
+          ✅ Processed PR #${{ steps.extract.outputs.pr_number }}
+
+          ### Updates Made
+
+          - 📝 Pattern library updated: ${{ steps.analyze.outputs.workflow_changes == 'true' && 'Yes' || 'No' }}
+          - 💡 Insight entry created: Yes
+          - 🔍 Improvement opportunities found: ${{ steps.improvements.outputs.improvement_count }}
+
+          ### Next Steps
+
+          - Review auto-generated insights for accuracy
+          - Enhance insights with additional context
+          - Monitor for improvement issue creation
+
+          ---
+
+          *Automated by knowledge-base-update workflow*
+          EOF

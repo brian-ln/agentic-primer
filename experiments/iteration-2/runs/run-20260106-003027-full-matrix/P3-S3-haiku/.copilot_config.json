@@ -1,0 +1,115 @@
+{
+  "version": "1.0.0",
+  "metadata": {
+    "created": "2026-01-06T00:00:00Z",
+    "description": "Configuration for @copilot autonomous task processing"
+  },
+  "agents": {
+    "default_model": "sonnet",
+    "available_models": ["opus", "sonnet", "haiku"],
+    "model_preferences": {
+      "complex_architecture": "opus",
+      "feature_implementation": "sonnet",
+      "documentation": "haiku",
+      "bug_fixes": "sonnet"
+    }
+  },
+  "workflow": {
+    "max_execution_time_minutes": 15,
+    "retry_on_failure": true,
+    "retry_attempts": 3,
+    "retry_backoff_seconds": 30
+  },
+  "validation": {
+    "syntax_checks": {
+      "yaml": true,
+      "json": true,
+      "bash": true,
+      "markdown": true
+    },
+    "require_all_checks_pass": true,
+    "fail_on_warnings": false
+  },
+  "pr_generation": {
+    "auto_create_draft": false,
+    "auto_request_review": false,
+    "add_checklist": true,
+    "add_test_status": true,
+    "add_documentation_status": true
+  },
+  "knowledge_base": {
+    "capture_enabled": true,
+    "auto_create_decision_records": true,
+    "auto_log_insights": true,
+    "base_path": "docs/knowledge"
+  },
+  "issue_processing": {
+    "required_fields": [
+      "task-description",
+      "task-type",
+      "success-criteria",
+      "complexity"
+    ],
+    "optional_fields": [
+      "acceptance-notes",
+      "reference-links"
+    ],
+    "template_version": "1.0"
+  },
+  "branch_naming": {
+    "pattern": "copilot/task-{issue_number}",
+    "cleanup_merged_branches": true,
+    "cleanup_delay_hours": 24
+  },
+  "logging": {
+    "enabled": true,
+    "log_level": "info",
+    "log_directory": "docs/knowledge/insights",
+    "log_format": "markdown",
+    "include_timestamps": true,
+    "include_agent_id": true
+  },
+  "permissions": {
+    "can_create_branches": true,
+    "can_create_pull_requests": true,
+    "can_write_knowledge_base": true,
+    "can_post_issue_comments": true,
+    "can_update_labels": false
+  },
+  "constraints": {
+    "max_files_per_pr": 50,
+    "max_lines_per_file": 5000,
+    "prohibited_paths": [".env", "secrets/", "private/"],
+    "allowed_file_types": [
+      ".md", ".yaml", ".yml", ".json", ".js", ".ts", ".sh",
+      ".py", ".go", ".java", ".rb", ".rs", ".cpp", ".c"
+    ]
+  },
+  "feedback": {
+    "request_human_confirmation": false,
+    "include_confidence_scores": true,
+    "ask_for_clarification_on": [
+      "ambiguous_success_criteria",
+      "large_complexity_change",
+      "new_technology_decision"
+    ]
+  },
+  "security": {
+    "scan_for_secrets": true,
+    "validate_dependencies": true,
+    "check_for_vulnerabilities": true,
+    "allow_external_urls": true,
+    "verify_checksums": false
+  },
+  "monitoring": {
+    "track_success_rate": true,
+    "track_cycle_time": true,
+    "track_pattern_reuse": true,
+    "metrics_file": "docs/knowledge/insights/metrics.json"
+  },
+  "patterns": {
+    "auto_generate_patterns": true,
+    "pattern_threshold_usage_count": 3,
+    "pattern_directory": "docs/knowledge/patterns"
+  }
+}

@@ -1,0 +1,57 @@
+version: 2
+
+# Dependabot configuration for automatic dependency updates
+# Keeps GitHub Actions up-to-date with security patches and new features
+
+updates:
+  # GitHub Actions dependencies
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "REPO_OWNER"
+    labels:
+      - "dependencies"
+      - "github-actions"
+      - "automated"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    # Group minor and patch updates together
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # If using npm/yarn for scripts
+  # Uncomment if package.json exists
+  # - package-ecosystem: "npm"
+  #   directory: "/"
+  #   schedule:
+  #     interval: "weekly"
+  #   open-pull-requests-limit: 5
+  #   reviewers:
+  #     - "REPO_OWNER"
+  #   labels:
+  #     - "dependencies"
+  #     - "javascript"
+
+  # If using Python for scripts
+  # Uncomment if requirements.txt exists
+  # - package-ecosystem: "pip"
+  #   directory: "/"
+  #   schedule:
+  #     interval: "weekly"
+  #   open-pull-requests-limit: 5
+  #   reviewers:
+  #     - "REPO_OWNER"
+  #   labels:
+  #     - "dependencies"
+  #     - "python"

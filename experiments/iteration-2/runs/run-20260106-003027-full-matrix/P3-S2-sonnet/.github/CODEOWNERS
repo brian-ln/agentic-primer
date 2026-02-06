@@ -1,0 +1,16 @@
+# CODEOWNERS - Automatic PR Review Assignment
+#
+# This file defines code ownership for automatic pull request review assignment.
+# When @copilot creates a PR, the specified owners are automatically requested as reviewers.
+#
+# Format: pattern @username
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for all files
+# All PRs will be auto-assigned to @owner for human review
+* @owner
+
+# Future refinements (examples - commented out):
+# /docs/ @owner @tech-writer
+# /.github/ @owner @devops-team
+# /tests/ @owner @qa-team

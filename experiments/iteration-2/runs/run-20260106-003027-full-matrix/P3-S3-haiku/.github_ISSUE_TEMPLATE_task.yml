@@ -1,0 +1,128 @@
+name: AI Task Assignment
+description: Assign a task for @copilot to work on autonomously
+title: "[TASK] "
+labels: ["task", "copilot"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        # AI Task Assignment
+
+        Use this template to create tasks that @copilot can work on autonomously.
+        Complete all required fields for best results.
+
+  - type: textarea
+    id: task-description
+    attributes:
+      label: Task Description
+      description: What needs to be done? Be as specific as possible.
+      placeholder: |
+        Example: Create a GitHub Actions workflow that builds and tests the project on every push.
+
+        Details:
+        - Should run on Ubuntu latest
+        - Must execute `npm install && npm test`
+        - Report results as check on PR
+      value: ""
+    validations:
+      required: true
+
+  - type: dropdown
+    id: task-type
+    attributes:
+      label: Task Type
+      description: What kind of task is this?
+      options:
+        - feature
+        - bug
+        - refactor
+        - documentation
+        - devops
+        - research
+        - testing
+    validations:
+      required: true
+
+  - type: textarea
+    id: success-criteria
+    attributes:
+      label: Success Criteria
+      description: How will you know this task is complete? List 2-5 observable outcomes.
+      placeholder: |
+        - [ ] Workflow file created at .github/workflows/
+        - [ ] Tests pass locally before PR creation
+        - [ ] Workflow runs successfully on PR
+        - [ ] Success logged to docs/knowledge/insights/
+      value: ""
+    validations:
+      required: true
+
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: Complexity Estimate
+      description: How complex is this task? (1-5 scale)
+      options:
+        - "1 - Trivial (< 30 min)"
+        - "2 - Simple (30 min - 1 hour)"
+        - "3 - Moderate (1-2 hours)"
+        - "4 - Complex (2-4 hours)"
+        - "5 - Very Complex (4+ hours)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How urgent is this task?
+      options:
+        - "🔴 Critical (blocks other work)"
+        - "🟠 High (needed soon)"
+        - "🟡 Medium (can wait a few days)"
+        - "🟢 Low (nice to have)"
+      default: "🟡 Medium (can wait a few days)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-notes
+    attributes:
+      label: Additional Notes
+      description: Any constraints, preferences, or context @copilot should know?
+      placeholder: |
+        - Use TypeScript for new code
+        - Follow existing patterns in src/lib/
+        - Don't add external dependencies
+        - Update docs when adding new features
+      value: ""
+    validations:
+      required: false
+
+  - type: textarea
+    id: reference-links
+    attributes:
+      label: Reference Links
+      description: Link to relevant issues, documentation, or examples
+      placeholder: |
+        - Related issue: #123
+        - Pattern example: docs/knowledge/patterns/github-actions-pattern.md
+        - Architecture doc: docs/ARCHITECTURE.md
+      value: ""
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      description: Verify before submitting this task
+      options:
+        - label: I have described the task clearly
+          required: true
+        - label: Success criteria are observable and measurable
+          required: true
+        - label: I understand @copilot may ask for clarification
+          required: false

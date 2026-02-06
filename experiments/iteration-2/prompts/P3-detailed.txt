@@ -1,0 +1,5 @@
+Create issue-driven development system:
+- Issue template (.github/ISSUE_TEMPLATE/task.yml) for @copilot tasks
+- CODEOWNERS (* @owner) for PR auto-assignment
+- Knowledge base (docs/knowledge/) with patterns/decisions/insights structure
+- README with workflow: issue → @copilot → PR → review via web UI

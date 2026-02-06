@@ -1,0 +1,120 @@
+name: Task for @copilot
+description: Create a structured task for autonomous processing by @copilot agent
+title: "[TASK] "
+labels: ["copilot-task", "needs-triage"]
+assignees:
+  - copilot
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Task Submission for @copilot
+
+        This form creates a structured task that will be automatically assigned to @copilot for autonomous processing.
+
+        **Workflow:** Issue → @copilot processing → Pull Request → Human review
+
+  - type: input
+    id: task-title
+    attributes:
+      label: Task Summary
+      description: Brief one-line description of what needs to be done
+      placeholder: "e.g., Add user authentication to API endpoints"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Detailed Description
+      description: Comprehensive explanation of the task requirements, context, and constraints
+      placeholder: |
+        Describe:
+        - What needs to be built/changed/fixed
+        - Why this is needed
+        - Any relevant background or context
+        - Known constraints or dependencies
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Specific, testable conditions that define task completion
+      placeholder: |
+        - [ ] Criterion 1: API endpoint /auth/login accepts POST requests
+        - [ ] Criterion 2: Invalid credentials return 401 status
+        - [ ] Criterion 3: Valid login returns JWT token
+        - [ ] Criterion 4: All tests pass
+      value: |
+        - [ ] Implementation complete
+        - [ ] Tests passing
+        - [ ] Documentation updated
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: Task urgency level
+      options:
+        - "P0 - Critical (blocking)"
+        - "P1 - High (important)"
+        - "P2 - Medium (normal)"
+        - "P3 - Low (nice-to-have)"
+      default: 2
+    validations:
+      required: true
+
+  - type: dropdown
+    id: task-type
+    attributes:
+      label: Task Type
+      description: Category of work
+      options:
+        - "Feature - New functionality"
+        - "Bug Fix - Correct existing behavior"
+        - "Refactor - Improve code structure"
+        - "Documentation - Update docs"
+        - "Test - Add/improve testing"
+        - "Infrastructure - Build/deploy/config"
+      default: 0
+    validations:
+      required: true
+
+  - type: textarea
+    id: related-files
+    attributes:
+      label: Related Files/Modules
+      description: Files, directories, or modules relevant to this task (optional)
+      placeholder: |
+        src/auth/login.ts
+        tests/auth.test.ts
+        docs/api/authentication.md
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Links, screenshots, error messages, or other supporting information (optional)
+      placeholder: |
+        - Related issue: #123
+        - Design doc: https://...
+        - Error logs: ...
+
+  - type: checkboxes
+    id: validation
+    attributes:
+      label: Pre-submission Checklist
+      description: Ensure task is ready for @copilot processing
+      options:
+        - label: Task description is clear and unambiguous
+          required: true
+        - label: Acceptance criteria are specific and testable
+          required: true
+        - label: I have searched for duplicate issues
+          required: true
+        - label: Task scope is reasonable for autonomous processing
+          required: true

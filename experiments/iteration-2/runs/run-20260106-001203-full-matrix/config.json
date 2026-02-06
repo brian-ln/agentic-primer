@@ -1,0 +1,10 @@
+{
+  "run_name": "run-20260106-001203-full-matrix",
+  "created": "2026-01-06T00:12:03-05:00",
+  "prompts": ["P1", "P2", "P3"],
+  "criteria": ["S1", "S2", "S3"],
+  "models": ["opus", "sonnet", "haiku"],
+  "research_policy": "web",
+  "total_simulations": 27,
+  "notes": ""
+}

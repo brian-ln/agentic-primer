@@ -1,0 +1,33 @@
+# CODEOWNERS - Auto-assign PR reviewers
+#
+# This file defines code ownership for automatic PR assignment.
+# All PRs will be automatically assigned to @owner for review.
+#
+# Syntax: <pattern> <owner>
+# Pattern: file pattern (glob syntax)
+# Owner: @username or @org/team
+#
+# Reference: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default: all files owned by @owner
+* @owner
+
+# Specific ownership patterns (examples - customize as needed)
+
+# GitHub configuration files
+/.github/ @owner
+
+# Documentation
+/docs/ @owner
+
+# Knowledge base (high value, requires careful review)
+/docs/knowledge/ @owner
+
+# CI/CD and automation
+/.github/workflows/ @owner
+
+# Root configuration files
+/*.yml @owner
+/*.yaml @owner
+/*.json @owner
+/*.md @owner

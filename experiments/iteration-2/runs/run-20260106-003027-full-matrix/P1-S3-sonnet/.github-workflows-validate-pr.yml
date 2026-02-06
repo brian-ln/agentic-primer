@@ -1,0 +1,321 @@
+name: PR Validation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  syntax-validation:
+    name: Syntax Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install validation tools
+        run: |
+          # YAML validation
+          pip install yamllint
+
+          # Shell script validation
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+          # Markdown validation
+          npm install -g markdownlint-cli
+
+      - name: Validate YAML files
+        run: |
+          echo "🔍 Validating YAML files..."
+
+          # Create yamllint config
+          cat > .yamllint.yml << 'EOF'
+          extends: default
+          rules:
+            line-length:
+              max: 120
+              level: warning
+            indentation:
+              spaces: 2
+            comments:
+              min-spaces-from-content: 1
+            document-start: disable
+            truthy:
+              allowed-values: ['true', 'false', 'on', 'off']
+          EOF
+
+          # Find and validate all YAML files
+          if find . -name "*.yml" -o -name "*.yaml" | grep -v node_modules | grep -v .git; then
+            find . \( -name "*.yml" -o -name "*.yaml" \) ! -path "*/node_modules/*" ! -path "*/.git/*" -exec yamllint -c .yamllint.yml {} \;
+            echo "✅ YAML validation passed"
+          else
+            echo "ℹ️ No YAML files to validate"
+          fi
+
+      - name: Validate shell scripts
+        run: |
+          echo "🔍 Validating shell scripts..."
+
+          # Find and validate all shell scripts
+          if find . -name "*.sh" | grep -v node_modules | grep -v .git; then
+            find . -name "*.sh" ! -path "*/node_modules/*" ! -path "*/.git/*" -exec shellcheck -x {} \;
+            echo "✅ Shell script validation passed"
+          else
+            echo "ℹ️ No shell scripts to validate"
+          fi
+
+      - name: Validate markdown files
+        run: |
+          echo "🔍 Validating markdown files..."
+
+          # Create markdownlint config
+          cat > .markdownlint.json << 'EOF'
+          {
+            "default": true,
+            "MD013": { "line_length": 120, "code_blocks": false, "tables": false },
+            "MD033": false,
+            "MD041": false,
+            "MD034": false
+          }
+          EOF
+
+          # Find and validate all markdown files
+          if find . -name "*.md" | grep -v node_modules | grep -v .git; then
+            find . -name "*.md" ! -path "*/node_modules/*" ! -path "*/.git/*" -exec markdownlint -c .markdownlint.json {} \;
+            echo "✅ Markdown validation passed"
+          else
+            echo "ℹ️ No markdown files to validate"
+          fi
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for secrets
+        run: |
+          echo "🔍 Scanning for exposed secrets..."
+
+          # Check for common secret patterns
+          SECRET_PATTERNS=(
+            "password.*=.*['\"]"
+            "api[_-]?key.*=.*['\"]"
+            "secret.*=.*['\"]"
+            "token.*=.*['\"]"
+            "private[_-]?key"
+            "-----BEGIN.*PRIVATE KEY-----"
+          )
+
+          FOUND_SECRETS=0
+          for pattern in "${SECRET_PATTERNS[@]}"; do
+            if git diff origin/main...HEAD | grep -iE "$pattern"; then
+              echo "⚠️ Potential secret found matching pattern: $pattern"
+              FOUND_SECRETS=1
+            fi
+          done
+
+          if [ $FOUND_SECRETS -eq 1 ]; then
+            echo "❌ Potential secrets detected in PR"
+            exit 1
+          else
+            echo "✅ No secrets detected"
+          fi
+
+      - name: Check file permissions
+        run: |
+          echo "🔍 Checking file permissions..."
+
+          # Check for executable files that shouldn't be
+          SUSPICIOUS_EXECUTABLES=$(find . -type f -executable ! -name "*.sh" ! -path "*/.git/*" ! -path "*/node_modules/*" ! -path "*/bin/*")
+
+          if [ -n "$SUSPICIOUS_EXECUTABLES" ]; then
+            echo "⚠️ Found unexpected executable files:"
+            echo "$SUSPICIOUS_EXECUTABLES"
+            echo "Please review file permissions"
+          else
+            echo "✅ File permissions look good"
+          fi
+
+  test-execution:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup test environment
+        run: |
+          echo "🔧 Setting up test environment..."
+          # Add test setup commands here based on project type
+
+      - name: Run unit tests
+        run: |
+          echo "🧪 Running unit tests..."
+
+          # Check for common test frameworks and run appropriate commands
+          if [ -f "package.json" ]; then
+            if grep -q '"test"' package.json; then
+              npm install
+              npm test
+            fi
+          elif [ -f "requirements.txt" ] || [ -f "pyproject.toml" ]; then
+            if [ -f "pytest.ini" ] || grep -r "pytest" . > /dev/null 2>&1; then
+              pip install pytest
+              pytest
+            fi
+          elif [ -f "go.mod" ]; then
+            go test ./...
+          else
+            echo "ℹ️ No test framework detected, skipping tests"
+          fi
+
+      - name: Check test coverage
+        run: |
+          echo "📊 Checking test coverage..."
+          # Add coverage reporting here
+          echo "ℹ️ Coverage reporting not configured yet"
+
+  integration-test:
+    name: Integration Test
+    runs-on: ubuntu-latest
+    needs: [syntax-validation, security-scan]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run integration tests
+        run: |
+          echo "🔗 Running integration tests..."
+
+          # Check if test-issue-flow.sh exists
+          if [ -f "scripts/test-issue-flow.sh" ]; then
+            chmod +x scripts/test-issue-flow.sh
+            ./scripts/test-issue-flow.sh
+          else
+            echo "ℹ️ Integration test script not found"
+          fi
+
+  post-validation-comment:
+    name: Post Validation Results
+    runs-on: ubuntu-latest
+    needs: [syntax-validation, security-scan, test-execution, integration-test]
+    if: always()
+    steps:
+      - name: Generate validation report
+        id: report
+        run: |
+          SYNTAX_STATUS="${{ needs.syntax-validation.result }}"
+          SECURITY_STATUS="${{ needs.security-scan.result }}"
+          TEST_STATUS="${{ needs.test-execution.result }}"
+          INTEGRATION_STATUS="${{ needs.integration-test.result }}"
+
+          # Determine overall status
+          if [[ "$SYNTAX_STATUS" == "success" ]] && [[ "$SECURITY_STATUS" == "success" ]] && [[ "$TEST_STATUS" == "success" ]] && [[ "$INTEGRATION_STATUS" == "success" ]]; then
+            OVERALL="✅ All validation checks passed"
+            STATUS_EMOJI="✅"
+          else
+            OVERALL="❌ Some validation checks failed"
+            STATUS_EMOJI="❌"
+          fi
+
+          # Create report
+          cat > report.md << EOF
+          ## $OVERALL
+
+          ### Validation Results
+
+          | Check | Status |
+          |-------|--------|
+          | Syntax Validation | $([ "$SYNTAX_STATUS" == "success" ] && echo "✅ Passed" || echo "❌ Failed") |
+          | Security Scan | $([ "$SECURITY_STATUS" == "success" ] && echo "✅ Passed" || echo "❌ Failed") |
+          | Test Execution | $([ "$TEST_STATUS" == "success" ] && echo "✅ Passed" || echo "❌ Failed") |
+          | Integration Test | $([ "$INTEGRATION_STATUS" == "success" ] && echo "✅ Passed" || echo "❌ Failed") |
+
+          ### Next Steps
+
+          EOF
+
+          if [[ "$SYNTAX_STATUS" == "success" ]] && [[ "$SECURITY_STATUS" == "success" ]] && [[ "$TEST_STATUS" == "success" ]] && [[ "$INTEGRATION_STATUS" == "success" ]]; then
+            cat >> report.md << EOF
+          This PR is ready for human review! 🎉
+
+          - [ ] Code review by maintainer
+          - [ ] Verify implementation meets acceptance criteria
+          - [ ] Approve and merge
+
+          Once merged, the knowledge base will be automatically updated with learnings from this PR.
+          EOF
+          else
+            cat >> report.md << EOF
+          Please address the failing checks:
+
+          $([ "$SYNTAX_STATUS" != "success" ] && echo "- Fix syntax validation errors")
+          $([ "$SECURITY_STATUS" != "success" ] && echo "- Fix security issues")
+          $([ "$TEST_STATUS" != "success" ] && echo "- Fix failing tests")
+          $([ "$INTEGRATION_STATUS" != "success" ] && echo "- Fix integration test failures")
+
+          Push new commits to this PR and validation will run automatically.
+          EOF
+          fi
+
+          echo "report<<EOF" >> $GITHUB_OUTPUT
+          cat report.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const report = `${{ steps.report.outputs.report }}`;
+
+            // Find existing validation comment
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+            });
+
+            const botComment = comments.data.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('Validation Results')
+            );
+
+            const commentBody = `${report}
+
+---
+🤖 Automated validation by GitHub Actions
+Last updated: ${new Date().toISOString()}`;
+
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: commentBody
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body: commentBody
+              });
+            }

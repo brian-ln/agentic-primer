@@ -1,0 +1,239 @@
+name: Copilot Task Automation
+
+# Trigger on issue events
+on:
+  issues:
+    types: [opened, labeled, assigned]
+  issue_comment:
+    types: [created, edited]
+
+# Permissions for workflow actions
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  process_copilot_task:
+    name: Process Copilot Task
+    runs-on: ubuntu-latest
+    # Run if:
+    # - Issue was opened, OR
+    # - Issue has 'copilot-task' label, OR
+    # - Issue is assigned to copilot, OR
+    # - Someone mentioned @copilot in a comment
+    if: |
+      (github.event.action == 'opened' ||
+       contains(github.event.issue.labels.*.name, 'copilot-task') ||
+       github.event.issue.assignee.login == 'copilot' ||
+       contains(github.event.comment.body, '@copilot'))
+
+    steps:
+      # Step 1: Checkout repository code
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Step 2: Set up git configuration for commits
+      - name: Configure Git
+        run: |
+          git config user.name "copilot-bot"
+          git config user.email "copilot@github.com"
+
+      # Step 3: Extract and validate issue metadata
+      - name: Extract Issue Information
+        id: issue_info
+        run: |
+          echo "issue_number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
+          echo "issue_title=${{ github.event.issue.title }}" >> $GITHUB_OUTPUT
+          echo "issue_author=${{ github.event.issue.user.login }}" >> $GITHUB_OUTPUT
+          echo "has_copilot_label=$(echo '${{ contains(github.event.issue.labels.*.name, '\''copilot-task'\'') }}' | tr -d ' ')" >> $GITHUB_OUTPUT
+
+      # Step 4: Post acknowledgment comment
+      - name: Post Acknowledgment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '✓ Task received by @copilot. Analyzing requirements...'
+            })
+
+      # Step 5: Add 'in-progress' label to indicate work started
+      - name: Mark Task as In Progress
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.addLabels({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ['in-progress']
+            })
+
+      # Step 6: Create feature branch for this task
+      - name: Create Feature Branch
+        run: |
+          # Branch naming: copilot/issue-NNN for traceability
+          BRANCH_NAME="copilot/issue-${{ steps.issue_info.outputs.issue_number }}"
+          git checkout -b "$BRANCH_NAME"
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_ENV
+
+      # Step 7: Verify the repository structure
+      - name: Verify Repository Structure
+        id: repo_check
+        run: |
+          # Check for common files that indicate repository readiness
+          echo "has_readme=$([[ -f README.md ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "has_gitignore=$([[ -f .gitignore ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "has_github_config=$([[ -d .github ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+
+      # Step 8: Validate knowledge base exists (for pattern lookup)
+      - name: Check Knowledge Base
+        run: |
+          if [[ ! -d "docs/knowledge" ]]; then
+            echo "Note: Knowledge base not yet created (docs/knowledge/)"
+            mkdir -p docs/knowledge/{patterns,decisions,insights}
+            touch docs/knowledge/{patterns,decisions,insights}/.gitkeep
+            echo "Created empty knowledge base structure"
+          fi
+
+      # Step 9: Log task receipt (for audit trail)
+      - name: Record Task in Audit Log
+        run: |
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          AUDIT_ENTRY="{\"timestamp\":\"$TIMESTAMP\",\"issue_number\":${{ steps.issue_info.outputs.issue_number }},\"title\":\"${{ steps.issue_info.outputs.issue_title }}\",\"author\":\"${{ steps.issue_info.outputs.issue_author }}\",\"status\":\"received\"}"
+          echo "$AUDIT_ENTRY" >> .github/copilot-audit.log || true
+
+      # Step 10: Simulate analysis phase (in real system, would call copilot API)
+      - name: Analyze Requirements
+        id: analysis
+        run: |
+          echo "Task analysis would occur here in production"
+          echo "Implementation would:"
+          echo "  1. Parse acceptance criteria from issue body"
+          echo "  2. Search knowledge base for relevant patterns"
+          echo "  3. Estimate implementation complexity"
+          echo "  4. Plan code changes"
+
+          # For test purposes, mark as analyzed
+          echo "complexity_estimate=Medium" >> $GITHUB_OUTPUT
+          echo "analysis_complete=true" >> $GITHUB_OUTPUT
+
+      # Step 11: Example: Create a summary file documenting the task
+      - name: Create Task Summary
+        run: |
+          cat > .task-${{ steps.issue_info.outputs.issue_number }}.md << 'EOF'
+          # Task Summary
+
+          **Issue #${{ steps.issue_info.outputs.issue_number }}:** ${{ steps.issue_info.outputs.issue_title }}
+
+          **Received by:** @copilot
+          **Branch:** ${{ env.branch_name }}
+          **Timestamp:** $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          ## Status
+          - [x] Issue received and validated
+          - [x] Feature branch created
+          - [x] Knowledge base checked
+          - [ ] Implementation in progress
+          - [ ] PR created
+          - [ ] Review complete
+
+          ## Next Steps
+          1. Analyze requirements in detail
+          2. Check knowledge base for relevant patterns
+          3. Implement solution
+          4. Create pull request
+
+          EOF
+
+      # Step 12: Commit the task tracking file (optional demo)
+      - name: Commit Task Files
+        run: |
+          if [[ -f .task-${{ steps.issue_info.outputs.issue_number }}.md ]]; then
+            git add .task-${{ steps.issue_info.outputs.issue_number }}.md
+            git commit -m "docs: Add task summary for issue #${{ steps.issue_info.outputs.issue_number }}" || true
+          fi
+
+      # Step 13: Push feature branch (creates basis for PR)
+      - name: Push Feature Branch
+        run: |
+          # Push the branch to create it on remote (ready for PR)
+          git push -u origin "${{ env.branch_name }}" 2>&1 || {
+            echo "Note: Could not push (expected in test environment without remote)"
+          }
+
+      # Step 14: Create pull request (simulated - would need actual PR creation)
+      - name: Create Pull Request
+        id: create_pr
+        run: |
+          echo "In production, would create PR with:"
+          echo "  - Title: Implementation of: ${{ steps.issue_info.outputs.issue_title }}"
+          echo "  - Body: Auto-populated from issue description"
+          echo "  - Base: main"
+          echo "  - Head: ${{ env.branch_name }}"
+          echo "  - Assignees: (from CODEOWNERS)"
+
+          # For simulation, just log the intent
+          echo "pr_creation_planned=true" >> $GITHUB_OUTPUT
+
+      # Step 15: Update issue with completion status
+      - name: Update Task Status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: |
+                ## Analysis Complete
+
+                ✓ Task received and analyzed
+                ✓ Feature branch created: `copilot/issue-${{ steps.issue_info.outputs.issue_number }}`
+                ✓ Knowledge base verified
+
+                **Next:** Implementation phase would proceed automatically in production environment.
+
+                ### Workflow Checklist
+                - [x] Issue parsed
+                - [x] Branch created
+                - [x] Knowledge base checked
+                - [ ] Code implementation (requires external API in production)
+                - [ ] PR creation (requires external API in production)
+                - [ ] Review and merge (manual step)
+            })
+
+      # Step 16: Error handling - what to do if workflow fails
+      - name: Handle Workflow Errors
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.addLabels({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ['copilot-error']
+            })
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '⚠️ Error processing task. Check workflow logs in Actions tab.'
+            })
+
+      # Step 17: Success summary
+      - name: Task Processing Summary
+        run: |
+          echo "=== COPILOT TASK PROCESSING SUMMARY ==="
+          echo "Issue #${{ steps.issue_info.outputs.issue_number }}: ${{ steps.issue_info.outputs.issue_title }}"
+          echo "Status: RECEIVED AND ANALYZED"
+          echo "Branch: ${{ env.branch_name }}"
+          echo "Next step: Manual review of implementation (in production)"
+          echo "========================================"

@@ -1,0 +1,25 @@
+# CODEOWNERS - Auto-assignment for Pull Requests
+#
+# This file defines code ownership for automatic PR assignment.
+# When a PR is opened, GitHub will request reviews from the matching owners.
+#
+# Format: <pattern> <owners>
+# Owners can be @username, @org/team, or email
+#
+# Order matters: later rules override earlier ones for matching files
+
+# Default owner for all files
+# Replace @owner with actual GitHub username or team
+* @owner
+
+# Example: Specific ownership patterns (uncomment and customize as needed)
+# /docs/ @docs-team
+# /.github/ @platform-team
+# /src/api/ @api-team
+# *.test.ts @qa-team
+
+# Knowledge base ownership
+/docs/knowledge/ @owner
+
+# GitHub configuration ownership
+/.github/ @owner

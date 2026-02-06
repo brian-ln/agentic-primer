@@ -1,0 +1,78 @@
+name: Copilot Issue Processing
+
+on:
+  issues:
+    types: [opened, edited, labeled]
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  check-copilot-label:
+    runs-on: ubuntu-latest
+    outputs:
+      is-copilot-task: ${{ steps.check.outputs.is-copilot-task }}
+    steps:
+      - name: Check for copilot label
+        id: check
+        run: |
+          LABELS='${{ toJson(github.event.issue.labels.*.name) }}'
+          if echo "$LABELS" | grep -q "copilot"; then
+            echo "is-copilot-task=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is-copilot-task=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  process-issue:
+    runs-on: ubuntu-latest
+    needs: check-copilot-label
+    if: needs.check-copilot-label.outputs.is-copilot-task == 'true'
+    steps:
+      - name: Acknowledge issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issueNumber = context.issue.number;
+            const issueTitle = context.payload.issue.title;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: `## @copilot Processing\n\nThis issue has been assigned to @copilot for autonomous processing.\n\n**Issue:** #${issueNumber}\n**Title:** ${issueTitle}\n\n---\n_Workflow triggered at: ${new Date().toISOString()}_`
+            });
+
+      - name: Add processing label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: ['in-progress']
+            });
+
+      - name: Log issue details
+        run: |
+          echo "Issue Number: ${{ github.event.issue.number }}"
+          echo "Issue Title: ${{ github.event.issue.title }}"
+          echo "Issue URL: ${{ github.event.issue.html_url }}"
+          echo "Labels: ${{ join(github.event.issue.labels.*.name, ', ') }}"
+          echo "Created At: ${{ github.event.issue.created_at }}"
+
+  notify-completion:
+    runs-on: ubuntu-latest
+    needs: process-issue
+    steps:
+      - name: Post completion notice
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `## Workflow Complete\n\n@copilot has been notified and will begin processing this issue.\n\nExpected actions:\n1. Analyze issue requirements\n2. Create feature branch\n3. Implement solution\n4. Open pull request\n\n_Check back soon for a PR link._`
+            });

@@ -1,0 +1,142 @@
+{
+  "version": "1.0.0",
+  "created_at": "2026-01-06T00:31:27Z",
+  "agent": {
+    "name": "copilot",
+    "identifier": "copilot-automation",
+    "description": "Autonomous GitHub issue processing agent with auto-review and knowledge base integration",
+    "primary_model": "claude-opus-4-5",
+    "fallback_model": "claude-sonnet-4-5",
+    "emergency_model": "claude-haiku-4-5",
+    "api_timeout_seconds": 300
+  },
+  "behavior": {
+    "auto_review": true,
+    "auto_review_delay_seconds": 30,
+    "knowledge_base_query": true,
+    "knowledge_base_feedback_loop": true,
+    "commit_directly": false,
+    "require_pull_request": true,
+    "require_tests": true,
+    "require_documentation": true,
+    "minimum_test_coverage": 80,
+    "maximum_pr_size_lines": 500,
+    "maximum_execution_time_seconds": 3600,
+    "enable_async_processing": true,
+    "enable_parallel_work": true
+  },
+  "knowledge_base": {
+    "base_path": "docs/knowledge",
+    "enable_auto_update": true,
+    "update_on_merge": true,
+    "update_on_completion": true,
+    "retention_days": 730,
+    "compression_enabled": true,
+    "search_enabled": true,
+    "components": {
+      "patterns": "docs/knowledge/patterns",
+      "decisions": "docs/knowledge/decisions",
+      "insights": "docs/knowledge/insights",
+      "index": "docs/knowledge/index.json"
+    }
+  },
+  "issue_processing": {
+    "issue_label_trigger": "copilot-task",
+    "issue_template_path": ".github/ISSUE_TEMPLATE/task.yml",
+    "accept_complexity_levels": ["simple", "moderate", "complex"],
+    "maximum_issues_concurrent": 3,
+    "timeout_per_issue_seconds": 3600,
+    "auto_assign_pr": true,
+    "add_labels": ["automation", "copilot"],
+    "link_to_issue": true
+  },
+  "pull_request_defaults": {
+    "create_draft_pr": false,
+    "auto_add_labels": ["automation", "copilot"],
+    "request_review": true,
+    "request_from": ["@maintainer"],
+    "auto_merge_on_approval": false,
+    "auto_merge_after_checks": false,
+    "squash_commits": true,
+    "delete_branch_after_merge": true,
+    "pr_title_prefix": "[copilot]"
+  },
+  "validation": {
+    "enable_yaml_lint": true,
+    "enable_shellcheck": true,
+    "enable_markdown_lint": false,
+    "enable_prettier": false,
+    "enable_eslint": false,
+    "enable_pytest": false,
+    "fail_on_lint_error": true,
+    "fail_on_test_failure": true
+  },
+  "logging": {
+    "level": "info",
+    "base_path": "logs",
+    "retention_days": 90,
+    "log_format": "json",
+    "enable_debug_logging": false,
+    "enable_request_logging": true,
+    "enable_trace_logging": false,
+    "log_components": {
+      "issue_processing": "logs/processing",
+      "pr_creation": "logs/prs",
+      "knowledge_base": "logs/knowledge-base",
+      "auto_review": "logs/review",
+      "errors": "logs/errors"
+    }
+  },
+  "notification": {
+    "enable_slack": false,
+    "slack_channel": "#copilot-notifications",
+    "slack_on_completion": true,
+    "slack_on_error": true,
+    "slack_on_pr_created": false,
+    "enable_github_comments": true,
+    "enable_issue_updates": true,
+    "detailed_logs_in_pr": true,
+    "include_metrics": true
+  },
+  "monitoring": {
+    "track_metrics": true,
+    "metrics_path": "logs/metrics.jsonl",
+    "track_timing": true,
+    "track_success_rate": true,
+    "track_knowledge_base_hits": true,
+    "track_error_patterns": true,
+    "alert_on_failure_rate_above": 10,
+    "alert_on_avg_time_above_minutes": 10
+  },
+  "escalation": {
+    "escalate_on_error": true,
+    "escalate_to_github_issue": true,
+    "escalate_to_slack": false,
+    "escalate_to_maintainer": true,
+    "add_escalation_label": "requires-manual-review"
+  },
+  "quality_gates": {
+    "require_issue_validation": true,
+    "require_knowledge_base_query": true,
+    "require_tests_pass": true,
+    "require_coverage_above": 80,
+    "require_documentation": true,
+    "require_manual_review": false,
+    "require_auto_review_approval": true,
+    "require_codeowners_review": false
+  },
+  "extensibility": {
+    "enable_custom_validators": true,
+    "enable_custom_handlers": true,
+    "custom_script_path": "copilot/custom",
+    "enable_webhooks": false,
+    "webhook_path": "copilot/webhooks"
+  },
+  "experimental_features": {
+    "enable_multi_repo_sync": false,
+    "enable_advanced_routing": false,
+    "enable_dependency_analysis": false,
+    "enable_performance_optimization": false,
+    "enable_cost_tracking": false
+  }
+}

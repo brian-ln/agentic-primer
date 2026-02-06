@@ -1,0 +1,134 @@
+name: "@copilot Task"
+description: Create a task for @copilot to execute autonomously
+title: "[Task]: "
+labels: ["@copilot", "task"]
+assignees:
+  - copilot
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Task for @copilot
+        Use this template to create structured tasks that @copilot can execute autonomously.
+
+        **Workflow**: Issue → @copilot → PR → Human Review → Merge
+
+  - type: input
+    id: title
+    attributes:
+      label: Task Title
+      description: Brief description of what needs to be done
+      placeholder: "Add user authentication system"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Detailed Description
+      description: Complete specification of the task requirements
+      placeholder: |
+        Implement JWT-based authentication with:
+        - User login/logout endpoints
+        - Token generation and validation
+        - Protected route middleware
+        - Session management
+      value: ""
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria
+      description: How will we know this task is complete?
+      placeholder: |
+        - [ ] User can log in with credentials
+        - [ ] JWT token is generated on successful login
+        - [ ] Protected routes verify token
+        - [ ] Unit tests achieve 80%+ coverage
+        - [ ] Documentation updated
+      value: ""
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: Task urgency and importance
+      options:
+        - "Low - Nice to have"
+        - "Medium - Should have"
+        - "High - Must have"
+        - "Critical - Blocking other work"
+      default: 1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: Estimated Complexity
+      description: Rough estimate of task size
+      options:
+        - "Small - < 1 hour"
+        - "Medium - 1-4 hours"
+        - "Large - 4-8 hours"
+        - "Extra Large - > 8 hours"
+      default: 1
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Links to related issues, design docs, or relevant background
+      placeholder: |
+        Related issues: #123, #456
+        Design doc: docs/auth-design.md
+        Reference implementation: https://github.com/example/auth
+      value: ""
+    validations:
+      required: false
+
+  - type: textarea
+    id: files
+    attributes:
+      label: Files to Modify/Create
+      description: Expected files that will be changed (if known)
+      placeholder: |
+        - src/auth/jwt.js
+        - src/middleware/auth.js
+        - tests/auth.test.js
+        - docs/api/authentication.md
+      value: ""
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: requirements
+    attributes:
+      label: Requirements
+      description: Required aspects for this task
+      options:
+        - label: "Tests required"
+          required: false
+        - label: "Documentation required"
+          required: false
+        - label: "Knowledge base update required"
+          required: false
+        - label: "Breaking change (requires version bump)"
+          required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        **After creating this issue:**
+        1. @copilot will be automatically notified
+        2. @copilot will create a branch and implement the solution
+        3. @copilot will open a PR for human review
+        4. Review and merge via GitHub web UI

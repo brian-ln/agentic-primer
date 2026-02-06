@@ -1,0 +1,6 @@
+{
+  "title": "Add welcome message to homepage",
+  "body": "## Description\n\nAdd a friendly welcome message to the homepage that greets users when they first visit the site.\n\n## Acceptance Criteria\n\n- [ ] Welcome message appears on homepage load\n- [ ] Message is personalized if user is logged in\n- [ ] Message is responsive and looks good on mobile\n- [ ] Message follows design system typography and spacing\n\n## Context\n\n**Related Issues:** None\n**Tech Stack:** React, TypeScript, CSS Modules\n**Constraints:** Must work without JavaScript (progressive enhancement)\n**Knowledge Base References:** frontend/patterns, practices/coding-standards\n\n## Additional Notes\n\nThis is a test issue to validate the @copilot workflow end-to-end. The implementation should be simple but demonstrate all workflow steps: branch creation, implementation, PR opening, and auto-assignment.",
+  "labels": ["copilot", "enhancement", "good-first-issue"],
+  "assignees": []
+}

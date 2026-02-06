@@ -1,0 +1,36 @@
+name: AI Task
+description: Create a task for AI agents to execute
+title: "[Task]: "
+labels: ["ai-task"]
+body:
+  - type: input
+    id: title
+    attributes:
+      label: Title
+      description: Brief description of the task
+      placeholder: "Implement feature X"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Detailed description of what needs to be done
+      placeholder: |
+        Provide context and details about the task.
+        Include any relevant background information.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria
+      description: How will we know when this task is complete?
+      placeholder: |
+        - [ ] Feature X is implemented
+        - [ ] Tests pass
+        - [ ] Documentation updated
+    validations:
+      required: true

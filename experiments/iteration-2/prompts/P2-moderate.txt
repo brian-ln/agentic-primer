@@ -1,0 +1,1 @@
+Setup issue-driven development with @copilot. Auto-assign PRs to owner. Include knowledge base.

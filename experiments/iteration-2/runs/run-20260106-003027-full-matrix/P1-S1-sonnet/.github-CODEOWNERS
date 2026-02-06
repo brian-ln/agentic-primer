@@ -1,0 +1,32 @@
+# CODEOWNERS - Auto-assign reviewers for pull requests
+#
+# When a PR modifies files matching these patterns, the specified
+# users/teams are automatically requested as reviewers.
+#
+# Documentation: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for all files
+* @owner
+
+# GitHub configuration files require review by repository owner
+/.github/ @owner
+
+# Knowledge base changes should be reviewed by documentation team
+/docs/knowledge/ @owner
+
+# Copilot-generated PRs (from copilot/* branches) also go to owner
+# Note: CODEOWNERS applies to file paths, not branch names
+# This pattern catches typical copilot-modified files
+/src/ @owner
+/tests/ @owner
+
+# Configuration files require careful review
+*.yml @owner
+*.yaml @owner
+*.json @owner
+*.toml @owner
+
+# Security-sensitive files
+.env* @owner
+*secret* @owner
+*credentials* @owner

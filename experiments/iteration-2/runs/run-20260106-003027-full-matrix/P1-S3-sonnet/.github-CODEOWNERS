@@ -1,0 +1,47 @@
+# CODEOWNERS - Automatic PR review assignment
+#
+# This file defines code ownership for automatic review requests.
+# When a PR is created, GitHub automatically requests review from
+# the owners of modified files.
+#
+# Syntax: <pattern> <owner1> <owner2>
+# Patterns follow .gitignore syntax
+#
+# Documentation: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything in the repo
+# This ensures all PRs get reviewed
+* @owner
+
+# Specific overrides for critical areas
+# (Examples - adjust based on actual repository structure)
+
+# GitHub configuration requires admin approval
+/.github/ @owner @admin
+
+# Workflow changes need careful review
+/.github/workflows/ @owner @admin
+
+# Knowledge base updates can be auto-merged if validation passes
+/docs/knowledge/patterns/ @owner
+/docs/knowledge/insights/ @owner
+
+# Scripts require security review
+/scripts/ @owner
+
+# Documentation updates
+/docs/ @owner
+*.md @owner
+
+# Configuration files
+*.yml @owner
+*.yaml @owner
+*.json @owner
+
+# Security-sensitive files always need human review
+.env* @owner @security-team
+*secret* @owner @security-team
+*credential* @owner @security-team
+*password* @owner @security-team
+*.key @owner @security-team
+*.pem @owner @security-team

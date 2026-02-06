@@ -1,0 +1,14 @@
+# CODEOWNERS - Auto-assign PR reviews
+#
+# This file automatically assigns reviewers to pull requests.
+# Replace @OWNER with your GitHub username or team name.
+#
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default: All files require review by the repository owner
+* @OWNER
+
+# Optional: Assign specific owners to specific paths
+# *.yml @devops-team
+# docs/ @docs-team
+# src/api/ @backend-team

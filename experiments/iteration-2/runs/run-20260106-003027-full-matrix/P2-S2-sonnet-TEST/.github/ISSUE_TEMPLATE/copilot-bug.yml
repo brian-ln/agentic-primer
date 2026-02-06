@@ -1,0 +1,171 @@
+name: Copilot Bug Fix
+description: Report a bug to be fixed by @copilot
+title: "[BUG] "
+labels: ["copilot", "bug"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Bug Report for @copilot
+
+        This issue will be automatically assigned to @copilot for fixing.
+        Please provide detailed reproduction steps and context.
+
+  - type: input
+    id: bug-title
+    attributes:
+      label: Bug Title
+      description: Short, descriptive summary of the bug
+      placeholder: "Login form doesn't validate email format"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: Clear description of what's wrong
+      placeholder: |
+        The login form accepts invalid email addresses (e.g., "test@", "user.com")
+        and attempts to authenticate with them, causing 400 errors from the API.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Step-by-step instructions to reproduce the bug
+      placeholder: |
+        1. Navigate to /login
+        2. Enter "invalid@" in email field
+        3. Enter any password
+        4. Click "Sign In" button
+        5. Observe error in console
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: What should happen instead?
+      placeholder: |
+        The form should validate email format client-side and show an error message
+        before attempting to submit to the API.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual Behavior
+      description: What actually happens?
+      placeholder: |
+        The form submits invalid email to API, which returns 400 error.
+        User sees generic "Login failed" message instead of helpful validation feedback.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: How serious is this bug?
+      options:
+        - Low (minor inconvenience)
+        - Medium (impacts functionality)
+        - High (breaks important feature)
+        - Critical (system unusable)
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Where does this bug occur?
+      placeholder: |
+        - Browser: Chrome 120, Firefox 121
+        - OS: macOS 14.2, Windows 11
+        - App version: 2.3.1
+        - Environment: Production, Staging
+    validations:
+      required: true
+
+  - type: textarea
+    id: technical-context
+    attributes:
+      label: Technical Context
+      description: Relevant files, functions, or components involved
+      placeholder: |
+        - File: src/components/LoginForm.tsx
+        - Function: handleSubmit(), line 45
+        - Related: src/lib/validation.ts (email validation utility)
+        - API endpoint: POST /api/auth/login
+    validations:
+      required: true
+
+  - type: textarea
+    id: error-logs
+    attributes:
+      label: Error Logs
+      description: Console errors, stack traces, or relevant logs
+      placeholder: |
+        ```
+        POST /api/auth/login 400 Bad Request
+        Error: Invalid email format
+            at validateEmail (validation.ts:12)
+            at handleSubmit (LoginForm.tsx:45)
+        ```
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: suggested-fix
+    attributes:
+      label: Suggested Fix
+      description: If you have ideas on how to fix this, share them
+      placeholder: |
+        Add email validation using regex or a library like validator.js
+        before calling the API. Show inline error message below the email field.
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Checklist of conditions that confirm the bug is fixed
+      placeholder: |
+        - [ ] Email field validates format on blur
+        - [ ] Invalid emails show clear error message
+        - [ ] Valid emails pass validation and submit
+        - [ ] API is only called with valid email formats
+        - [ ] Unit tests cover validation edge cases
+        - [ ] Manual testing confirms fix in all browsers
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      description: Confirm you've provided sufficient context
+      options:
+        - label: I have provided clear reproduction steps
+          required: true
+        - label: I have described expected vs actual behavior
+          required: true
+        - label: I have included environment details
+          required: true
+        - label: I have specified the severity level
+          required: true
+        - label: I understand this will be fixed by an AI agent
+          required: true

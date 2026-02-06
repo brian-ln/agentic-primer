@@ -1,0 +1,135 @@
+# Architecture Patterns
+#
+# Common design patterns and architectural decisions used in this project.
+
+version: "1.0"
+
+description: |
+  Design patterns and architectural principles that guide implementation
+  decisions in this codebase.
+
+patterns:
+  - name: Service Layer
+    description: Business logic encapsulated in service classes/modules
+    when_to_use: Complex business logic, multiple data sources, testing isolation
+    example: |
+      // services/user-service.ts
+      export class UserService {
+        constructor(private db: Database, private cache: Cache) {}
+
+        async getUser(id: string): Promise<User> {
+          // Check cache first
+          const cached = await this.cache.get(`user:${id}`);
+          if (cached) return cached;
+
+          // Fetch from database
+          const user = await this.db.users.findById(id);
+          await this.cache.set(`user:${id}`, user, 3600);
+
+          return user;
+        }
+      }
+    files:
+      - src/services/
+      - src/lib/
+
+  - name: Repository Pattern
+    description: Data access abstraction layer
+    when_to_use: Database operations, multiple data sources, testing
+    example: |
+      // repositories/user-repository.ts
+      export interface UserRepository {
+        findById(id: string): Promise<User | null>;
+        save(user: User): Promise<void>;
+        delete(id: string): Promise<void>;
+      }
+
+      export class PrismaUserRepository implements UserRepository {
+        constructor(private prisma: PrismaClient) {}
+
+        async findById(id: string): Promise<User | null> {
+          return this.prisma.user.findUnique({ where: { id } });
+        }
+      }
+    files:
+      - src/repositories/
+
+  - name: Authentication Middleware
+    description: Request authentication and authorization
+    when_to_use: Protected routes, API authentication, role-based access
+    implementation: |
+      - JWT tokens in HTTP-only cookies
+      - Token validation middleware
+      - Role-based authorization guards
+      - Session management with refresh tokens
+    files:
+      - src/middleware/auth.ts
+      - src/lib/jwt.ts
+    considerations:
+      - Use HTTP-only cookies to prevent XSS
+      - Implement CSRF protection for state-changing operations
+      - Support token refresh flow
+      - Handle expired tokens gracefully
+
+  - name: API Error Handling
+    description: Consistent error responses across API endpoints
+    when_to_use: All API routes
+    structure: |
+      {
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Invalid request parameters",
+          "details": [
+            {
+              "field": "email",
+              "issue": "Invalid email format"
+            }
+          ]
+        }
+      }
+    files:
+      - src/lib/errors.ts
+      - src/middleware/error-handler.ts
+
+  - name: Event-Driven Updates
+    description: Pub/sub pattern for real-time updates
+    when_to_use: Real-time features, notifications, cross-service communication
+    implementation: |
+      - Event emitter for in-process events
+      - WebSocket for client updates
+      - Message queue for distributed systems (if needed)
+    files:
+      - src/lib/events.ts
+      - src/lib/websocket.ts
+
+anti_patterns:
+  - name: God Objects
+    description: Classes or modules that do too much
+    why_avoid: Hard to test, maintain, and understand
+    instead: Break into focused, single-responsibility components
+
+  - name: Circular Dependencies
+    description: Module A imports B, B imports A
+    why_avoid: Build errors, runtime issues, tight coupling
+    instead: Use dependency injection, event emitters, or extract shared code
+
+  - name: Magic Numbers
+    description: Hard-coded values without explanation
+    why_avoid: Unclear intent, hard to maintain
+    instead: Use named constants with descriptive names
+
+decision_log:
+  - decision: Use service layer pattern
+    date: "2025-12-01"
+    rationale: Separates business logic from data access, improves testability
+    status: active
+
+  - decision: JWT authentication with refresh tokens
+    date: "2025-11-15"
+    rationale: Stateless auth, supports distributed systems, industry standard
+    status: active
+
+  - decision: Prefer composition over inheritance
+    date: "2025-10-20"
+    rationale: More flexible, easier to test, avoids deep inheritance chains
+    status: active

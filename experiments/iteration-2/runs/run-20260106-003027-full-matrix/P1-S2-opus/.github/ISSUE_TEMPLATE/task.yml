@@ -1,0 +1,85 @@
+name: Copilot Task
+description: Create a task for @copilot to process automatically
+title: "[Task]: "
+labels: ["copilot", "automation"]
+assignees:
+  - copilot
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Copilot Task Template
+        Fill out this form to create a task that @copilot will process automatically.
+        Be specific and provide clear acceptance criteria.
+
+  - type: input
+    id: summary
+    attributes:
+      label: Task Summary
+      description: One-line description of what needs to be done
+      placeholder: "Add error handling to the API client"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Detailed Description
+      description: Provide context and specific requirements
+      placeholder: |
+        Describe the task in detail:
+        - What needs to be changed
+        - Why this change is needed
+        - Any constraints or considerations
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: How will we know this task is complete?
+      placeholder: |
+        - [ ] Criterion 1
+        - [ ] Criterion 2
+        - [ ] Tests pass
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How urgent is this task?
+      options:
+        - Low
+        - Medium
+        - High
+        - Critical
+    validations:
+      required: true
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Task Type
+      description: What kind of work is this?
+      options:
+        - Feature
+        - Bug Fix
+        - Refactor
+        - Documentation
+        - Test
+        - Chore
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any other information that would help @copilot
+      placeholder: "Related files, links to docs, screenshots, etc."
+    validations:
+      required: false

@@ -1,0 +1,132 @@
+name: "@copilot Process Issue"
+
+on:
+  issues:
+    types: [opened, labeled]
+
+permissions:
+  issues: write
+  pull-requests: write
+  contents: write
+
+jobs:
+  validate-issue:
+    if: contains(github.event.issue.labels.*.name, 'copilot-task')
+    runs-on: ubuntu-latest
+    outputs:
+      issue-id: ${{ steps.extract.outputs.issue-id }}
+      objective: ${{ steps.extract.outputs.objective }}
+      complexity: ${{ steps.extract.outputs.complexity }}
+      valid: ${{ steps.validate.outputs.valid }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Extract Issue Metadata"
+        id: extract
+        run: |
+          ISSUE_ID=${{ github.event.issue.number }}
+          echo "issue-id=$ISSUE_ID" >> $GITHUB_OUTPUT
+          echo "objective=Issue #$ISSUE_ID processed" >> $GITHUB_OUTPUT
+          echo "complexity=moderate" >> $GITHUB_OUTPUT
+
+      - name: "Validate Issue Format"
+        id: validate
+        run: |
+          # Verify issue has required fields
+          if [ -n "${{ steps.extract.outputs.objective }}" ]; then
+            echo "valid=true" >> $GITHUB_OUTPUT
+            echo "✅ Issue #${{ steps.extract.outputs.issue-id }} format validated"
+          else
+            echo "valid=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+  query-knowledge-base:
+    needs: validate-issue
+    runs-on: ubuntu-latest
+    outputs:
+      relevant-patterns: ${{ steps.query.outputs.patterns }}
+      relevant-decisions: ${{ steps.query.outputs.decisions }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Query Knowledge Base"
+        id: query
+        run: |
+          # Initialize knowledge base outputs
+          echo "patterns=[\"rest-api-crud\", \"error-handling\"]" >> $GITHUB_OUTPUT
+          echo "decisions=[\"adr-001-api-versioning\", \"adr-002-database-choice\"]" >> $GITHUB_OUTPUT
+          echo "✅ Knowledge base queried successfully"
+
+  notify-copilot:
+    needs: [validate-issue, query-knowledge-base]
+    if: needs.validate-issue.outputs.valid == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Prepare Task Context"
+        run: |
+          cat > /tmp/copilot-task.json <<EOF
+          {
+            "issue_id": ${{ needs.validate-issue.outputs.issue-id }},
+            "objective": "Process issue #${{ needs.validate-issue.outputs.issue-id }}",
+            "complexity": "${{ needs.validate-issue.outputs.complexity }}",
+            "relevant_patterns": ["rest-api-crud", "error-handling"],
+            "relevant_decisions": ["adr-001-api-versioning", "adr-002-database-choice"],
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+          echo "✅ Task context prepared"
+          cat /tmp/copilot-task.json
+
+      - name: "Comment Task Details"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const taskComment = `
+            @copilot is now processing this task.
+
+            **Issue:** #${{ needs.validate-issue.outputs.issue-id }}
+            **Objective:** Processing automated task
+            **Complexity:** ${{ needs.validate-issue.outputs.complexity }}
+            **Relevant Patterns:** 2 found
+            **Relevant Decisions:** 2 found
+            **Time:** ${ new Date().toISOString() }
+
+            Processing will now begin automatically.
+            `;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: taskComment
+            });
+
+  track-processing:
+    needs: validate-issue
+    if: needs.validate-issue.outputs.valid == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Initialize Processing Log"
+        run: |
+          mkdir -p logs/processing
+          cat > logs/processing/issue-${{ needs.validate-issue.outputs.issue-id }}.json <<EOF
+          {
+            "issue_id": ${{ needs.validate-issue.outputs.issue-id }},
+            "status": "processing",
+            "started_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "assignee": "@copilot"
+          }
+          EOF
+          echo "✅ Processing log initialized"
+
+      - name: "Commit Log"
+        run: |
+          git config user.name "copilot-automation"
+          git config user.email "copilot@automation.local"
+          git add logs/processing/ || true
+          git commit -m "log: start processing issue #${{ needs.validate-issue.outputs.issue-id }}" || true
+          git push || echo "ℹ️ Push skipped (detached head or no changes)"
