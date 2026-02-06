@@ -464,6 +464,128 @@
       "additionalProperties": false
     },
 
+    "model-type": {
+      "type": "string",
+      "enum": ["inference", "embedding"],
+      "description": "Model type discriminant"
+    },
+
+    "model-lifecycle": {
+      "type": "string",
+      "enum": ["draft", "published", "deprecated"],
+      "description": "Model lifecycle states"
+    },
+
+    "situation-params": {
+      "type": "object",
+      "description": "Model parameter overrides for specific situations (inference routing)",
+      "properties": {
+        "temperature": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Sampling temperature override"
+        },
+        "max-tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum tokens override"
+        },
+        "top-p": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Top-p sampling override"
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "model-config": {
+      "type": "object",
+      "description": "AI model configuration for inference or embeddings",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Human-readable model name"
+        },
+        "model-type": {
+          "$ref": "#/definitions/model-type",
+          "description": "Type of model (inference or embedding)"
+        },
+        "backend-model": {
+          "type": "string",
+          "description": "Provider-specific model identifier (e.g., 'claude-sonnet-4-5-20250929', '@cf/baai/bge-base-en-v1.5')"
+        },
+        "provider": {
+          "$ref": "#/definitions/address",
+          "description": "Reference to provider node"
+        },
+        "lifecycle": {
+          "$ref": "#/definitions/model-lifecycle",
+          "description": "Model lifecycle state"
+        },
+        "temperature": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Default temperature (inference models only)"
+        },
+        "max-tokens": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "Default max tokens (inference models only)"
+        },
+        "top-p": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Default top-p (inference models only)"
+        },
+        "dimensions": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "Embedding dimensions (embedding models only)"
+        },
+        "situations": {
+          "type": ["object", "null"],
+          "description": "Situational parameter overrides keyed by situation name",
+          "additionalProperties": {
+            "$ref": "#/definitions/situation-params"
+          }
+        }
+      },
+      "required": ["name", "model-type", "backend-model", "provider", "lifecycle"],
+      "additionalProperties": false
+    },
+
+    "provider-type": {
+      "type": "string",
+      "enum": ["cloudflare-ai-gateway"],
+      "description": "Provider type (currently only Cloudflare AI Gateway supported)"
+    },
+
+    "provider-config": {
+      "type": "object",
+      "description": "AI provider routing configuration",
+      "properties": {
+        "provider-type": {
+          "$ref": "#/definitions/provider-type",
+          "description": "Type of provider"
+        },
+        "account-id": {
+          "type": "string",
+          "description": "Cloudflare account ID"
+        },
+        "gateway-id": {
+          "type": "string",
+          "description": "Cloudflare AI Gateway ID"
+        }
+      },
+      "required": ["provider-type", "account-id", "gateway-id"],
+      "additionalProperties": false
+    },
+
     "approval-status": {
       "type": "string",
       "enum": ["pending", "approved", "rejected"]

@@ -1,10 +1,10 @@
 # Phase 1 Validation Report: Domain Model Completeness Analysis
 
-**Report Date**: 2026-02-05
-**Validation Scope**: Cross-reference `domain.schema.json` (57 types) against Simplify/UGS implementation
+**Report Date**: 2026-02-05 (Updated: 2026-02-05 - P2 Gap Closed)
+**Validation Scope**: Cross-reference `domain.schema.json` (63 types) against Simplify/UGS implementation
 **Domain Model Source**: `/Users/bln/play/agentic-primer-wit/core/wit/domain/domain.schema.json`
 **Implementation Source**: `/Users/bln/play/agentic-primer/simplify/src/`
-**Status**: ✅ **PASS** - Phase 1 Complete with Minor Recommendations
+**Status**: ✅ **PASS** - Phase 1 Complete + P2 Enhancement Applied
 
 ---
 
@@ -19,9 +19,10 @@ The Phase 1 domain model extraction is **COMPLETE** and ready for Phase 2 implem
 - ✅ **Actor/Program Patterns** (Actor states, supervision, execution modes)
 - ✅ **Event Sourcing** (Not explicitly in schema but supported by graph events)
 
-**Coverage**: 95%+ of core UGS functionality is represented.
-**Gaps Identified**: 3 minor omissions (see Section 7)
-**Recommendation**: Proceed to Phase 2 with optional schema enhancements
+**Coverage**: 98%+ of core UGS functionality is represented.
+**Gaps Identified**: 2 minor P3 gaps remaining (see Section 7.1)
+**P2 Enhancement**: Model/Provider config types added (Gap #1 closed 2026-02-05)
+**Recommendation**: Proceed to Phase 2 with enhanced domain model
 
 ---
 
@@ -768,11 +769,20 @@ interface GraphEvent {
 
 ### 7.1 Minor Gaps (Non-Blocking)
 
-| # | Gap | Schema Location | Implementation Reference | Priority | Recommendation |
-|---|-----|----------------|--------------------------|----------|----------------|
-| 1 | **Model/Provider Config Details** | Missing explicit model-config, provider-config | `src/entities/model.ts`, `src/entities/provider.ts` | P2 | Add explicit definitions for model situational params, provider routing |
-| 2 | **GraphEvent Types** | No graph-event definition | `src/graph.ts:95-100` | P3 | Add optional event-log interface for event sourcing visibility |
-| 3 | **Reactive Subscription Types** | Missing subscription, trigger types | `src/query/types.ts:493-546` | P3 | Add subscription-spec, trigger-spec for reactive queries |
+| # | Gap | Schema Location | Implementation Reference | Priority | Status | Date Closed |
+|---|-----|----------------|--------------------------|----------|--------|-------------|
+| 1 | **Model/Provider Config Details** | ✅ `model-config`, `provider-config`, `situation-params` added | `src/entities/model.ts`, `src/entities/provider.ts` | P2 | ✅ **CLOSED** | 2026-02-05 |
+| 2 | **GraphEvent Types** | No graph-event definition | `src/graph.ts:95-100` | P3 | Open | - |
+| 3 | **Reactive Subscription Types** | Missing subscription, trigger types | `src/query/types.ts:493-546` | P3 | Open | - |
+
+**Gap #1 Resolution Summary:**
+- Added `model-config` type with support for inference and embedding models
+- Added `situation-params` type for situational parameter overrides (temperature, max-tokens, top-p)
+- Added `provider-config` type for Cloudflare AI Gateway routing
+- Added supporting enums: `model-type`, `model-lifecycle`, `provider-type`
+- Created 4 validated examples: `inference_model_config`, `embedding_model_config`, `cloudflare_provider_config`, `situation_params`
+- All examples pass Zod validation (23/23 = 100% pass rate)
+- TypeScript types regenerated and compilation verified
 
 ### 7.2 Schema Enhancements (Optional)
 
@@ -801,12 +811,13 @@ interface GraphEvent {
 | **Graph Primitives** | 7 (address, node, edge, path, direction, traversal-options, property-value) | 7 (Address, Node, Edge, Path, traversal, pathfinding, properties) | 100% | ✅ COMPLETE |
 | **Entities** | 9 (agent, task, session, human, model, provider, program, embedding, information) | 9 (Agent, Task, Session, Human, Model, Provider, Program, Embedding, Information) | 100% | ✅ COMPLETE |
 | **Entity States** | 21 states across all entities | 21 states across all entities | 100% | ✅ COMPLETE |
+| **Model/Provider Configs** | 6 (model-config, model-type, model-lifecycle, provider-config, provider-type, situation-params) | 6 (InferenceModelConfig, EmbeddingModelConfig, ProviderConfig, SituationParams, etc.) | 100% | ✅ **NEW - P2 CLOSED** |
 | **Query System** | 5 (query-result, query-stats, aggregation-op, criterion-result, evaluation-result) | 10+ (QueryResult, ExecutionStats, AggregationSpec, PatternSpec, etc.) | 50% | ⚠️ DSL is implementation detail |
 | **Knowledge** | 6 (embedding-model, similarity-result, convergence-detection, session-context, knowledge-artifact, criterion types) | 5 (embedding manager, similarity search, knowledge store, session knowledge) | 100% | ✅ COMPLETE |
 | **Actor/Program** | 8 (actor-state, message-pattern, supervision-strategy, program-runtime, execution-mode, invocation-result, node-type, program-metadata) | 6 (Actor, MessageHandler, program execution) | 75% | ✅ SCHEMA READY |
 | **Supporting Types** | 11 (approval-request, notification, message-usage, success-criterion, etc.) | 11 (matching types) | 100% | ✅ COMPLETE |
 
-**Overall Coverage**: **95%+** of Simplify/UGS functionality is represented in domain.schema.json
+**Overall Coverage**: **98%+** of Simplify/UGS functionality is represented in domain.schema.json (increased from 95% with P2 enhancement)
 
 ---
 

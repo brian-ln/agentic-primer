@@ -217,6 +217,59 @@
         ["model", "claude-3-5-sonnet-20241022"],
         ["tokens", "2350"]
       ]
+    },
+
+    "inference_model_config": {
+      "name": "claude-balanced",
+      "model-type": "inference",
+      "backend-model": "claude-sonnet-4-5-20250929",
+      "provider": {
+        "id": "cf-gateway",
+        "scope": "node"
+      },
+      "lifecycle": "published",
+      "temperature": 0.7,
+      "max-tokens": 4096,
+      "top-p": 0.9,
+      "situations": {
+        "research": {
+          "temperature": 0.3,
+          "max-tokens": 8192
+        },
+        "creative": {
+          "temperature": 1.0,
+          "max-tokens": 4096,
+          "top-p": 0.95
+        },
+        "concise": {
+          "temperature": 0.5,
+          "max-tokens": 1024
+        }
+      }
+    },
+
+    "embedding_model_config": {
+      "name": "bge-base-embeddings",
+      "model-type": "embedding",
+      "backend-model": "@cf/baai/bge-base-en-v1.5",
+      "provider": {
+        "id": "cf-gateway",
+        "scope": "node"
+      },
+      "lifecycle": "published",
+      "dimensions": 768
+    },
+
+    "cloudflare_provider_config": {
+      "provider-type": "cloudflare-ai-gateway",
+      "account-id": "abc123def456",
+      "gateway-id": "my-ai-gateway"
+    },
+
+    "situation_params": {
+      "temperature": 0.3,
+      "max-tokens": 8192,
+      "top-p": 0.85
     }
   }
 }

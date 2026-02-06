@@ -52,6 +52,10 @@ const EXAMPLE_TO_VALIDATOR_MAP: Record<string, string> = {
   'knowledge_artifact': 'knowledgeArtifact',
   'program_metadata': 'programMetadata',
   'invocation_result': 'invocationResult',
+  'inference_model_config': 'modelConfig',
+  'embedding_model_config': 'modelConfig',
+  'cloudflare_provider_config': 'providerConfig',
+  'situation_params': 'situationParams',
 };
 
 function loadExamples(): ExamplesFile {
@@ -219,6 +223,16 @@ function typeCheck() {
 
   // Invocation result
   const invocation: DomainTypes.InvocationResult = examples.invocation_result;
+
+  // Model configs
+  const inferenceModel: DomainTypes.ModelConfig = examples.inference_model_config;
+  const embeddingModel: DomainTypes.ModelConfig = examples.embedding_model_config;
+
+  // Provider config
+  const providerConfig: DomainTypes.ProviderConfig = examples.cloudflare_provider_config;
+
+  // Situation params
+  const situationParams: DomainTypes.SituationParams = examples.situation_params;
 
   console.log('Type checking passed!');
 }

@@ -86,6 +86,22 @@ export const notificationChannelSchema = z.enum(['terminal', 'email', 'slack']);
 // human-permission
 export const humanPermissionSchema = z.enum(['approve', 'assign', 'configure', 'admin']);
 
+// model-type
+export const modelTypeSchema = z.enum(['inference', 'embedding']);
+
+// model-lifecycle
+export const modelLifecycleSchema = z.enum(['draft', 'published', 'deprecated']);
+
+// situation-params
+export const situationParamsSchema = z.object({
+  temperature: z.number().min(0).max(2).optional(),
+  'max-tokens': z.number().int().min(1).optional(),
+  'top-p': z.number().min(0).max(1).optional()
+}).strict();
+
+// provider-type
+export const providerTypeSchema = z.enum(['cloudflare-ai-gateway']);
+
 // approval-status
 export const approvalStatusSchema = z.enum(['pending', 'approved', 'rejected']);
 
@@ -214,6 +230,13 @@ export const notificationSchema = z.object({
   read: z.boolean()
 }).strict();
 
+// provider-config
+export const providerConfigSchema = z.object({
+  'provider-type': providerTypeSchema,
+  'account-id': z.string(),
+  'gateway-id': z.string()
+}).strict();
+
 // evaluation-result
 export const evaluationResultSchema = z.object({
   'criterion-result': criterionResultSchema,
@@ -272,6 +295,20 @@ export const taskConfigSchema = z.object({
   spec: z.union([taskSpecSchema, z.null()]).optional(),
   assignee: z.union([addressSchema, z.null()]).optional(),
   priority: z.union([taskPrioritySchema, z.null()]).optional()
+}).strict();
+
+// model-config
+export const modelConfigSchema = z.object({
+  name: z.string(),
+  'model-type': modelTypeSchema,
+  'backend-model': z.string(),
+  provider: addressSchema,
+  lifecycle: modelLifecycleSchema,
+  temperature: z.number().min(0).max(2).nullable().optional(),
+  'max-tokens': z.number().int().min(1).nullable().optional(),
+  'top-p': z.number().min(0).max(1).nullable().optional(),
+  dimensions: z.number().int().min(1).nullable().optional(),
+  situations: z.object({}).nullable().optional()
 }).strict();
 
 // approval-request
@@ -388,6 +425,10 @@ export const DomainValidators = {
   humanState: humanStateSchema,
   notificationChannel: notificationChannelSchema,
   humanPermission: humanPermissionSchema,
+  modelType: modelTypeSchema,
+  modelLifecycle: modelLifecycleSchema,
+  situationParams: situationParamsSchema,
+  providerType: providerTypeSchema,
   approvalStatus: approvalStatusSchema,
   criterionResult: criterionResultSchema,
   criterionType: criterionTypeSchema,
@@ -411,12 +452,14 @@ export const DomainValidators = {
   sessionMessage: sessionMessageSchema,
   humanPreferences: humanPreferencesSchema,
   notification: notificationSchema,
+  providerConfig: providerConfigSchema,
   evaluationResult: evaluationResultSchema,
   programMetadata: programMetadataSchema,
   address: addressSchema,
   humanConfig: humanConfigSchema,
   propertyValue: propertyValueSchema,
   taskConfig: taskConfigSchema,
+  modelConfig: modelConfigSchema,
   approvalRequest: approvalRequestSchema,
   queryResult: queryResultSchema,
   similarityResult: similarityResultSchema,
