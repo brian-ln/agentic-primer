@@ -1,5 +1,22 @@
 # Agent Instructions
 
+## Project Context
+
+**Agentic Primer** is a protocol-first convergence platform for multi-agent actor systems. Key components:
+
+- **@agentic-primer/protocols** - Published npm package (63+ domain types: Address, Node, Edge, Agent, Task, etc.)
+- **WIT Protocols** - Language-agnostic interface definitions using WebAssembly Interface Types
+- **SEAG** - Reference implementation of protocol-driven actor system (Simplify Environment for Agentic Growth)
+- **Path-Based Addressing** - Hierarchical routing for actor systems (POC complete in `simplify/`)
+
+**Documentation:**
+- `packages/protocols/` - Protocol package source
+- `docs/protocols/` - WIT migration plans, integration strategy
+- `CURRENT_STATE.md` - Project evolution and current focus
+- `docs/archive/bootstrap-phase/` - Historical bootstrap experiments (Jan 2026)
+
+## Issue Tracking
+
 This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
 
 ## Quick Reference
@@ -11,6 +28,22 @@ bd update <id> --status in_progress  # Claim work
 bd close <id>         # Complete work
 bd sync               # Sync with git
 ```
+
+## Knowledge Systems
+
+**Session Knowledge** - Learn from past work:
+```bash
+./scripts/know decisions recent 10       # Recent architectural decisions
+./scripts/know learnings category technical  # Technical insights
+./scripts/know errors type <ErrorType>   # Known error patterns
+```
+
+When you complete significant work, extract knowledge:
+```bash
+/extract-knowledge <session-id>
+```
+
+See `.claude/rules/session-knowledge.md` for detailed usage patterns.
 
 ## Landing the Plane (Session Completion)
 

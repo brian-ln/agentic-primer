@@ -1,129 +1,152 @@
 # Agentic Primer
 
-**Turn any git repository into an AI-executable workspace that bootstraps itself and remembers everything.**
+**Protocol-first convergence platform for multi-agent actor systems.**
+
+## Current Focus (February 2026)
+
+This project is building a **universal protocol layer** for convergent agent systems using the WASM Component Model:
+
+- **@agentic-primer/protocols** - Published npm package with 63+ typed domain primitives (Address, Node, Edge, Agent, Task, etc.)
+- **WIT Interface Definitions** - Language-agnostic protocol specifications using WebAssembly Interface Types
+- **SEAG Integration** - Reference implementation of protocol-driven actor system (Simplify Environment for Agentic Growth)
+- **Path-Based Addressing** - Hierarchical routing for actor systems (POC complete, performance validated)
+
+**Key Components:**
+- `packages/protocols/` - Protocol package (JSON Schema → TypeScript + Zod + WIT)
+- `docs/protocols/` - WIT migration plans, integration strategy, validation reports
+- `simplify/` - SEAG reference implementation (separate branch: feature/path-addressing)
+
+**Recent Milestones:**
+- Feb 6: Published `@agentic-primer/protocols@0.1.0` to npm
+- Feb 5-6: Path-based addressing POC with hierarchical routing
+- Late Jan: WIT protocol extraction and consolidation from UGS/Simplify
+- Early Feb: Documentation reorganization (archive structure created)
+
+See **CURRENT_STATE.md** for detailed project evolution and **docs/protocols/** for architecture documentation.
+
+---
+
+## Historical Context: Bootstrap Experiments (January 2026)
+
+The project began with bootstrap simulation experiments (Jan 5-8) exploring self-optimizing git-native issue automation. This work is now archived in `docs/archive/bootstrap-phase/` and `docs/bootstrap/`. The focus has shifted to protocol-first actor systems.
 
 ## Quick Start
 
-### To Execute the Bootstrap:
-1. Read `BOOTSTRAP.md` - The 30-word prompt that creates the system
-2. Check `SUCCESS_CRITERIA.md` - Observable outcomes that define success
-3. Execute the bootstrap with your preferred AI agent (@copilot, Claude, etc.)
-4. Verify the system processes a test issue end-to-end
+### To Use the Protocols Package:
+```bash
+npm install @agentic-primer/protocols
+```
 
-### To Run Simulation Experiments:
-1. Read `RUN_SIMULATION.md` - Instructions for testing bootstrap variations
-2. Create experiment run: `./scripts/create-experiment-run.sh`
-3. Run simulations (see RUN_SIMULATION.md for prompts)
-4. Finalize: `./scripts/finalize-experiment-run.sh <run-name> <agent-ids>`
-5. Review findings in `experiments/<run-name>/`
+See `packages/protocols/README.md` for usage examples.
 
-## Files
+### To Explore WIT Protocols:
+- Protocol definitions: `packages/protocols/wit/`
+- Migration plans: `docs/protocols/WIT_PLATFORM_MIGRATION_PLAN.md`
+- Integration strategy: `docs/protocols/INTEGRATION_STRATEGY.md`
 
-**Core:**
-- **BOOTSTRAP.md** - Production bootstrap prompt (30 words)
-- **SUCCESS_CRITERIA.md** - Observable outcome definitions
-- **AFTER_CLEAR.md** - Instructions to give me after `/clear` ⭐
+### To Run Bootstrap Experiments (Historical):
+1. Read `docs/bootstrap/BOOTSTRAP.md` - The 30-word prompt
+2. Check `docs/bootstrap/SUCCESS_CRITERIA.md` - Observable outcomes
+3. See `docs/simulation/` for simulation harness documentation
 
-**Testing:**
-- **SIMULATION_HARNESS.md** - Test framework (3×3×3 = 27 permutations)
-- **RUN_SIMULATION.md** - Detailed run instructions
-- **COMPACT_LOG_SCHEMA.md** - Minimal log format (90-95% compression)
+## Key Files
+
+**Protocols & Architecture:**
+- **packages/protocols/** - Published npm package with domain types
+- **docs/protocols/** - WIT migration plans, integration strategy, validation reports
+- **CURRENT_STATE.md** - Project evolution and current status
+- **AGENTS.md** - Agent instructions (issue tracking, workflow)
 
 **Activity Management:**
-- **ACTIVITY_WORKTREE_SYSTEM.md** - Worktree-based parallel activities design
-- **ACTIVITY_QUICK_REFERENCE.md** - Quick command reference for users and Claude
-- **CLAUDE_ACTIVITY_INTEGRATION.md** - How Claude Code uses activities reliably
+- **docs/activity/** - Worktree-based parallel activities system
+- **scripts/activity** - Activity management CLI
 
-## Structure
+**Historical (Bootstrap Experiments):**
+- **docs/bootstrap/** - Bootstrap prompt and success criteria
+- **docs/simulation/** - Simulation harness and testing framework
+- **docs/archive/bootstrap-phase/** - Archived bootstrap-era documentation
+
+## Repository Structure
 
 ```
-├── BOOTSTRAP.md              # Production prompt (30 words)
-├── SUCCESS_CRITERIA.md       # Definition of done (observable outcomes)
-├── SIMULATION_HARNESS.md     # Test framework (3×3×3 = 27 permutations)
-├── COMPACT_LOG_SCHEMA.md     # Minimal agent log format (90-95% compression)
-├── AFTER_CLEAR.md            # Instructions to give me after /clear ⭐
-├── experiments/              # Experiment templates and runs
-│   ├── prompts/             # P1, P2, P3 (10w, 14w, 35w)
-│   ├── criteria/            # S1, S2, S3 (minimal, moderate, comprehensive)
-│   ├── README.md            # Template usage guide
-│   └── run-YYYYMMDD-*/      # Individual experiment runs
-├── archive/                  # Analysis & exploration (48 files)
-├── docs/                     # Generated knowledge base
-└── scripts/                  # Utilities
-    ├── activity                       # Activity management CLI
-    ├── activity-lib.sh                # Activity library functions
-    ├── activity-context               # Activity context helper
-    ├── create-experiment-run.sh       # Create experiment directory
-    ├── finalize-experiment-run.sh     # Export logs and finalize
-    ├── analyze-simulation-agents.sh   # Extract metrics from logs
-    ├── compact-agent-log.py           # Convert to minimal schema
-    ├── export-agent-logs.sh           # Export & compact logs
-    └── verify-bootstrap.sh            # Validate generated system
+agentic-primer/
+├── packages/
+│   └── protocols/            # @agentic-primer/protocols npm package
+│       ├── schema/           # JSON Schema (source of truth)
+│       ├── wit/              # WIT interface definitions
+│       ├── src/              # Generated TypeScript + Zod
+│       └── README.md         # Package documentation
+│
+├── docs/
+│   ├── protocols/            # WIT migration, integration strategy
+│   ├── activity/             # Activity system documentation
+│   ├── bootstrap/            # Historical: bootstrap experiments
+│   ├── simulation/           # Historical: simulation harness
+│   ├── knowledge/            # Session knowledge system
+│   └── archive/              # Archived documentation
+│       └── bootstrap-phase/  # Outdated bootstrap-era docs
+│
+├── simplify/                 # SEAG implementation (separate branch)
+├── experiments/              # Historical experiment runs
+├── scripts/                  # Utilities
+│   ├── activity              # Activity management CLI
+│   ├── know                  # Knowledge query CLI
+│   └── [other scripts]
+│
+├── CURRENT_STATE.md          # Project evolution summary
+├── AGENTS.md                 # Agent instructions
+└── ARCHIVED_BRANCHES.md      # Documented archived work
 ```
 
-## Key Learnings
+## Key Learnings from Bootstrap Experiments (Historical)
 
-From 9 initial simulations (3 models × 3 prompt lengths):
+From 9 bootstrap simulations (Jan 5-8, 2026):
+- **Prompt length matters**: 30-35 words optimal for completeness
+- **Model archetypes emerge**: Opus (analysis), Sonnet (research), Haiku (implementation)
+- **Outcome-based criteria work better** than implementation requirements
 
-### Model Archetypes
-- **Opus "The Philosopher"**: Pure analysis, 0 tools, ~10 sec
-- **Sonnet "The Researcher"**: Web research + validation, ~2-3 min
-- **Haiku "The Builder"**: Creates files for short prompts, analyzes long ones
-
-### Optimal Configuration
-- **Prompt**: 30-35 words (sweet spot for 65-75% completeness)
-- **Success Criteria**: Moderate detail (clear expectations without overwhelming)
-- **Model**: Sonnet (balanced research + consistency)
-
-### Critical Findings
-- **Haiku flips behavior at ~35 words** (build mode → analysis mode)
-- **Define success in first 10 minutes**, not after 2.5 hours
-- **Outcome-based criteria** beat implementation requirements
-- **Separate evaluation** from simulation (self-assessment unreliable)
+See `docs/bootstrap/` and `docs/archive/bootstrap-phase/` for detailed findings.
 
 ## Usage
 
-**To execute the bootstrap:**
+**Install the protocols package:**
 ```bash
-# Use the 30-word prompt from BOOTSTRAP.md
-# Verify with SUCCESS_CRITERIA.md
+npm install @agentic-primer/protocols
 ```
 
-**To test variations:**
-```bash
-# Use SIMULATION_HARNESS.md framework
-# Test different prompts, criteria, models
-# Compare results with 100-point rubric
+**Use domain types in TypeScript:**
+```typescript
+import { Address, Node, Agent, addressSchema } from '@agentic-primer/protocols';
+
+const addr: Address = { id: "agent-123", scope: "node" };
+const result = addressSchema.safeParse(addr);
 ```
 
-**To analyze agent behavior:**
+**Manage parallel work:**
 ```bash
-# After running simulations, analyze what agents actually did
-./scripts/analyze-simulation-agents.sh <agent-id-1> <agent-id-2> ...
-
-# Example: Compare 3 models on same prompt
-./scripts/analyze-simulation-agents.sh ad7d53c a7c3dfb a525bb6
-```
-
-**To manage parallel activities:**
-```bash
-# Initialize activity system (first time only)
-./scripts/activity init
-
-# Create new activity worktree
-./scripts/activity create exploring-idea-x "Exploring new idea"
-
-# List all activities
-./scripts/activity list
+# Create activity worktree
+./scripts/activity create feature-name "Description"
 
 # Switch between activities
-./scripts/activity switch main
-./scripts/activity switch exploring-idea-x
+./scripts/activity list
+./scripts/activity switch feature-name
 
-# Get current activity path (for scripts)
-cd "$(./scripts/activity path)"
-
-# See ACTIVITY_QUICK_REFERENCE.md for full usage
+# See docs/activity/ for full documentation
 ```
 
-See `archive/` for detailed analysis and retrospective.
+**Query session knowledge:**
+```bash
+./scripts/know decisions recent 10
+./scripts/know learnings category technical
+./scripts/know errors type NetworkError
+```
+
+**Track issues:**
+```bash
+bd ready              # Find available work
+bd show <id>          # View issue details
+bd update <id> --status in_progress
+bd close <id>         # Complete work
+```
+
+See `docs/` for detailed documentation and `AGENTS.md` for agent workflows.
