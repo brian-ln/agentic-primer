@@ -8,6 +8,10 @@ core/bindings/typescript/**/*
 core/wasm/**/*.wasm
 *.wasm
 
+# Embedded git repositories (separate projects)
+simplify/
+spec-kit/
+
 # Node modules
 node_modules/
 

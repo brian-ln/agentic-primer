@@ -1,0 +1,50 @@
+{
+  "name": "@agentic-primer/protocols",
+  "version": "0.1.0",
+  "description": "Convergence domain protocol types - universal graph system primitives",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./types": {
+      "types": "./dist/domain.types.d.ts",
+      "import": "./dist/domain.types.js"
+    },
+    "./validators": {
+      "types": "./dist/domain.validators.d.ts",
+      "import": "./dist/domain.validators.js"
+    },
+    "./schema": "./schema/domain.schema.json",
+    "./wit": "./wit/domain.wit"
+  },
+  "files": [
+    "dist/",
+    "schema/",
+    "wit/",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "convergence",
+    "protocols",
+    "universal-graph",
+    "actor-model",
+    "domain-model",
+    "wasm-component-model"
+  ],
+  "author": "Brian Lloyd-Newberry",
+  "license": "MIT",
+  "dependencies": {
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}

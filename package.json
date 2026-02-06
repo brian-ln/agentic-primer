@@ -1,17 +1,26 @@
 {
-  "name": "agentic-primer-wit",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "agentic-primer",
+  "version": "0.1.0",
+  "description": "Protocol-first architecture for convergence systems",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
     "generate:types": "tsx scripts/generate-domain-types.ts",
     "validate:domain": "tsx core/wit/domain/validation-test.ts",
-    "typecheck": "tsc --noEmit",
-    "test": "pnpm validate:domain && pnpm typecheck"
+    "typecheck": "tsc --noEmit"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "convergence",
+    "protocols",
+    "universal-graph",
+    "actor-model"
+  ],
+  "author": "Brian Lloyd-Newberry",
+  "license": "MIT",
   "packageManager": "pnpm@10.11.0",
   "devDependencies": {
     "@types/node": "^25.2.1",

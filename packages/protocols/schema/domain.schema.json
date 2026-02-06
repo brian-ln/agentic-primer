@@ -1,0 +1,876 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://convergence.dev/schemas/domain/v0.1.0",
+  "title": "Convergence Domain Model",
+  "description": "Complete domain model for Convergence framework - JSON Schema representation of convergence:domain@0.1.0 WIT package",
+
+  "definitions": {
+    "address": {
+      "type": "object",
+      "description": "Address primitive - universal reference (@(id))",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier"
+        },
+        "namespace": {
+          "type": ["string", "null"],
+          "description": "Optional namespace qualifier"
+        },
+        "scope": {
+          "$ref": "#/definitions/address-scope",
+          "description": "Address scope determines resolution"
+        },
+        "version": {
+          "type": ["string", "null"],
+          "description": "Optional version identifier"
+        }
+      },
+      "required": ["id", "scope"],
+      "additionalProperties": false
+    },
+
+    "address-scope": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "node",
+          "description": "Node-scoped address"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "edge": {
+              "$ref": "#/definitions/edge-ref"
+            }
+          },
+          "required": ["edge"],
+          "additionalProperties": false,
+          "description": "Edge-scoped address"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "computed": {
+              "type": "string"
+            }
+          },
+          "required": ["computed"],
+          "additionalProperties": false,
+          "description": "Computed address with expression"
+        }
+      ]
+    },
+
+    "edge-ref": {
+      "type": "object",
+      "description": "Edge reference for scoped addresses",
+      "properties": {
+        "source": {"type": "string"},
+        "target": {"type": "string"}
+      },
+      "required": ["source", "target"],
+      "additionalProperties": false
+    },
+
+    "property-value": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "string-val": {"type": "string"}
+          },
+          "required": ["string-val"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "number-val": {"type": "number"}
+          },
+          "required": ["number-val"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "bool-val": {"type": "boolean"}
+          },
+          "required": ["bool-val"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "null-val": {"type": "null"}
+          },
+          "required": ["null-val"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "address-ref": {"$ref": "#/definitions/address"}
+          },
+          "required": ["address-ref"],
+          "additionalProperties": false
+        }
+      ]
+    },
+
+    "node-metadata": {
+      "type": "object",
+      "properties": {
+        "created-at": {"type": "string", "format": "date-time"},
+        "updated-at": {"type": "string", "format": "date-time"},
+        "version": {"type": "integer", "minimum": 0}
+      },
+      "required": ["created-at", "updated-at", "version"],
+      "additionalProperties": false
+    },
+
+    "node": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "node-type": {"type": ["string", "null"]},
+        "properties": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {"type": "string"},
+              {"$ref": "#/definitions/property-value"}
+            ],
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "data": {"type": ["string", "null"]},
+        "metadata": {"$ref": "#/definitions/node-metadata"}
+      },
+      "required": ["id", "properties", "metadata"],
+      "additionalProperties": false
+    },
+
+    "edge": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "source": {"$ref": "#/definitions/address"},
+        "target": {"$ref": "#/definitions/address"},
+        "edge-type": {"type": ["string", "null"]},
+        "weight": {"type": "number"},
+        "properties": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {"type": "string"},
+              {"$ref": "#/definitions/property-value"}
+            ],
+            "minItems": 2,
+            "maxItems": 2
+          }
+        }
+      },
+      "required": ["id", "source", "target", "weight", "properties"],
+      "additionalProperties": false
+    },
+
+    "direction": {
+      "type": "string",
+      "enum": ["outgoing", "incoming", "bidirectional"]
+    },
+
+    "traversal-options": {
+      "type": "object",
+      "properties": {
+        "max-depth": {"type": ["integer", "null"], "minimum": 0},
+        "edge-types": {
+          "type": ["array", "null"],
+          "items": {"type": "string"}
+        },
+        "direction": {"$ref": "#/definitions/direction"}
+      },
+      "required": ["direction"],
+      "additionalProperties": false
+    },
+
+    "path": {
+      "type": "object",
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {"$ref": "#/definitions/node"}
+        },
+        "edges": {
+          "type": "array",
+          "items": {"$ref": "#/definitions/edge"}
+        },
+        "total-weight": {"type": "number"}
+      },
+      "required": ["nodes", "edges", "total-weight"],
+      "additionalProperties": false
+    },
+
+    "entity-kind": {
+      "type": "string",
+      "enum": ["agent", "task", "session", "human", "model", "provider", "program"]
+    },
+
+    "entity-lifecycle": {
+      "type": "string",
+      "enum": ["draft", "published", "deprecated"]
+    },
+
+    "entity-metadata": {
+      "type": "object",
+      "properties": {
+        "kind": {"$ref": "#/definitions/entity-kind"},
+        "lifecycle": {
+          "oneOf": [
+            {"$ref": "#/definitions/entity-lifecycle"},
+            {"type": "null"}
+          ]
+        },
+        "version": {"type": "integer", "minimum": 0},
+        "created": {"type": "integer", "minimum": 0},
+        "modified": {"type": "integer", "minimum": 0}
+      },
+      "required": ["kind", "version", "created", "modified"],
+      "additionalProperties": false
+    },
+
+    "agent-state": {
+      "type": "string",
+      "enum": ["idle", "thinking", "executing", "waiting", "completed", "error"]
+    },
+
+    "agent-harness": {
+      "type": "object",
+      "properties": {
+        "max-turns": {"type": "integer", "minimum": 1},
+        "reflect-on-failure": {"type": "boolean"},
+        "checkpoint-every": {"type": "integer", "minimum": 1}
+      },
+      "required": ["max-turns", "reflect-on-failure", "checkpoint-every"],
+      "additionalProperties": false
+    },
+
+    "agent-config": {
+      "type": "object",
+      "properties": {
+        "name": {"type": "string"},
+        "system-prompt": {"type": "string"},
+        "tools": {
+          "type": "array",
+          "items": {"$ref": "#/definitions/address"}
+        },
+        "default-model": {"$ref": "#/definitions/address"},
+        "harness": {"$ref": "#/definitions/agent-harness"}
+      },
+      "required": ["name", "system-prompt", "tools", "default-model", "harness"],
+      "additionalProperties": false
+    },
+
+    "step-result": {
+      "type": "object",
+      "properties": {
+        "done": {"type": "boolean"},
+        "turn": {"type": ["integer", "null"], "minimum": 0},
+        "reason": {"type": ["string", "null"]},
+        "response": {"type": ["string", "null"]},
+        "error": {"type": ["string", "null"]}
+      },
+      "required": ["done"],
+      "additionalProperties": false
+    },
+
+    "task-lifecycle": {
+      "type": "string",
+      "enum": ["pending", "assigned", "in-progress", "completed", "failed"]
+    },
+
+    "task-priority": {
+      "type": "string",
+      "enum": ["p0", "p1", "p2", "p3", "p4"]
+    },
+
+    "success-criterion": {
+      "type": "object",
+      "properties": {
+        "criterion-type": {"type": "string"},
+        "params": {"type": "string", "description": "JSON-encoded parameters"}
+      },
+      "required": ["criterion-type", "params"],
+      "additionalProperties": false
+    },
+
+    "task-spec": {
+      "type": "object",
+      "properties": {
+        "inputs": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "outputs": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "constraints": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "success-criteria": {
+          "type": "array",
+          "items": {"$ref": "#/definitions/success-criterion"}
+        }
+      },
+      "required": ["inputs", "outputs", "constraints", "success-criteria"],
+      "additionalProperties": false
+    },
+
+    "task-config": {
+      "type": "object",
+      "properties": {
+        "title": {"type": "string"},
+        "description": {"type": ["string", "null"]},
+        "spec": {
+          "oneOf": [
+            {"$ref": "#/definitions/task-spec"},
+            {"type": "null"}
+          ]
+        },
+        "assignee": {
+          "oneOf": [
+            {"$ref": "#/definitions/address"},
+            {"type": "null"}
+          ]
+        },
+        "priority": {
+          "oneOf": [
+            {"$ref": "#/definitions/task-priority"},
+            {"type": "null"}
+          ]
+        }
+      },
+      "required": ["title"],
+      "additionalProperties": false
+    },
+
+    "session-lifecycle": {
+      "type": "string",
+      "enum": ["created", "active", "paused", "completed"]
+    },
+
+    "message-role": {
+      "type": "string",
+      "enum": ["user", "assistant"]
+    },
+
+    "message-usage": {
+      "type": "object",
+      "properties": {
+        "input-tokens": {"type": "integer", "minimum": 0},
+        "output-tokens": {"type": "integer", "minimum": 0}
+      },
+      "required": ["input-tokens", "output-tokens"],
+      "additionalProperties": false
+    },
+
+    "session-message": {
+      "type": "object",
+      "properties": {
+        "uuid": {"type": "string", "format": "uuid"},
+        "parent-uuid": {"type": ["string", "null"], "format": "uuid"},
+        "timestamp": {"type": "string", "format": "date-time"},
+        "role": {"$ref": "#/definitions/message-role"},
+        "content": {"type": "string"},
+        "model": {"type": ["string", "null"]},
+        "usage": {
+          "oneOf": [
+            {"$ref": "#/definitions/message-usage"},
+            {"type": "null"}
+          ]
+        }
+      },
+      "required": ["uuid", "timestamp", "role", "content"],
+      "additionalProperties": false
+    },
+
+    "session-config": {
+      "type": "object",
+      "properties": {
+        "owner": {
+          "oneOf": [
+            {"$ref": "#/definitions/address"},
+            {"type": "null"}
+          ]
+        },
+        "default-model": {"$ref": "#/definitions/address"},
+        "log-file": {"type": "string"}
+      },
+      "required": ["default-model", "log-file"],
+      "additionalProperties": false
+    },
+
+    "human-state": {
+      "type": "string",
+      "enum": ["available", "busy", "away", "offline"]
+    },
+
+    "notification-channel": {
+      "type": "string",
+      "enum": ["terminal", "email", "slack"]
+    },
+
+    "human-permission": {
+      "type": "string",
+      "enum": ["approve", "assign", "configure", "admin"]
+    },
+
+    "human-preferences": {
+      "type": "object",
+      "properties": {
+        "notification-channel": {
+          "oneOf": [
+            {"$ref": "#/definitions/notification-channel"},
+            {"type": "null"}
+          ]
+        },
+        "timezone": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    },
+
+    "human-config": {
+      "type": "object",
+      "properties": {
+        "name": {"type": "string"},
+        "email": {"type": ["string", "null"], "format": "email"},
+        "preferences": {
+          "oneOf": [
+            {"$ref": "#/definitions/human-preferences"},
+            {"type": "null"}
+          ]
+        },
+        "permissions": {
+          "type": "array",
+          "items": {"$ref": "#/definitions/human-permission"}
+        }
+      },
+      "required": ["name", "permissions"],
+      "additionalProperties": false
+    },
+
+    "model-type": {
+      "type": "string",
+      "enum": ["inference", "embedding"],
+      "description": "Model type discriminant"
+    },
+
+    "model-lifecycle": {
+      "type": "string",
+      "enum": ["draft", "published", "deprecated"],
+      "description": "Model lifecycle states"
+    },
+
+    "situation-params": {
+      "type": "object",
+      "description": "Model parameter overrides for specific situations (inference routing)",
+      "properties": {
+        "temperature": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Sampling temperature override"
+        },
+        "max-tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum tokens override"
+        },
+        "top-p": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Top-p sampling override"
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "model-config": {
+      "type": "object",
+      "description": "AI model configuration for inference or embeddings",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Human-readable model name"
+        },
+        "model-type": {
+          "$ref": "#/definitions/model-type",
+          "description": "Type of model (inference or embedding)"
+        },
+        "backend-model": {
+          "type": "string",
+          "description": "Provider-specific model identifier (e.g., 'claude-sonnet-4-5-20250929', '@cf/baai/bge-base-en-v1.5')"
+        },
+        "provider": {
+          "$ref": "#/definitions/address",
+          "description": "Reference to provider node"
+        },
+        "lifecycle": {
+          "$ref": "#/definitions/model-lifecycle",
+          "description": "Model lifecycle state"
+        },
+        "temperature": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Default temperature (inference models only)"
+        },
+        "max-tokens": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "Default max tokens (inference models only)"
+        },
+        "top-p": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Default top-p (inference models only)"
+        },
+        "dimensions": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "Embedding dimensions (embedding models only)"
+        },
+        "situations": {
+          "type": ["object", "null"],
+          "description": "Situational parameter overrides keyed by situation name",
+          "additionalProperties": {
+            "$ref": "#/definitions/situation-params"
+          }
+        }
+      },
+      "required": ["name", "model-type", "backend-model", "provider", "lifecycle"],
+      "additionalProperties": false
+    },
+
+    "provider-type": {
+      "type": "string",
+      "enum": ["cloudflare-ai-gateway"],
+      "description": "Provider type (currently only Cloudflare AI Gateway supported)"
+    },
+
+    "provider-config": {
+      "type": "object",
+      "description": "AI provider routing configuration",
+      "properties": {
+        "provider-type": {
+          "$ref": "#/definitions/provider-type",
+          "description": "Type of provider"
+        },
+        "account-id": {
+          "type": "string",
+          "description": "Cloudflare account ID"
+        },
+        "gateway-id": {
+          "type": "string",
+          "description": "Cloudflare AI Gateway ID"
+        }
+      },
+      "required": ["provider-type", "account-id", "gateway-id"],
+      "additionalProperties": false
+    },
+
+    "approval-status": {
+      "type": "string",
+      "enum": ["pending", "approved", "rejected"]
+    },
+
+    "approval-request": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "description": {"type": "string"},
+        "requested-by": {
+          "oneOf": [
+            {"$ref": "#/definitions/address"},
+            {"type": "null"}
+          ]
+        },
+        "requested-at": {"type": "integer", "minimum": 0},
+        "status": {"$ref": "#/definitions/approval-status"},
+        "resolved-at": {"type": ["integer", "null"], "minimum": 0},
+        "reason": {"type": ["string", "null"]}
+      },
+      "required": ["id", "description", "requested-at", "status"],
+      "additionalProperties": false
+    },
+
+    "notification": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "message": {"type": "string"},
+        "sent-at": {"type": "integer", "minimum": 0},
+        "channel": {"$ref": "#/definitions/notification-channel"},
+        "read": {"type": "boolean"}
+      },
+      "required": ["id", "message", "sent-at", "channel", "read"],
+      "additionalProperties": false
+    },
+
+    "criterion-result": {
+      "type": "string",
+      "enum": ["pass", "fail", "inconclusive"]
+    },
+
+    "criterion-type": {
+      "type": "string",
+      "enum": ["file-exists", "word-count", "pattern-match", "custom"]
+    },
+
+    "evaluation-result": {
+      "type": "object",
+      "properties": {
+        "criterion-result": {"$ref": "#/definitions/criterion-result"},
+        "reason": {"type": ["string", "null"]},
+        "details": {"type": ["string", "null"], "description": "JSON-encoded details"}
+      },
+      "required": ["criterion-result"],
+      "additionalProperties": false
+    },
+
+    "aggregation-op": {
+      "type": "string",
+      "enum": ["count", "collect", "group", "sum", "avg"]
+    },
+
+    "query-stats": {
+      "type": "object",
+      "properties": {
+        "duration-ms": {"type": "integer", "minimum": 0},
+        "steps-executed": {"type": "integer", "minimum": 0},
+        "messages-sent": {"type": "integer", "minimum": 0},
+        "cache-hits": {"type": "integer", "minimum": 0},
+        "cache-misses": {"type": "integer", "minimum": 0},
+        "results-returned": {"type": "integer", "minimum": 0}
+      },
+      "required": ["duration-ms", "steps-executed", "messages-sent", "cache-hits", "cache-misses", "results-returned"],
+      "additionalProperties": false
+    },
+
+    "query-result": {
+      "type": "object",
+      "properties": {
+        "bindings": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {"type": "string"},
+              {
+                "type": "array",
+                "items": {"$ref": "#/definitions/address"}
+              }
+            ],
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "stats": {"$ref": "#/definitions/query-stats"},
+        "success": {"type": "boolean"},
+        "error": {"type": ["string", "null"]}
+      },
+      "required": ["bindings", "stats", "success"],
+      "additionalProperties": false
+    },
+
+    "embedding-model": {
+      "type": "object",
+      "properties": {
+        "name": {"type": "string"},
+        "dimensions": {"type": "integer", "minimum": 1},
+        "provider": {"type": "string"}
+      },
+      "required": ["name", "dimensions", "provider"],
+      "additionalProperties": false
+    },
+
+    "similarity-result": {
+      "type": "object",
+      "properties": {
+        "node": {"$ref": "#/definitions/address"},
+        "similarity": {"type": "number", "minimum": 0, "maximum": 1}
+      },
+      "required": ["node", "similarity"],
+      "additionalProperties": false
+    },
+
+    "similarity-options": {
+      "type": "object",
+      "properties": {
+        "node-type": {"type": ["string", "null"]},
+        "limit": {"type": "integer", "minimum": 1},
+        "min-similarity": {"type": "number", "minimum": 0, "maximum": 1}
+      },
+      "required": ["limit", "min-similarity"],
+      "additionalProperties": false
+    },
+
+    "convergence-strength": {
+      "type": "string",
+      "enum": ["weak", "moderate", "strong"]
+    },
+
+    "convergence-detection": {
+      "type": "object",
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {"$ref": "#/definitions/address"}
+        },
+        "strength": {"$ref": "#/definitions/convergence-strength"},
+        "similarity": {"type": "number", "minimum": 0, "maximum": 1},
+        "theme": {"type": ["string", "null"]},
+        "detected-at": {"type": "integer", "minimum": 0}
+      },
+      "required": ["nodes", "strength", "similarity", "detected-at"],
+      "additionalProperties": false
+    },
+
+    "session-context": {
+      "type": "object",
+      "properties": {
+        "session": {"$ref": "#/definitions/address"},
+        "iteration": {"type": "integer", "minimum": 0},
+        "task": {
+          "oneOf": [
+            {"$ref": "#/definitions/address"},
+            {"type": "null"}
+          ]
+        },
+        "context": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {"type": "string"},
+              {"type": "string", "description": "JSON-encoded value"}
+            ],
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "captured-at": {"type": "integer", "minimum": 0}
+      },
+      "required": ["session", "iteration", "captured-at"],
+      "additionalProperties": false
+    },
+
+    "knowledge-artifact": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "artifact-type": {"type": "string"},
+        "content": {"type": "string", "description": "JSON-encoded content"},
+        "source": {"$ref": "#/definitions/address"},
+        "created-at": {"type": "integer", "minimum": 0},
+        "relevance": {"type": "number", "minimum": 0, "maximum": 1}
+      },
+      "required": ["id", "artifact-type", "content", "source", "created-at", "relevance"],
+      "additionalProperties": false
+    },
+
+    "actor-state": {
+      "type": "string",
+      "enum": ["initializing", "ready", "active", "paused", "stopping", "stopped", "error"]
+    },
+
+    "message-pattern": {
+      "type": "string",
+      "enum": ["tell", "ask", "stream-msg"]
+    },
+
+    "supervision-strategy": {
+      "type": "string",
+      "enum": ["restart", "stop", "resume", "escalate"]
+    },
+
+    "node-type": {
+      "type": "string",
+      "enum": ["producer", "consumer", "relay", "processor", "hybrid"]
+    },
+
+    "program-runtime": {
+      "type": "string",
+      "enum": ["javascript", "python", "wasm", "native", "container", "custom"]
+    },
+
+    "execution-mode": {
+      "type": "string",
+      "enum": ["inline", "worker", "subprocess", "container"]
+    },
+
+    "program-state": {
+      "type": "string",
+      "enum": ["draft", "published", "deprecated"]
+    },
+
+    "program-metadata": {
+      "type": "object",
+      "properties": {
+        "name": {"type": "string"},
+        "description": {"type": ["string", "null"]},
+        "runtime": {"$ref": "#/definitions/program-runtime"},
+        "execution-mode": {"$ref": "#/definitions/execution-mode"},
+        "state": {"$ref": "#/definitions/program-state"},
+        "version": {"type": "integer", "minimum": 0},
+        "input-schema": {"type": ["string", "null"]},
+        "output-schema": {"type": ["string", "null"]},
+        "created": {"type": "string", "format": "date-time"},
+        "modified": {"type": "string", "format": "date-time"},
+        "tags": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      },
+      "required": ["name", "runtime", "execution-mode", "state", "version", "created", "modified", "tags"],
+      "additionalProperties": false
+    },
+
+    "invocation-result": {
+      "type": "object",
+      "properties": {
+        "request-id": {"type": "string"},
+        "success": {"type": "boolean"},
+        "output": {
+          "type": ["array", "null"],
+          "items": {"type": "integer", "minimum": 0, "maximum": 255},
+          "description": "Binary payload as byte array"
+        },
+        "error": {"type": ["string", "null"]},
+        "duration-ms": {"type": "integer", "minimum": 0},
+        "timestamp": {"type": "string", "format": "date-time"},
+        "metadata": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {"type": "string"},
+              {"type": "string"}
+            ],
+            "minItems": 2,
+            "maxItems": 2
+          }
+        }
+      },
+      "required": ["request-id", "success", "duration-ms", "timestamp", "metadata"],
+      "additionalProperties": false
+    }
+  }
+}
