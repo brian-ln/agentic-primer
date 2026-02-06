@@ -65,6 +65,7 @@ See `packages/protocols/README.md` for usage examples.
 - **docs/bootstrap/** - Bootstrap prompt and success criteria
 - **docs/simulation/** - Simulation harness and testing framework
 - **docs/archive/bootstrap-phase/** - Archived bootstrap-era documentation
+- **docs/experiments/** - Completed meta-instruction and validation experiments
 
 ## Repository Structure
 
@@ -82,6 +83,7 @@ agentic-primer/
 │   ├── activity/             # Activity system documentation
 │   ├── bootstrap/            # Historical: bootstrap experiments
 │   ├── simulation/           # Historical: simulation harness
+│   ├── experiments/          # Historical: completed research findings
 │   ├── knowledge/            # Session knowledge system
 │   └── archive/              # Archived documentation
 │       └── bootstrap-phase/  # Outdated bootstrap-era docs
