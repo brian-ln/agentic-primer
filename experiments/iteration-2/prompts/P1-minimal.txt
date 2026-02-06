@@ -1,0 +1,1 @@
+Bootstrap @copilot issue automation with auto-review and knowledge base.

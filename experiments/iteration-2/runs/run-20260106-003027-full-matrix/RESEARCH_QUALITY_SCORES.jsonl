@@ -1,0 +1,916 @@
+{
+  "scenario": "P1-S1-opus",
+  "agent_id": "a715b99",
+  "research_quality": {
+    "total_score": 10,
+    "max_score": 15,
+    "percentage": 66.7,
+    "websearch": {
+      "score": 3,
+      "max_score": 8,
+      "count": 0,
+      "label": "NO RESEARCH BUT CURRENT",
+      "queries": []
+    },
+    "citations": {
+      "score": 7,
+      "max_score": 7,
+      "count": 15,
+      "label": "EXCELLENT CITATIONS",
+      "urls_found": 15,
+      "source_attributions": 0,
+      "official_docs_count": 8,
+      "year_references": [
+  "2026"
+]
+    },
+    "currency": {
+      "current_practices": [
+  "current_action_versions",
+  "issue_forms",
+  "current_nodejs"
+],
+      "outdated_patterns": []
+    }
+  }
+}
+{
+  "scenario": "P1-S1-sonnet",
+  "agent_id": "ab7accd",
+  "research_quality": {
+    "total_score": 7,
+    "max_score": 15,
+    "percentage": 46.7,
+    "websearch": {
+      "score": 0,
+      "max_score": 8,
+      "count": 0,
+      "label": "NO RESEARCH AND OUTDATED",
+      "queries": []
+    },
+    "citations": {
+      "score": 7,
+      "max_score": 7,
+      "count": 20,
+      "label": "EXCELLENT CITATIONS",
+      "urls_found": 20,
+      "source_attributions": 1,
+      "official_docs_count": 11,
+      "year_references": [
+  "2025",
+  "2026"
+]
+    },
+    "currency": {
+      "current_practices": [],
+      "outdated_patterns": []
+    }
+  }
+}
+{
+  "scenario": "P1-S1-haiku",
+  "agent_id": "adfcfd7",
+  "research_quality": {
+    "total_score": 0,
+    "max_score": 15,
+    "percentage": 0.0,
+    "websearch": {
+      "score": 0,
+      "max_score": 8,
+      "count": 0,
+      "label": "NO RESEARCH AND OUTDATED",
+      "queries": []
+    },
+    "citations": {
+      "score": 0,
+      "max_score": 7,
+      "count": 0,
+      "label": "NO CITATIONS AND STALE",
+      "urls_found": 0,
+      "source_attributions": 0,
+      "official_docs_count": 0,
+      "year_references": [
+  "2026"
+]
+    },
+    "currency": {
+      "current_practices": [],
+      "outdated_patterns": []
+    }
+  }
+}
+{
+  "scenario": "P1-S2-opus",
+  "agent_id": "ae5da5e",
+  "research_quality": {
+    "total_score": 10,
+    "max_score": 15,
+    "percentage": 66.7,
+    "websearch": {
+      "score": 3,
+      "max_score": 8,
+      "count": 0,
+      "label": "NO RESEARCH BUT CURRENT",
+      "queries": []
+    },
+    "citations": {
+      "score": 7,
+      "max_score": 7,
+      "count": 6,
+      "label": "EXCELLENT CITATIONS",
+      "urls_found": 6,
+      "source_attributions": 2,
+      "official_docs_count": 5,
+      "year_references": [
+  "2025",
+  "2026"
+]
+    },
+    "currency": {
+      "current_practices": [
+  "current_action_versions",
+  "issue_forms"
+],
+      "outdated_patterns": []
+    }
+  }
+}
+{
+  "scenario": "P1-S2-sonnet",
+  "agent_id": "ad46777",
+  "research_quality": {
+    "total_score": 10,
+    "max_score": 15,
+    "percentage": 66.7,
+    "websearch": {
+      "score": 3,
+      "max_score": 8,
+      "count": 0,
+      "label": "NO RESEARCH BUT CURRENT",
+      "queries": []
+    },
+    "citations": {
+      "score": 7,
+      "max_score": 7,
+      "count": 17,
+      "label": "EXCELLENT CITATIONS",
+      "urls_found": 17,
+      "source_attributions": 0,
+      "official_docs_count": 15,
+      "year_references": [
+  "2025",
+  "2026"
+]
+    },
+    "currency": {
+      "current_practices": [
+  "current_action_versions",
+  "issue_forms"
+],
+      "outdated_patterns": []
+    }
+  }
+}
+{
+  "scenario": "P1-S2-haiku",
+  "agent_id": "a220eb2",
+  "research_quality": {
+    "total_score": 5,
+    "max_score": 15,
+    "percentage": 33.3,
+    "websearch": {
+      "score": 0,
+      "max_score": 8,
+      "count": 0,
+      "label": "NO RESEARCH AND OUTDATED",
+      "queries": []
+    },
+    "citations": {
+      "score": 5,
+      "max_score": 7,
+      "count": 6,
+      "label": "GOOD CITATIONS",
+      "urls_found": 6,
+      "source_attributions": 0,
+      "official_docs_count": 0,
+      "year_references": [
+  "2025",
+  "2026"
+]
+    },
+    "currency": {
+      "current_practices": [],
+      "outdated_patterns": []
+    }
+  }
+}
+{
+  "scenario": "P1-S3-opus",
+  "agent_id": "a4d4d7a",
+  "research_quality": {
+    "total_score": 6,
+    "max_score": 15,
+    "percentage": 40.0,
+    "websearch": {
+      "score": 3,
+      "max_score": 8,
+      "count": 0,
+      "label": "NO RESEARCH BUT CURRENT",
+      "queries": []
+    },
+    "citations": {
+      "score": 3,
+      "max_score": 7,
+      "count": 0,
+      "label": "IMPLICIT CURRENCY",
+      "urls_found": 0,
+      "source_attributions": 0,
+      "official_docs_count": 0,
+      "year_references": [
+  "2026"
+]
+    },
+    "currency": {
+      "current_practices": [
+  "current_action_versions",
+  "issue_forms"
+],
+      "outdated_patterns": []
+    }
+  }
+}
+{
+  "scenario": "P1-S3-sonnet",
+  "agent_id": "a6a9b42",
+  "research_quality": {
+    "total_score": 7,
+    "max_score": 15,
+    "percentage": 46.7,
+    "websearch": {
+      "score": 0,
+      "max_score": 8,
+      "count": 0,
+      "label": "NO RESEARCH AND OUTDATED",
+      "queries": []
+    },
+    "citations": {
+      "score": 7,
+      "max_score": 7,
+      "count": 14,
+      "label": "EXCELLENT CITATIONS",
+      "urls_found": 14,
+      "source_attributions": 0,
+      "official_docs_count": 4,
+      "year_references": [
+  "2024",
+  "2025",
+  "2026"
+]
+    },
+    "currency": {
+      "current_practices": [],
+      "outdated_patterns": []
+    }
+  }
+}
+{
+  "scenario": "P1-S3-haiku",
+  "agent_id": "a20731c",
+  "research_quality": {
+    "total_score": 7,
+    "max_score": 15,
+    "percentage": 46.7,
+    "websearch": {
+      "score": 0,
+      "max_score": 8,
+      "count": 0,
+      "label": "NO RESEARCH AND OUTDATED",
+      "queries": []
+    },
+    "citations": {
+      "score": 7,
+      "max_score": 7,
+      "count": 15,
+      "label": "EXCELLENT CITATIONS",
+      "urls_found": 15,
+      "source_attributions": 0,
+      "official_docs_count": 8,
+      "year_references": [
+  "2026"
+]
+    },
+    "currency": {
+      "current_practices": [],
+      "outdated_patterns": []
+    }
+  }
+}
+{
+  "scenario": "P2-S1-opus",
+  "agent_id": "a826764",
+  "research_quality": {
+    "total_score": 6,
+    "max_score": 15,
+    "percentage": 40.0,
+    "websearch": {
+      "score": 3,
+      "max_score": 8,
+      "count": 0,
+      "label": "NO RESEARCH BUT CURRENT",
+      "queries": []
+    },
+    "citations": {
+      "score": 3,
+      "max_score": 7,
+      "count": 0,
+      "label": "IMPLICIT CURRENCY",
+      "urls_found": 0,
+      "source_attributions": 0,
+      "official_docs_count": 0,
+      "year_references": [
+  "2026"
+]
+    },
+    "currency": {
+      "current_practices": [
+  "current_action_versions",
+  "issue_forms"
+],
+      "outdated_patterns": []
+    }
+  }
+}
+{
+  "scenario": "P2-S1-sonnet",
+  "agent_id": "a557af2",
+  "research_quality": {
+    "total_score": 7,
+    "max_score": 15,
+    "percentage": 46.7,
+    "websearch": {
+      "score": 0,
+      "max_score": 8,
+      "count": 0,
+      "label": "NO RESEARCH AND OUTDATED",
+      "queries": []
+    },
+    "citations": {
+      "score": 7,
+      "max_score": 7,
+      "count": 16,
+      "label": "EXCELLENT CITATIONS",
+      "urls_found": 16,
+      "source_attributions": 0,
+      "official_docs_count": 5,
+      "year_references": [
+  "2025",
+  "2026"
+]
+    },
+    "currency": {
+      "current_practices": [],
+      "outdated_patterns": []
+    }
+  }
+}
+{
+  "scenario": "P2-S1-haiku",
+  "agent_id": "a1049e4",
+  "research_quality": {
+    "total_score": 6,
+    "max_score": 15,
+    "percentage": 40.0,
+    "websearch": {
+      "score": 3,
+      "max_score": 8,
+      "count": 0,
+      "label": "NO RESEARCH BUT CURRENT",
+      "queries": []
+    },
+    "citations": {
+      "score": 3,
+      "max_score": 7,
+      "count": 0,
+      "label": "IMPLICIT CURRENCY",
+      "urls_found": 0,
+      "source_attributions": 0,
+      "official_docs_count": 0,
+      "year_references": [
+  "2025",
+  "2026"
+]
+    },
+    "currency": {
+      "current_practices": [
+  "current_action_versions",
+  "issue_forms"
+],
+      "outdated_patterns": []
+    }
+  }
+}
+{
+  "scenario": "P2-S2-opus",
+  "agent_id": "affde4d",
+  "research_quality": {
+    "total_score": 8,
+    "max_score": 15,
+    "percentage": 53.3,
+    "websearch": {
+      "score": 3,
+      "max_score": 8,
+      "count": 0,
+      "label": "NO RESEARCH BUT CURRENT",
+      "queries": []
+    },
+    "citations": {
+      "score": 5,
+      "max_score": 7,
+      "count": 0,
+      "label": "GOOD CITATIONS",
+      "urls_found": 0,
+      "source_attributions": 1,
+      "official_docs_count": 0,
+      "year_references": []
+    },
+    "currency": {
+      "current_practices": [
+  "issue_forms"
+],
+      "outdated_patterns": []
+    }
+  }
+}
+{
+  "scenario": "P2-S2-sonnet",
+  "agent_id": "adb41ad",
+  "research_quality": {
+    "total_score": 10,
+    "max_score": 15,
+    "percentage": 66.7,
+    "websearch": {
+      "score": 3,
+      "max_score": 8,
+      "count": 0,
+      "label": "NO RESEARCH BUT CURRENT",
+      "queries": []
+    },
+    "citations": {
+      "score": 7,
+      "max_score": 7,
+      "count": 5,
+      "label": "EXCELLENT CITATIONS",
+      "urls_found": 5,
+      "source_attributions": 0,
+      "official_docs_count": 5,
+      "year_references": [
+  "2025",
+  "2026"
+]
+    },
+    "currency": {
+      "current_practices": [
+  "current_action_versions",
+  "issue_forms"
+],
+      "outdated_patterns": []
+    }
+  }
+}
+{
+  "scenario": "P2-S2-haiku",
+  "agent_id": "a2a5d74",
+  "research_quality": {
+    "total_score": 8,
+    "max_score": 15,
+    "percentage": 53.3,
+    "websearch": {
+      "score": 3,
+      "max_score": 8,
+      "count": 0,
+      "label": "NO RESEARCH BUT CURRENT",
+      "queries": []
+    },
+    "citations": {
+      "score": 5,
+      "max_score": 7,
+      "count": 1,
+      "label": "GOOD CITATIONS",
+      "urls_found": 1,
+      "source_attributions": 1,
+      "official_docs_count": 0,
+      "year_references": [
+  "2026"
+]
+    },
+    "currency": {
+      "current_practices": [
+  "current_action_versions"
+],
+      "outdated_patterns": []
+    }
+  }
+}
+{
+  "scenario": "P2-S3-opus",
+  "agent_id": "a748d2c",
+  "research_quality": {
+    "total_score": 6,
+    "max_score": 15,
+    "percentage": 40.0,
+    "websearch": {
+      "score": 3,
+      "max_score": 8,
+      "count": 0,
+      "label": "NO RESEARCH BUT CURRENT",
+      "queries": []
+    },
+    "citations": {
+      "score": 3,
+      "max_score": 7,
+      "count": 0,
+      "label": "IMPLICIT CURRENCY",
+      "urls_found": 0,
+      "source_attributions": 0,
+      "official_docs_count": 0,
+      "year_references": [
+  "2026"
+]
+    },
+    "currency": {
+      "current_practices": [
+  "current_action_versions",
+  "issue_forms"
+],
+      "outdated_patterns": []
+    }
+  }
+}
+{
+  "scenario": "P2-S3-sonnet",
+  "agent_id": "a2f6071",
+  "research_quality": {
+    "total_score": 7,
+    "max_score": 15,
+    "percentage": 46.7,
+    "websearch": {
+      "score": 0,
+      "max_score": 8,
+      "count": 0,
+      "label": "NO RESEARCH AND OUTDATED",
+      "queries": []
+    },
+    "citations": {
+      "score": 7,
+      "max_score": 7,
+      "count": 17,
+      "label": "EXCELLENT CITATIONS",
+      "urls_found": 17,
+      "source_attributions": 1,
+      "official_docs_count": 10,
+      "year_references": [
+  "2026"
+]
+    },
+    "currency": {
+      "current_practices": [],
+      "outdated_patterns": []
+    }
+  }
+}
+{
+  "scenario": "P2-S3-haiku",
+  "agent_id": "acbb8b4",
+  "research_quality": {
+    "total_score": 5,
+    "max_score": 15,
+    "percentage": 33.3,
+    "websearch": {
+      "score": 0,
+      "max_score": 8,
+      "count": 0,
+      "label": "NO RESEARCH AND OUTDATED",
+      "queries": []
+    },
+    "citations": {
+      "score": 5,
+      "max_score": 7,
+      "count": 2,
+      "label": "GOOD CITATIONS",
+      "urls_found": 2,
+      "source_attributions": 1,
+      "official_docs_count": 0,
+      "year_references": [
+  "2024",
+  "2025",
+  "2026"
+]
+    },
+    "currency": {
+      "current_practices": [],
+      "outdated_patterns": []
+    }
+  }
+}
+{
+  "scenario": "P3-S1-opus",
+  "agent_id": "aa98b45",
+  "research_quality": {
+    "total_score": 6,
+    "max_score": 15,
+    "percentage": 40.0,
+    "websearch": {
+      "score": 3,
+      "max_score": 8,
+      "count": 0,
+      "label": "NO RESEARCH BUT CURRENT",
+      "queries": []
+    },
+    "citations": {
+      "score": 3,
+      "max_score": 7,
+      "count": 0,
+      "label": "IMPLICIT CURRENCY",
+      "urls_found": 0,
+      "source_attributions": 0,
+      "official_docs_count": 0,
+      "year_references": [
+  "2026"
+]
+    },
+    "currency": {
+      "current_practices": [
+  "issue_forms"
+],
+      "outdated_patterns": []
+    }
+  }
+}
+{
+  "scenario": "P3-S1-sonnet",
+  "agent_id": "a28445f",
+  "research_quality": {
+    "total_score": 8,
+    "max_score": 15,
+    "percentage": 53.3,
+    "websearch": {
+      "score": 3,
+      "max_score": 8,
+      "count": 0,
+      "label": "NO RESEARCH BUT CURRENT",
+      "queries": []
+    },
+    "citations": {
+      "score": 5,
+      "max_score": 7,
+      "count": 0,
+      "label": "GOOD CITATIONS",
+      "urls_found": 0,
+      "source_attributions": 1,
+      "official_docs_count": 0,
+      "year_references": [
+  "2026"
+]
+    },
+    "currency": {
+      "current_practices": [
+  "issue_forms"
+],
+      "outdated_patterns": []
+    }
+  }
+}
+{
+  "scenario": "P3-S1-haiku",
+  "agent_id": "a573883",
+  "research_quality": {
+    "total_score": 8,
+    "max_score": 15,
+    "percentage": 53.3,
+    "websearch": {
+      "score": 3,
+      "max_score": 8,
+      "count": 0,
+      "label": "NO RESEARCH BUT CURRENT",
+      "queries": []
+    },
+    "citations": {
+      "score": 5,
+      "max_score": 7,
+      "count": 0,
+      "label": "GOOD CITATIONS",
+      "urls_found": 0,
+      "source_attributions": 1,
+      "official_docs_count": 0,
+      "year_references": [
+  "2025",
+  "2026"
+]
+    },
+    "currency": {
+      "current_practices": [
+  "issue_forms"
+],
+      "outdated_patterns": []
+    }
+  }
+}
+{
+  "scenario": "P3-S2-opus",
+  "agent_id": "a9ec83b",
+  "research_quality": {
+    "total_score": 6,
+    "max_score": 15,
+    "percentage": 40.0,
+    "websearch": {
+      "score": 3,
+      "max_score": 8,
+      "count": 0,
+      "label": "NO RESEARCH BUT CURRENT",
+      "queries": []
+    },
+    "citations": {
+      "score": 3,
+      "max_score": 7,
+      "count": 0,
+      "label": "IMPLICIT CURRENCY",
+      "urls_found": 0,
+      "source_attributions": 0,
+      "official_docs_count": 0,
+      "year_references": []
+    },
+    "currency": {
+      "current_practices": [
+  "current_action_versions",
+  "issue_forms"
+],
+      "outdated_patterns": []
+    }
+  }
+}
+{
+  "scenario": "P3-S2-sonnet",
+  "agent_id": "a97df7d",
+  "research_quality": {
+    "total_score": 8,
+    "max_score": 15,
+    "percentage": 53.3,
+    "websearch": {
+      "score": 3,
+      "max_score": 8,
+      "count": 0,
+      "label": "NO RESEARCH BUT CURRENT",
+      "queries": []
+    },
+    "citations": {
+      "score": 5,
+      "max_score": 7,
+      "count": 3,
+      "label": "GOOD CITATIONS",
+      "urls_found": 3,
+      "source_attributions": 0,
+      "official_docs_count": 0,
+      "year_references": [
+  "2026"
+]
+    },
+    "currency": {
+      "current_practices": [
+  "current_action_versions",
+  "issue_forms"
+],
+      "outdated_patterns": []
+    }
+  }
+}
+{
+  "scenario": "P3-S2-haiku",
+  "agent_id": "a8e5a77",
+  "research_quality": {
+    "total_score": 7,
+    "max_score": 15,
+    "percentage": 46.7,
+    "websearch": {
+      "score": 0,
+      "max_score": 8,
+      "count": 0,
+      "label": "NO RESEARCH AND OUTDATED",
+      "queries": []
+    },
+    "citations": {
+      "score": 7,
+      "max_score": 7,
+      "count": 5,
+      "label": "EXCELLENT CITATIONS",
+      "urls_found": 5,
+      "source_attributions": 0,
+      "official_docs_count": 4,
+      "year_references": [
+  "2026"
+]
+    },
+    "currency": {
+      "current_practices": [],
+      "outdated_patterns": []
+    }
+  }
+}
+{
+  "scenario": "P3-S3-opus",
+  "agent_id": "a208d07",
+  "research_quality": {
+    "total_score": 6,
+    "max_score": 15,
+    "percentage": 40.0,
+    "websearch": {
+      "score": 3,
+      "max_score": 8,
+      "count": 0,
+      "label": "NO RESEARCH BUT CURRENT",
+      "queries": []
+    },
+    "citations": {
+      "score": 3,
+      "max_score": 7,
+      "count": 0,
+      "label": "IMPLICIT CURRENCY",
+      "urls_found": 0,
+      "source_attributions": 0,
+      "official_docs_count": 0,
+      "year_references": []
+    },
+    "currency": {
+      "current_practices": [
+  "current_action_versions",
+  "issue_forms"
+],
+      "outdated_patterns": []
+    }
+  }
+}
+{
+  "scenario": "P3-S3-sonnet",
+  "agent_id": "a609e0c",
+  "research_quality": {
+    "total_score": 5,
+    "max_score": 15,
+    "percentage": 33.3,
+    "websearch": {
+      "score": 0,
+      "max_score": 8,
+      "count": 0,
+      "label": "NO RESEARCH AND OUTDATED",
+      "queries": []
+    },
+    "citations": {
+      "score": 5,
+      "max_score": 7,
+      "count": 1,
+      "label": "GOOD CITATIONS",
+      "urls_found": 1,
+      "source_attributions": 0,
+      "official_docs_count": 0,
+      "year_references": [
+  "2024",
+  "2025",
+  "2026"
+]
+    },
+    "currency": {
+      "current_practices": [],
+      "outdated_patterns": []
+    }
+  }
+}
+{
+  "scenario": "P3-S3-haiku",
+  "agent_id": "aede432",
+  "research_quality": {
+    "total_score": 7,
+    "max_score": 15,
+    "percentage": 46.7,
+    "websearch": {
+      "score": 0,
+      "max_score": 8,
+      "count": 0,
+      "label": "NO RESEARCH AND OUTDATED",
+      "queries": []
+    },
+    "citations": {
+      "score": 7,
+      "max_score": 7,
+      "count": 4,
+      "label": "EXCELLENT CITATIONS",
+      "urls_found": 4,
+      "source_attributions": 0,
+      "official_docs_count": 2,
+      "year_references": [
+  "2026"
+]
+    },
+    "currency": {
+      "current_practices": [],
+      "outdated_patterns": []
+    }
+  }
+}

@@ -1,0 +1,27 @@
+# CODEOWNERS - Automatic PR Review Assignment
+#
+# This file ensures all pull requests receive mandatory human review.
+# GitHub Copilot agents cannot approve their own PRs - human oversight required.
+#
+# Documentation: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# Pattern: * @owner
+# Effect: Every file change requires review from @owner
+#
+# To enforce this:
+# 1. Replace @owner with actual GitHub username(s)
+# 2. Enable branch protection on main branch
+# 3. Check "Require review from Code Owners"
+#
+# Examples:
+# * @username              # Single owner
+# * @org/team             # Team ownership
+# * @user1 @user2         # Multiple reviewers
+
+# Default: All files require owner review
+* @owner
+
+# Override examples (uncomment and customize as needed):
+# *.md @docs-team         # Documentation changes go to docs team
+# *.yml @devops-team      # Workflow changes require DevOps review
+# /src/security/* @security-team  # Security code needs security review

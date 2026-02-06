@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# activity-context - Helper for Claude Code to get current activity context
+
+set -euo pipefail
+
+# Source library functions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=activity-lib.sh
+source "$SCRIPT_DIR/activity-lib.sh"
+
+# Get current activity name and path
+get_context() {
+    ensure_activities_json || {
+        echo "ERROR: Activity system not initialized"
+        echo "Run: ./scripts/activity init"
+        return 1
+    }
+
+    local current_activity
+    current_activity=$(get_current_activity)
+
+    local activity_path
+    activity_path=$(get_activity_path "$current_activity")
+
+    local branch
+    branch=$(get_activity_field "$current_activity" "branch")
+
+    local description
+    description=$(get_activity_field "$current_activity" "description")
+
+    cat <<EOF
+ACTIVITY_NAME="$current_activity"
+ACTIVITY_PATH="$activity_path"
+ACTIVITY_BRANCH="$branch"
+ACTIVITY_DESCRIPTION="$description"
+EOF
+}
+
+# Export environment variables for use in scripts
+export_context() {
+    ensure_activities_json || return 1
+
+    local current_activity
+    current_activity=$(get_current_activity)
+
+    local activity_path
+    activity_path=$(get_activity_path "$current_activity")
+
+    export ACTIVITY_NAME="$current_activity"
+    export ACTIVITY_PATH="$activity_path"
+    export ACTIVITY_CWD="$activity_path"
+
+    echo "Exported:"
+    echo "  ACTIVITY_NAME=$ACTIVITY_NAME"
+    echo "  ACTIVITY_PATH=$ACTIVITY_PATH"
+    echo "  ACTIVITY_CWD=$ACTIVITY_CWD"
+}
+
+# Check if activity system is initialized
+is_initialized() {
+    if [ -f "$ACTIVITIES_JSON" ]; then
+        echo "yes"
+        return 0
+    else
+        echo "no"
+        return 1
+    fi
+}
+
+# Main dispatch
+main() {
+    local command="${1:-context}"
+
+    case "$command" in
+        context|get|info)
+            get_context
+            ;;
+        export)
+            export_context
+            ;;
+        init-check|check|initialized)
+            is_initialized
+            ;;
+        *)
+            echo "Usage: activity-context [context|export|init-check]" >&2
+            return 1
+            ;;
+    esac
+}
+
+# Run main if executed directly
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+    main "$@"
+fi

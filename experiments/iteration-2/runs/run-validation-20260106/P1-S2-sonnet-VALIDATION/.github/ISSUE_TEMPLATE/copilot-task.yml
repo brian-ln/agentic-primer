@@ -1,0 +1,96 @@
+name: "@copilot Task"
+description: "Assign a task to @copilot agent for autonomous execution"
+title: "[TASK]: "
+labels: ["copilot-task"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## @copilot Task Assignment
+
+        Use this template to assign work to the @copilot agent. The agent will:
+        1. Process your task description
+        2. Create a branch and implement changes
+        3. Open a PR for your review
+        4. Update the knowledge base with learnings
+
+        **Important:** Provide clear requirements and success criteria for best results.
+
+  - type: input
+    id: task-summary
+    attributes:
+      label: "Task Summary"
+      description: "Brief one-line summary of what needs to be done"
+      placeholder: "Add user authentication with JWT tokens"
+    validations:
+      required: true
+
+  - type: textarea
+    id: task-description
+    attributes:
+      label: "Detailed Description"
+      description: "Comprehensive description of the task including requirements"
+      placeholder: |
+        Implement user authentication system:
+        - JWT token-based authentication
+        - Login and registration endpoints
+        - Password hashing with bcrypt
+        - Token refresh mechanism
+        - Protected route middleware
+      value: ""
+    validations:
+      required: true
+
+  - type: textarea
+    id: task-context
+    attributes:
+      label: "Context and Background"
+      description: "Additional context, related files, dependencies, or background information"
+      placeholder: |
+        - Using Express.js backend
+        - PostgreSQL database already configured
+        - User model exists in src/models/User.js
+        - Need to integrate with existing API structure
+      value: ""
+    validations:
+      required: false
+
+  - type: textarea
+    id: success-criteria
+    attributes:
+      label: "Success Criteria"
+      description: "Observable outcomes that define task completion"
+      placeholder: |
+        - [ ] All endpoints return correct status codes
+        - [ ] Passwords are hashed before storage
+        - [ ] JWT tokens expire after 1 hour
+        - [ ] Protected routes reject invalid tokens
+        - [ ] All tests pass
+      value: ""
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: "Priority"
+      description: "Task priority level"
+      options:
+        - "Low"
+        - "Medium"
+        - "High"
+        - "Critical"
+      default: 1
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-notes
+    attributes:
+      label: "Additional Notes"
+      description: "Any other information that might be helpful"
+      placeholder: "Consider edge cases for password reset functionality"
+      value: ""
+    validations:
+      required: false

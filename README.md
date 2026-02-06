@@ -1,84 +1,129 @@
-# Git-Native Issue Automation
+# Agentic Primer
 
-AI agents execute GitHub issues as work items
-
-## Overview
-
-This repository implements a git-native issue automation system where GitHub Issues become executable work items. AI agents (Claude, Copilot, Gemini, Aider) can process issues labeled as tasks and automatically create pull requests with implementations.
+**Turn any git repository into an AI-executable workspace that bootstraps itself and remembers everything.**
 
 ## Quick Start
 
-### 1. Create an Issue
+### To Execute the Bootstrap:
+1. Read `BOOTSTRAP.md` - The 30-word prompt that creates the system
+2. Check `SUCCESS_CRITERIA.md` - Observable outcomes that define success
+3. Execute the bootstrap with your preferred AI agent (@copilot, Claude, etc.)
+4. Verify the system processes a test issue end-to-end
 
-Use the "AI Task" issue template to create a new task:
+### To Run Simulation Experiments:
+1. Read `RUN_SIMULATION.md` - Instructions for testing bootstrap variations
+2. Create experiment run: `./scripts/create-experiment-run.sh`
+3. Run simulations (see RUN_SIMULATION.md for prompts)
+4. Finalize: `./scripts/finalize-experiment-run.sh <run-name> <agent-ids>`
+5. Review findings in `experiments/<run-name>/`
 
-1. Go to Issues > New Issue
-2. Select "AI Task" template
-3. Fill in:
-   - **Title**: Brief description of the task
-   - **Description**: Detailed explanation of what needs to be done
-   - **Acceptance Criteria**: Checklist of requirements
-4. Submit the issue
+## Files
 
-The issue will automatically receive the `ai-task` label.
+**Core:**
+- **BOOTSTRAP.md** - Production bootstrap prompt (30 words)
+- **SUCCESS_CRITERIA.md** - Observable outcome definitions
+- **AFTER_CLEAR.md** - Instructions to give me after `/clear` ⭐
 
-### 2. Automation Triggers
+**Testing:**
+- **SIMULATION_HARNESS.md** - Test framework (3×3×3 = 27 permutations)
+- **RUN_SIMULATION.md** - Detailed run instructions
+- **COMPACT_LOG_SCHEMA.md** - Minimal log format (90-95% compression)
 
-When an issue is created with or labeled `ai-task`, the workflow triggers and:
-- Checks out the repository
-- Sets up the environment
-- Processes the issue (calls AI agent)
-- Creates a pull request with changes
+**Activity Management:**
+- **ACTIVITY_WORKTREE_SYSTEM.md** - Worktree-based parallel activities design
+- **ACTIVITY_QUICK_REFERENCE.md** - Quick command reference for users and Claude
+- **CLAUDE_ACTIVITY_INTEGRATION.md** - How Claude Code uses activities reliably
 
-### 3. Review and Merge
+## Structure
 
-Review the automatically created PR and merge when ready.
-
-## Requirements
-
-### Required GitHub Secrets
-
-Depending on which AI agent you use, configure one or more of these secrets:
-
-- `ANTHROPIC_API_KEY` - For Claude Code
-- `GITHUB_TOKEN` - Automatically provided by GitHub Actions
-- `OPENAI_API_KEY` - For OpenAI-based agents
-- `GOOGLE_API_KEY` - For Gemini
-
-### Setup Instructions
-
-1. Go to Settings > Secrets and variables > Actions
-2. Add your API key(s) as repository secrets
-3. Update `.github/workflows/issue-agent.yml` to use your preferred AI agent
-
-## Architecture
-
-- `.github/workflows/issue-agent.yml` - Main automation workflow
-- `.github/ISSUE_TEMPLATE/task.yml` - Issue template for AI tasks
-- `docs/knowledge/` - Git-tracked knowledge base for patterns and decisions
-- `scripts/verify-bootstrap.sh` - Validation script
-
-## Knowledge Base
-
-The `docs/knowledge/` directory stores:
-- **patterns/** - Reusable patterns and best practices
-- **decisions/** - Architecture decision records (ADRs)
-- **insights/** - Learnings and observations
-
-See `docs/knowledge/README.md` for contribution guidelines.
-
-## Verification
-
-To verify the bootstrap setup is correct:
-
-```bash
-./scripts/verify-bootstrap.sh
+```
+├── BOOTSTRAP.md              # Production prompt (30 words)
+├── SUCCESS_CRITERIA.md       # Definition of done (observable outcomes)
+├── SIMULATION_HARNESS.md     # Test framework (3×3×3 = 27 permutations)
+├── COMPACT_LOG_SCHEMA.md     # Minimal agent log format (90-95% compression)
+├── AFTER_CLEAR.md            # Instructions to give me after /clear ⭐
+├── experiments/              # Experiment templates and runs
+│   ├── prompts/             # P1, P2, P3 (10w, 14w, 35w)
+│   ├── criteria/            # S1, S2, S3 (minimal, moderate, comprehensive)
+│   ├── README.md            # Template usage guide
+│   └── run-YYYYMMDD-*/      # Individual experiment runs
+├── archive/                  # Analysis & exploration (48 files)
+├── docs/                     # Generated knowledge base
+└── scripts/                  # Utilities
+    ├── activity                       # Activity management CLI
+    ├── activity-lib.sh                # Activity library functions
+    ├── activity-context               # Activity context helper
+    ├── create-experiment-run.sh       # Create experiment directory
+    ├── finalize-experiment-run.sh     # Export logs and finalize
+    ├── analyze-simulation-agents.sh   # Extract metrics from logs
+    ├── compact-agent-log.py           # Convert to minimal schema
+    ├── export-agent-logs.sh           # Export & compact logs
+    └── verify-bootstrap.sh            # Validate generated system
 ```
 
-This checks that all required files exist and are properly configured.
+## Key Learnings
 
-## Learn More
+From 9 initial simulations (3 models × 3 prompt lengths):
 
-- See `BOOTLOADER.md` for setup instructions with different AI agents
-- See `ARCHITECTURE.md` for system design details
-- See `ROADMAP.md` for development phases and future enhancements
+### Model Archetypes
+- **Opus "The Philosopher"**: Pure analysis, 0 tools, ~10 sec
+- **Sonnet "The Researcher"**: Web research + validation, ~2-3 min
+- **Haiku "The Builder"**: Creates files for short prompts, analyzes long ones
+
+### Optimal Configuration
+- **Prompt**: 30-35 words (sweet spot for 65-75% completeness)
+- **Success Criteria**: Moderate detail (clear expectations without overwhelming)
+- **Model**: Sonnet (balanced research + consistency)
+
+### Critical Findings
+- **Haiku flips behavior at ~35 words** (build mode → analysis mode)
+- **Define success in first 10 minutes**, not after 2.5 hours
+- **Outcome-based criteria** beat implementation requirements
+- **Separate evaluation** from simulation (self-assessment unreliable)
+
+## Usage
+
+**To execute the bootstrap:**
+```bash
+# Use the 30-word prompt from BOOTSTRAP.md
+# Verify with SUCCESS_CRITERIA.md
+```
+
+**To test variations:**
+```bash
+# Use SIMULATION_HARNESS.md framework
+# Test different prompts, criteria, models
+# Compare results with 100-point rubric
+```
+
+**To analyze agent behavior:**
+```bash
+# After running simulations, analyze what agents actually did
+./scripts/analyze-simulation-agents.sh <agent-id-1> <agent-id-2> ...
+
+# Example: Compare 3 models on same prompt
+./scripts/analyze-simulation-agents.sh ad7d53c a7c3dfb a525bb6
+```
+
+**To manage parallel activities:**
+```bash
+# Initialize activity system (first time only)
+./scripts/activity init
+
+# Create new activity worktree
+./scripts/activity create exploring-idea-x "Exploring new idea"
+
+# List all activities
+./scripts/activity list
+
+# Switch between activities
+./scripts/activity switch main
+./scripts/activity switch exploring-idea-x
+
+# Get current activity path (for scripts)
+cd "$(./scripts/activity path)"
+
+# See ACTIVITY_QUICK_REFERENCE.md for full usage
+```
+
+See `archive/` for detailed analysis and retrospective.

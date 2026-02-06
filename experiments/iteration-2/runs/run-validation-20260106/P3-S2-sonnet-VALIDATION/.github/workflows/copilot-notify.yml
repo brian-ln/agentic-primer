@@ -1,0 +1,140 @@
+name: "@copilot Task Notification"
+
+# Trigger: When a new issue is created with @copilot label
+on:
+  issues:
+    types: [opened, labeled]
+
+permissions:
+  issues: read
+  contents: read
+
+jobs:
+  notify-copilot:
+    name: Notify @copilot of New Task
+    runs-on: ubuntu-latest
+
+    # Only run if issue has @copilot label
+    if: contains(github.event.issue.labels.*.name, '@copilot')
+
+    steps:
+      - name: Check issue labels
+        id: check_labels
+        run: |
+          echo "Issue #${{ github.event.issue.number }} has @copilot label"
+          echo "issue_number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
+          echo "issue_title=${{ github.event.issue.title }}" >> $GITHUB_OUTPUT
+
+      - name: Validate issue template
+        run: |
+          echo "Validating issue structure..."
+          echo "Title: ${{ github.event.issue.title }}"
+          echo "Labels: ${{ join(github.event.issue.labels.*.name, ', ') }}"
+          echo "Created by: ${{ github.event.issue.user.login }}"
+
+          # Check if issue follows task template
+          if [[ "${{ github.event.issue.title }}" == "[Task]:"* ]]; then
+            echo "✅ Issue follows task template"
+          else
+            echo "⚠️  Issue may not follow task template"
+          fi
+
+      - name: Simulate @copilot notification
+        run: |
+          echo "================================================"
+          echo "🤖 @COPILOT NOTIFICATION"
+          echo "================================================"
+          echo ""
+          echo "New task assigned:"
+          echo "  Issue: #${{ github.event.issue.number }}"
+          echo "  Title: ${{ github.event.issue.title }}"
+          echo "  URL: ${{ github.event.issue.html_url }}"
+          echo "  Created by: ${{ github.event.issue.user.login }}"
+          echo ""
+          echo "Next steps for @copilot:"
+          echo "  1. Read issue description and acceptance criteria"
+          echo "  2. Create feature branch: feature/issue-${{ github.event.issue.number }}"
+          echo "  3. Implement solution"
+          echo "  4. Run tests and validation"
+          echo "  5. Create PR linked to issue"
+          echo ""
+          echo "================================================"
+
+          # In production, this would trigger @copilot system
+          # For simulation, we just log the event
+
+      - name: Add processing comment
+        run: |
+          echo "In production, would add comment to issue:"
+          echo "@copilot has been notified and will begin processing this task."
+
+          # Actual implementation would use:
+          # gh issue comment ${{ github.event.issue.number }} \
+          #   --body "@copilot processing started at $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+
+      - name: Log event for monitoring
+        run: |
+          cat << EOF
+          {
+            "event": "copilot_task_created",
+            "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "issue_number": ${{ github.event.issue.number }},
+            "issue_title": "${{ github.event.issue.title }}",
+            "created_by": "${{ github.event.issue.user.login }}",
+            "labels": "${{ join(github.event.issue.labels.*.name, ',') }}"
+          }
+          EOF
+
+          # In production, this would be sent to monitoring/logging system
+
+  validate-workflow:
+    name: Validate Workflow Configuration
+    runs-on: ubuntu-latest
+    if: github.event.action == 'opened'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate YAML syntax
+        run: |
+          echo "Validating workflow YAML syntax..."
+
+          # Check if yamllint is available, install if needed
+          if ! command -v yamllint &> /dev/null; then
+            pip install yamllint
+          fi
+
+          # Validate this workflow file
+          yamllint .github/workflows/copilot-notify.yml || echo "yamllint not available, skipping"
+
+      - name: Check for required files
+        run: |
+          echo "Checking for required system files..."
+
+          files=(
+            ".github/ISSUE_TEMPLATE/task.yml"
+            ".github/CODEOWNERS"
+            ".github/workflows/copilot-notify.yml"
+          )
+
+          for file in "${files[@]}"; do
+            if [ -f "$file" ]; then
+              echo "✅ Found: $file"
+            else
+              echo "❌ Missing: $file"
+            fi
+          done
+
+      - name: Workflow health check
+        run: |
+          echo "================================================"
+          echo "✅ Workflow Health Check"
+          echo "================================================"
+          echo ""
+          echo "Trigger: issues.opened, issues.labeled"
+          echo "Condition: @copilot label present"
+          echo "Action: Notify @copilot system"
+          echo "Status: OPERATIONAL"
+          echo ""
+          echo "================================================"

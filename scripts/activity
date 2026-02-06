@@ -1,0 +1,478 @@
+#!/usr/bin/env bash
+# activity - Main CLI for activity management
+
+set -euo pipefail
+
+# Source library functions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=activity-lib.sh
+source "$SCRIPT_DIR/activity-lib.sh"
+
+# === Command Implementations ===
+
+cmd_init() {
+    print_info "Initializing activity management system..."
+
+    # Create .wt directory
+    if [ ! -d "$WORKTREE_DIR" ]; then
+        mkdir -p "$WORKTREE_DIR"
+        print_success "Created directory: $WORKTREE_DIR"
+    else
+        print_info "Directory already exists: $WORKTREE_DIR"
+    fi
+
+    # Add .wt/ to .gitignore
+    local gitignore="$REPO_ROOT/.gitignore"
+    if [ ! -f "$gitignore" ]; then
+        echo ".wt/" > "$gitignore"
+        print_success "Created .gitignore with .wt/"
+    elif ! grep -q "^\.wt/" "$gitignore" 2>/dev/null; then
+        echo ".wt/" >> "$gitignore"
+        print_success "Added .wt/ to .gitignore"
+    else
+        print_info ".wt/ already in .gitignore"
+    fi
+
+    # Create .activities.json
+    if [ ! -f "$ACTIVITIES_JSON" ]; then
+        local current_branch
+        current_branch=$(get_current_branch)
+
+        cat > "$ACTIVITIES_JSON" <<EOF
+{
+  "schema_version": "1.0",
+  "current_activity": "main",
+  "activities": {
+    "main": {
+      "name": "main",
+      "description": "Main repository (not a worktree)",
+      "worktree_path": "$REPO_ROOT",
+      "branch": "$current_branch",
+      "is_main": true,
+      "created": "$(now_iso8601)",
+      "last_accessed": "$(now_iso8601)",
+      "status": "active"
+    }
+  }
+}
+EOF
+        print_success "Created activities metadata: $ACTIVITIES_JSON"
+    else
+        print_info "Activities metadata already exists: $ACTIVITIES_JSON"
+    fi
+
+    # Create .current-activity file
+    if [ ! -f "$CURRENT_ACTIVITY_FILE" ]; then
+        echo "main" > "$CURRENT_ACTIVITY_FILE"
+        print_success "Set current activity to 'main'"
+    else
+        print_info "Current activity file already exists"
+    fi
+
+    print_success "Activity management system initialized!"
+    print_info "Create your first activity: ./scripts/activity create <name>"
+}
+
+cmd_create() {
+    local name="${1:-}"
+    local description="${2:-}"
+
+    if [ -z "$name" ]; then
+        print_error "Usage: activity create <name> [description]"
+        return 1
+    fi
+
+    # Validate name
+    if ! validate_activity_name "$name"; then
+        return 1
+    fi
+
+    # Check if already exists
+    if activity_exists "$name"; then
+        print_error "Activity '$name' already exists"
+        return 1
+    fi
+
+    # Set default description
+    if [ -z "$description" ]; then
+        description="Activity: $name"
+    fi
+
+    # Create git worktree
+    local worktree_path="$WORKTREE_DIR/$name"
+    local branch="feature/$name"
+    local parent_branch
+    parent_branch=$(get_current_branch)
+
+    print_info "Creating worktree: $worktree_path"
+    print_info "Branch: $branch (from $parent_branch)"
+
+    if ! git -C "$REPO_ROOT" worktree add "$worktree_path" -b "$branch" 2>&1; then
+        print_error "Failed to create worktree"
+        return 1
+    fi
+
+    # Add to metadata
+    if ! add_activity "$name" "$description" "$worktree_path" "$branch" "$parent_branch"; then
+        print_error "Failed to add activity to metadata"
+        # Clean up worktree
+        git -C "$REPO_ROOT" worktree remove "$worktree_path" 2>/dev/null || true
+        return 1
+    fi
+
+    # Switch to new activity
+    set_current_activity "$name"
+
+    print_success "Created activity: $name"
+    print_info "Worktree path: $worktree_path"
+    print_info "Branch: $branch"
+    print_success "Switched to activity: $name"
+}
+
+cmd_list() {
+    local status_filter="${1:-all}"
+
+    ensure_activities_json || return 1
+
+    local current_activity
+    current_activity=$(get_current_activity)
+
+    print_activity_table_header
+
+    while IFS=$'\t' read -r name branch status last_accessed; do
+        local is_current="false"
+        if [ "$name" = "$current_activity" ]; then
+            is_current="true"
+        fi
+
+        print_activity_row "$name" "$branch" "$status" "$last_accessed" "$is_current"
+    done < <(list_activities "$status_filter")
+
+    echo ""
+    print_info "* = current activity"
+}
+
+cmd_switch() {
+    local name="${1:-}"
+
+    if [ -z "$name" ]; then
+        print_error "Usage: activity switch <name>"
+        return 1
+    fi
+
+    ensure_activities_json || return 1
+
+    # Check if exists
+    if ! activity_exists "$name"; then
+        print_error "Activity '$name' does not exist"
+        print_info "Run './scripts/activity list' to see available activities"
+        return 1
+    fi
+
+    # Switch
+    if ! set_current_activity "$name"; then
+        print_error "Failed to switch to activity: $name"
+        return 1
+    fi
+
+    local path
+    path=$(get_activity_path "$name")
+
+    print_success "Switched to activity: $name"
+    print_info "Working directory: $path"
+}
+
+cmd_current() {
+    ensure_activities_json || return 1
+    get_current_activity
+}
+
+cmd_path() {
+    local name="${1:-}"
+
+    ensure_activities_json || return 1
+
+    # If no name provided, use current activity
+    if [ -z "$name" ]; then
+        name=$(get_current_activity)
+    fi
+
+    # Check if exists
+    if ! activity_exists "$name"; then
+        print_error "Activity '$name' does not exist" >&2
+        return 1
+    fi
+
+    get_activity_path "$name"
+}
+
+cmd_show() {
+    local name="${1:-}"
+
+    ensure_activities_json || return 1
+
+    # If no name provided, use current activity
+    if [ -z "$name" ]; then
+        name=$(get_current_activity)
+    fi
+
+    # Check if exists
+    if ! activity_exists "$name"; then
+        print_error "Activity '$name' does not exist"
+        return 1
+    fi
+
+    # Get all fields
+    local description branch created last_accessed status worktree_path is_main
+
+    description=$(get_activity_field "$name" "description")
+    branch=$(get_activity_field "$name" "branch")
+    created=$(get_activity_field "$name" "created")
+    last_accessed=$(get_activity_field "$name" "last_accessed")
+    status=$(get_activity_field "$name" "status")
+    worktree_path=$(get_activity_field "$name" "worktree_path")
+    is_main=$(get_activity_field "$name" "is_main")
+
+    # Display
+    echo "Activity: $name"
+    echo "Description: $description"
+    echo "Worktree: $worktree_path"
+    echo "Branch: $branch"
+    if [ "$is_main" = "true" ]; then
+        echo "Type: Main repository"
+    else
+        echo "Type: Worktree"
+        local parent_branch
+        parent_branch=$(get_activity_field "$name" "parent_branch")
+        if [ -n "$parent_branch" ]; then
+            echo "Parent branch: $parent_branch"
+        fi
+    fi
+    echo "Created: $created ($(time_ago "$created"))"
+    echo "Last accessed: $last_accessed ($(time_ago "$last_accessed"))"
+    echo "Status: $status"
+}
+
+cmd_archive() {
+    local name="${1:-}"
+
+    if [ -z "$name" ]; then
+        print_error "Usage: activity archive <name>"
+        return 1
+    fi
+
+    ensure_activities_json || return 1
+
+    # Check if exists
+    if ! activity_exists "$name"; then
+        print_error "Activity '$name' does not exist"
+        return 1
+    fi
+
+    # Don't allow archiving main
+    local is_main
+    is_main=$(get_activity_field "$name" "is_main")
+    if [ "$is_main" = "true" ]; then
+        print_error "Cannot archive main repository"
+        return 1
+    fi
+
+    # Update status
+    if ! update_activity_status "$name" "archived"; then
+        print_error "Failed to archive activity"
+        return 1
+    fi
+
+    print_success "Archived activity: $name"
+    print_info "Worktree still exists. To remove completely, use: ./scripts/activity remove $name"
+}
+
+cmd_remove() {
+    local name="${1:-}"
+    local force="${2:-}"
+
+    if [ -z "$name" ]; then
+        print_error "Usage: activity remove <name> [--force]"
+        return 1
+    fi
+
+    ensure_activities_json || return 1
+
+    # Check if exists
+    if ! activity_exists "$name"; then
+        print_error "Activity '$name' does not exist"
+        return 1
+    fi
+
+    # Don't allow removing main
+    local is_main
+    is_main=$(get_activity_field "$name" "is_main")
+    if [ "$is_main" = "true" ]; then
+        print_error "Cannot remove main repository"
+        return 1
+    fi
+
+    # Check if current activity
+    local current_activity
+    current_activity=$(get_current_activity)
+    if [ "$name" = "$current_activity" ]; then
+        print_warning "You are removing the currently active activity"
+        print_info "You will be switched to 'main' after removal"
+    fi
+
+    # Confirm unless --force
+    if [ "$force" != "--force" ]; then
+        read -p "Remove activity '$name'? This will delete the worktree. [y/N] " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            print_info "Cancelled"
+            return 0
+        fi
+    fi
+
+    # Get worktree path
+    local worktree_path
+    worktree_path=$(get_activity_path "$name")
+
+    # Remove git worktree
+    print_info "Removing worktree: $worktree_path"
+    if ! git -C "$REPO_ROOT" worktree remove "$worktree_path" 2>&1; then
+        print_warning "Failed to remove worktree (may have uncommitted changes)"
+        print_info "To force removal: git worktree remove --force $worktree_path"
+        return 1
+    fi
+
+    # Get branch name
+    local branch
+    branch=$(get_activity_field "$name" "branch")
+
+    # Optionally delete branch
+    if [ -n "$branch" ] && [ "$branch" != "main" ] && [ "$branch" != "master" ]; then
+        read -p "Delete branch '$branch'? [y/N] " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            if git -C "$REPO_ROOT" branch -d "$branch" 2>&1; then
+                print_success "Deleted branch: $branch"
+            else
+                print_warning "Failed to delete branch (may have unmerged changes)"
+                print_info "To force delete: git branch -D $branch"
+            fi
+        fi
+    fi
+
+    # Remove from metadata
+    if ! remove_activity "$name"; then
+        print_error "Failed to remove activity from metadata"
+        return 1
+    fi
+
+    # If was current activity, switch to main
+    if [ "$name" = "$current_activity" ]; then
+        set_current_activity "main"
+        print_info "Switched to activity: main"
+    fi
+
+    print_success "Removed activity: $name"
+}
+
+cmd_help() {
+    cat <<EOF
+Activity Management CLI
+
+USAGE:
+    activity <command> [options]
+
+COMMANDS:
+    init                    Initialize activity management system
+    create <name> [desc]    Create new activity worktree
+    list [status]           List activities (status: all|active|archived)
+    switch <name>           Switch to activity
+    current                 Show current activity name
+    path [name]             Show activity worktree path
+    show [name]             Show activity details
+    archive <name>          Archive activity (keeps worktree)
+    remove <name>           Remove activity and worktree
+    help                    Show this help
+
+EXAMPLES:
+    # Initialize system
+    ./scripts/activity init
+
+    # Create new activity
+    ./scripts/activity create exploring-idea-x "Exploring idea X"
+
+    # List all activities
+    ./scripts/activity list
+
+    # Switch to activity
+    ./scripts/activity switch exploring-idea-x
+
+    # Show current activity
+    ./scripts/activity current
+
+    # Get activity path (for scripts)
+    cd "\$(./scripts/activity path)"
+
+    # Show activity details
+    ./scripts/activity show exploring-idea-x
+
+    # Archive when done
+    ./scripts/activity archive exploring-idea-x
+
+    # Remove completely
+    ./scripts/activity remove exploring-idea-x
+
+For more information, see: ACTIVITY_WORKTREE_SYSTEM.md
+EOF
+}
+
+# === Main Dispatch ===
+
+main() {
+    local command="${1:-help}"
+    shift || true
+
+    case "$command" in
+        init)
+            cmd_init "$@"
+            ;;
+        create)
+            cmd_create "$@"
+            ;;
+        list)
+            cmd_list "$@"
+            ;;
+        switch)
+            cmd_switch "$@"
+            ;;
+        current)
+            cmd_current "$@"
+            ;;
+        path)
+            cmd_path "$@"
+            ;;
+        show)
+            cmd_show "$@"
+            ;;
+        archive)
+            cmd_archive "$@"
+            ;;
+        remove)
+            cmd_remove "$@"
+            ;;
+        help|--help|-h)
+            cmd_help
+            ;;
+        *)
+            print_error "Unknown command: $command"
+            echo ""
+            cmd_help
+            return 1
+            ;;
+    esac
+}
+
+# Run main if executed directly
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+    main "$@"
+fi

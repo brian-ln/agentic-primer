@@ -332,6 +332,8 @@ grep -ri "TODO\|FIXME\|PLACEHOLDER\|REPLACE_ME\|YOUR_\|FILL_IN" . | wc -l
 
 **Critical context:** Agent responses should be grounded in current best practices, not stale knowledge from training data.
 
+**⚠️ AUTOMATION AVAILABLE:** This dimension can be scored automatically using `scripts/analyze-research-quality.sh`. See RESEARCH_QUALITY_SCORING_AUTOMATION.md for details.
+
 #### 5.1 WebSearch Tool Usage (8 points)
 
 | Points | Criteria |
@@ -342,6 +344,14 @@ grep -ri "TODO\|FIXME\|PLACEHOLDER\|REPLACE_ME\|YOUR_\|FILL_IN" . | wc -l
 | 0 | No WebSearch usage AND implementation uses outdated patterns (e.g., `actions/checkout@v2` instead of `v4`) |
 
 **How to measure:**
+```bash
+# Automated (recommended)
+./scripts/analyze-research-quality.sh <scenario-dir> <agent-id>
+
+# Manual verification
+grep "WebSearch\|WebFetch" /tmp/claude/-Users-bln-play-agentic-primer/tasks/<agent-id>.output
+```
+
 - Check agent logs for WebSearch tool calls
 - Count distinct WebSearch queries
 - Verify search queries were relevant (e.g., "github actions codeowners 2026" NOT "what is github")
@@ -367,7 +377,16 @@ grep -ri "TODO\|FIXME\|PLACEHOLDER\|REPLACE_ME\|YOUR_\|FILL_IN" . | wc -l
 | 0 | No citations AND uses outdated practices (e.g., Node.js 12, actions/checkout@v1) |
 
 **How to measure:**
-- Search docs for source citations: `grep -ri "source:\|per:\|according to:\|https://" docs/ README.md`
+```bash
+# Automated (recommended)
+./scripts/analyze-research-quality.sh --verbose <scenario-dir> <agent-id>
+
+# Manual verification
+grep -ri "source:\|per:\|according to:\|https://" docs/ README.md
+grep -rhE "202[456]" docs/ *.md
+```
+
+- Search docs for source citations
 - Check dates mentioned in docs
 - Verify tool versions against current standards (2026)
 
@@ -1009,20 +1028,36 @@ Automated score covers 80 points
 - Specificity: 10 points (partially automated)
 - **Total automated:** ~65 points
 
-**Step 2: Manual Review (55 points, 15-20 minutes)**
+**Step 2: Automated Research Quality (15 points, 1 minute)**
+```bash
+./scripts/analyze-research-quality.sh <scenario-dir> <agent-id>
+```
+- **Research Quality (15 points):** Automated log and doc analysis
+  - WebSearch call counting (objective)
+  - URL and citation detection (objective)
+  - Implementation currency checking (objective)
+
+**Step 3: Manual Review (40 points, 15-20 minutes)**
 - **Correctness (20 points):** Read workflows, test logic, check CODEOWNERS syntax
-- **Research Quality (15 points):** Check agent logs for WebSearch, verify source citations in docs
 - **Insight Quality (5 points):** Read design docs for assumptions/edge cases
 - **Actionability (5 points):** Manual review of documentation quality
-- **Total manual:** ~45 points
+- **Research Quality override (optional):** Adjust automated score if human review reveals issues
+- **Total manual:** ~30-40 points
 
-**Step 3: Final Score**
-- Sum automated + manual scores
+**Step 4: Final Score**
+- Sum automated scores (functional + completeness + research + actionability/specificity)
+- Add manual scores (correctness + insight + documentation)
+- Apply research quality overrides if needed
 - Compare to thresholds:
   - <80: Fail (needs rework)
   - 80-99: Pass (viable implementation)
   - 100-109: Excellent (ready for production)
   - 110-120: Outstanding (exemplary quality)
+
+**Automation Summary:**
+- **Fully automated:** ~65-80 points (Functional Verification 30pts + Completeness 25pts + Research Quality 15pts + partial Actionability/Specificity)
+- **Human required:** ~40 points (Correctness 20pts + Insight 5pts + Documentation 5pts + Research overrides)
+- **Total time:** ~5min automated + ~15-20min manual = ~20-25min per scenario
 
 ### Calibration Across Evaluators
 
