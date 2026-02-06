@@ -1,0 +1,386 @@
+// Agentic Primer Usage Tracking
+// AI capacity tracking across Signal Hub, Convergence Framework, and /ai skill
+// Tracks token usage, costs, and quotas for all AI providers
+
+package agentic-primer:usage-tracking@0.1.0;
+
+interface types {
+    /// Error severity levels
+    enum error-severity {
+        info,
+        warning,
+        error,
+        critical,
+    }
+
+    /// Error categories
+    enum error-category {
+        configuration,
+        validation,
+        transport,
+        routing,
+        protocol,
+        resources,
+        authentication,
+        authorization,
+        timeout,
+        unknown,
+    }
+
+    /// Retry strategy information
+    record retry-info {
+        retryable: bool,
+        retry-after-ms: option<u64>,
+        max-attempts: option<u32>,
+    }
+
+    /// Detailed error information
+    record error-info {
+        code: string,
+        message: string,
+        severity: error-severity,
+        category: error-category,
+        details: option<string>,
+        timestamp: string,
+        correlation-id: option<string>,
+        retry-info: option<retry-info>,
+    }
+
+    /// Time duration
+    record duration {
+        milliseconds: u64,
+    }
+
+    /// Quota information
+    record quota-info {
+        limit: u64,
+        remaining: u64,
+        window: duration,
+        reset-after-ms: u64,
+    }
+}
+
+/// Core usage tracking interface
+interface tracking {
+    use types.{error-info, quota-info};
+
+    /// Token usage breakdown
+    record token-usage {
+        /// Input tokens (prompt)
+        input-tokens: u32,
+
+        /// Output tokens (completion)
+        output-tokens: u32,
+
+        /// Total tokens
+        total-tokens: u32,
+
+        /// Cached input tokens (Anthropic prompt caching)
+        cached-input-tokens: option<u32>,
+
+        /// Cache write tokens (Anthropic prompt caching)
+        cache-write-tokens: option<u32>,
+
+        /// Cache read tokens (Anthropic prompt caching)
+        cache-read-tokens: option<u32>,
+
+        /// Input cost in USD
+        input-cost-usd: option<f64>,
+
+        /// Output cost in USD
+        output-cost-usd: option<f64>,
+
+        /// Cache write cost in USD
+        cache-write-cost-usd: option<f64>,
+
+        /// Cache read cost in USD
+        cache-read-cost-usd: option<f64>,
+    }
+
+    /// Usage event record
+    record usage-event {
+        /// ISO 8601 timestamp
+        timestamp: string,
+
+        /// Provider name (anthropic, openai, google, etc.)
+        provider: string,
+
+        /// Model identifier (claude-sonnet-4-5, gpt-4o, etc.)
+        model: string,
+
+        /// Token usage details
+        tokens: token-usage,
+
+        /// Total cost in USD
+        cost-usd: f64,
+
+        /// Optional session ID
+        session-id: option<string>,
+
+        /// Optional convergence run ID (links to convergence framework)
+        convergence-run-id: option<string>,
+
+        /// Optional user/principal ID
+        user-id: option<string>,
+
+        /// Request source (signal-hub, convergence, ai-skill, etc.)
+        source: string,
+
+        /// Event metadata (key-value pairs)
+        metadata: list<tuple<string, string>>,
+    }
+
+    /// Track a usage event
+    track: func(event: usage-event) -> result<_, error-info>;
+
+    /// Track multiple events in batch
+    track-batch: func(events: list<usage-event>) -> result<_, error-info>;
+
+    /// Get usage statistics for a time period
+    get-stats: func(
+        start-time: string,
+        end-time: string,
+        filters: option<usage-filter>
+    ) -> result<usage-stats, error-info>;
+
+    /// Check quota status for user
+    check-quota: func(user-id: string) -> result<quota-status, error-info>;
+
+    /// Get remaining quota
+    remaining-quota: func(user-id: string) -> result<quota-info, error-info>;
+
+    /// Usage filter for queries
+    record usage-filter {
+        /// Filter by providers
+        providers: option<list<string>>,
+
+        /// Filter by models
+        models: option<list<string>>,
+
+        /// Filter by users
+        user-ids: option<list<string>>,
+
+        /// Filter by sources
+        sources: option<list<string>>,
+
+        /// Filter by session IDs
+        session-ids: option<list<string>>,
+
+        /// Filter by convergence run IDs
+        convergence-run-ids: option<list<string>>,
+    }
+
+    /// Usage statistics for a period
+    record usage-stats {
+        /// Period start (ISO 8601)
+        period-start: string,
+
+        /// Period end (ISO 8601)
+        period-end: string,
+
+        /// Total API requests
+        total-requests: u64,
+
+        /// Total input tokens
+        total-input-tokens: u64,
+
+        /// Total output tokens
+        total-output-tokens: u64,
+
+        /// Total cost in USD
+        total-cost-usd: f64,
+
+        /// Stats by provider
+        by-provider: list<provider-stats>,
+
+        /// Stats by model
+        by-model: list<model-stats>,
+
+        /// Stats by user
+        by-user: list<user-stats>,
+
+        /// Stats by source
+        by-source: list<source-stats>,
+    }
+
+    /// Provider-level statistics
+    record provider-stats {
+        provider: string,
+        requests: u64,
+        input-tokens: u64,
+        output-tokens: u64,
+        cost-usd: f64,
+    }
+
+    /// Model-level statistics
+    record model-stats {
+        model: string,
+        provider: string,
+        requests: u64,
+        input-tokens: u64,
+        output-tokens: u64,
+        cost-usd: f64,
+    }
+
+    /// User-level statistics
+    record user-stats {
+        user-id: string,
+        requests: u64,
+        input-tokens: u64,
+        output-tokens: u64,
+        cost-usd: f64,
+    }
+
+    /// Source-level statistics
+    record source-stats {
+        source: string,
+        requests: u64,
+        input-tokens: u64,
+        output-tokens: u64,
+        cost-usd: f64,
+    }
+
+    /// Quota status
+    record quota-status {
+        /// Quota exceeded flag
+        exceeded: bool,
+
+        /// Current usage (USD)
+        current-usage: f64,
+
+        /// Quota limit (USD)
+        quota-limit: f64,
+
+        /// Period end (ISO 8601)
+        period-end: string,
+
+        /// Usage percentage (0-100)
+        usage-percentage: f32,
+    }
+}
+
+/// Budget management interface
+interface budget {
+    use types.{error-info};
+    use tracking.{quota-status};
+
+    /// Budget period types
+    enum budget-period {
+        hourly,
+        daily,
+        weekly,
+        monthly,
+        yearly,
+        custom,
+    }
+
+    /// Budget configuration
+    record budget-config {
+        /// User or project ID
+        entity-id: string,
+
+        /// Budget limit in USD
+        limit-usd: f64,
+
+        /// Budget period
+        period: budget-period,
+
+        /// Alert thresholds (percentages)
+        alert-thresholds: list<u32>,
+
+        /// Hard limit (stop requests when exceeded)
+        enforce-hard-limit: bool,
+
+        /// Budget start date (ISO 8601)
+        start-date: string,
+
+        /// Budget end date (ISO 8601, optional)
+        end-date: option<string>,
+    }
+
+    /// Set budget for entity
+    set-budget: func(config: budget-config) -> result<_, error-info>;
+
+    /// Get budget configuration
+    get-budget: func(entity-id: string) -> result<budget-config, error-info>;
+
+    /// Check if budget exceeded
+    check-budget: func(entity-id: string) -> result<quota-status, error-info>;
+
+    /// Get budget utilization
+    get-utilization: func(entity-id: string) -> result<f32, error-info>;
+
+    /// Reset budget (start new period)
+    reset-budget: func(entity-id: string) -> result<_, error-info>;
+}
+
+/// Cost estimation interface
+interface estimation {
+    use types.{error-info};
+    use tracking.{token-usage};
+
+    /// Pricing tier
+    enum pricing-tier {
+        standard,
+        batch,
+        cached,
+        custom,
+    }
+
+    /// Cost estimate
+    record cost-estimate {
+        /// Model identifier
+        model: string,
+
+        /// Provider name
+        provider: string,
+
+        /// Estimated input tokens
+        estimated-input-tokens: u32,
+
+        /// Estimated output tokens
+        estimated-output-tokens: u32,
+
+        /// Estimated input cost (USD)
+        estimated-input-cost: f64,
+
+        /// Estimated output cost (USD)
+        estimated-output-cost: f64,
+
+        /// Total estimated cost (USD)
+        total-estimated-cost: f64,
+
+        /// Pricing tier used
+        pricing-tier: pricing-tier,
+    }
+
+    /// Estimate cost before API call
+    estimate-cost: func(
+        provider: string,
+        model: string,
+        input-text: string,
+        expected-output-tokens: u32
+    ) -> result<cost-estimate, error-info>;
+
+    /// Calculate actual cost from usage
+    calculate-cost: func(
+        provider: string,
+        model: string,
+        usage: token-usage
+    ) -> result<f64, error-info>;
+
+    /// Get pricing information
+    get-pricing: func(provider: string, model: string) -> result<pricing-info, error-info>;
+
+    /// Pricing information for a model
+    record pricing-info {
+        provider: string,
+        model: string,
+        input-cost-per-1m: f64,
+        output-cost-per-1m: f64,
+        cache-write-cost-per-1m: option<f64>,
+        cache-read-cost-per-1m: option<f64>,
+        currency: string,
+        last-updated: string,
+    }
+}

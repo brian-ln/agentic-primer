@@ -1,0 +1,364 @@
+// Agentic Primer Shared Types
+// Common type definitions used across all agentic-primer interfaces
+// Adapted from UGS types.wit for AI-first platform use cases
+
+package agentic-primer:types@0.1.0;
+
+/// Core types interface - contains all shared type definitions
+interface types {
+    /// Error severity levels
+    enum error-severity {
+        /// Informational - operation succeeded with notes
+        info,
+
+        /// Warning - operation succeeded but with concerns
+        warning,
+
+        /// Error - operation failed, recoverable
+        error,
+
+        /// Critical - operation failed, system integrity compromised
+        critical,
+    }
+
+    /// Error categories for classification
+    enum error-category {
+        /// Configuration error (invalid config, missing required fields)
+        configuration,
+
+        /// Validation error (invalid message format, schema mismatch)
+        validation,
+
+        /// Transport error (network failure, timeout, connection refused)
+        transport,
+
+        /// Routing error (no route found, component not registered)
+        routing,
+
+        /// Protocol error (unsupported version, invalid format)
+        protocol,
+
+        /// Resource error (out of memory, disk full, rate limit exceeded)
+        resources,
+
+        /// Authentication error (invalid credentials, token expired)
+        authentication,
+
+        /// Authorization error (insufficient permissions)
+        authorization,
+
+        /// Timeout error (operation exceeded time limit)
+        timeout,
+
+        /// Unknown error (unexpected failure)
+        unknown,
+    }
+
+    /// Retry strategy information
+    record retry-info {
+        /// Whether the operation can be retried
+        retryable: bool,
+
+        /// Suggested retry delay in milliseconds
+        retry-after-ms: option<u64>,
+
+        /// Maximum number of retry attempts
+        max-attempts: option<u32>,
+    }
+
+    /// Detailed error information
+    /// Used across all interfaces for consistent error handling
+    record error-info {
+        /// Error code (unique identifier for error type)
+        /// Format: CATEGORY_SPECIFIC_CODE (e.g., "TRANSPORT_CONNECTION_REFUSED")
+        code: string,
+
+        /// Human-readable error message
+        message: string,
+
+        /// Error severity level
+        severity: error-severity,
+
+        /// Error category for classification
+        category: error-category,
+
+        /// Optional detailed context (stack trace, additional info)
+        details: option<string>,
+
+        /// Timestamp when error occurred (ISO 8601)
+        timestamp: string,
+
+        /// Optional correlation ID linking error to request
+        correlation-id: option<string>,
+
+        /// Optional retry information
+        retry-info: option<retry-info>,
+    }
+
+    /// Content encoding types
+    enum content-encoding {
+        /// No encoding (raw bytes)
+        none,
+
+        /// JSON encoding
+        json,
+
+        /// MessagePack binary encoding
+        messagepack,
+
+        /// Protocol Buffers
+        protobuf,
+
+        /// CBOR (Concise Binary Object Representation)
+        cbor,
+
+        /// Custom encoding (specified in metadata)
+        custom,
+    }
+
+    /// Compression types
+    enum compression-type {
+        /// No compression
+        none,
+
+        /// Gzip compression
+        gzip,
+
+        /// Zstd compression
+        zstd,
+
+        /// Brotli compression
+        brotli,
+    }
+
+    /// Payload metadata
+    /// Describes how payload is encoded and compressed
+    record payload-metadata {
+        /// Content encoding
+        encoding: content-encoding,
+
+        /// Compression type
+        compression: compression-type,
+
+        /// Original payload size in bytes (before compression)
+        original-size: option<u64>,
+
+        /// Compressed payload size in bytes
+        compressed-size: option<u64>,
+
+        /// Payload schema identifier (for validation)
+        schema-id: option<string>,
+
+        /// Payload schema version (semver)
+        schema-version: option<string>,
+    }
+
+    /// Protocol version information
+    record protocol-version {
+        /// Major version (breaking changes)
+        major: u32,
+
+        /// Minor version (backward-compatible features)
+        minor: u32,
+
+        /// Patch version (backward-compatible fixes)
+        patch: u32,
+    }
+
+    /// Authentication credentials
+    variant auth-credentials {
+        /// No authentication
+        none,
+
+        /// API key authentication
+        api-key(string),
+
+        /// Bearer token (JWT, OAuth)
+        bearer-token(string),
+
+        /// Basic authentication (username:password)
+        basic(tuple<string, string>),
+
+        /// Custom authentication (type, value)
+        custom(tuple<string, string>),
+    }
+
+    /// Security context
+    /// Attached to messages for authentication/authorization
+    record security-context {
+        /// Authentication credentials
+        credentials: auth-credentials,
+
+        /// Optional user/principal identifier
+        principal: option<string>,
+
+        /// Optional tenant/organization identifier
+        tenant: option<string>,
+
+        /// Optional roles for authorization
+        roles: list<string>,
+
+        /// Optional permissions for fine-grained access control
+        permissions: list<string>,
+    }
+
+    /// Telemetry/tracing span information
+    record span-context {
+        /// Trace ID (128-bit, hex encoded)
+        trace-id: string,
+
+        /// Span ID (64-bit, hex encoded)
+        span-id: string,
+
+        /// Parent span ID (64-bit, hex encoded)
+        parent-span-id: option<string>,
+
+        /// Trace flags (sampling, debug)
+        trace-flags: u8,
+
+        /// Baggage items (key-value pairs propagated with trace)
+        baggage: list<tuple<string, string>>,
+    }
+
+    /// Configuration value types
+    /// Note: For complex nested structures, use JSON string representation
+    variant config-value {
+        /// String value
+        string-val(string),
+
+        /// Integer value
+        int-val(s64),
+
+        /// Float value
+        float-val(f64),
+
+        /// Boolean value
+        bool-val(bool),
+
+        /// JSON string for complex structures (lists, maps, nested objects)
+        json-val(string),
+    }
+
+    /// Structured configuration
+    /// Alternative to JSON string configuration
+    record config-object {
+        /// Configuration key-value pairs
+        values: list<tuple<string, config-value>>,
+    }
+
+    /// Time duration in various units
+    record duration {
+        /// Duration in milliseconds
+        milliseconds: u64,
+    }
+
+    /// Quota/rate limit information
+    record quota-info {
+        /// Maximum requests per time window
+        limit: u64,
+
+        /// Remaining requests in current window
+        remaining: u64,
+
+        /// Time window duration
+        window: duration,
+
+        /// Time until quota resets (milliseconds)
+        reset-after-ms: u64,
+    }
+
+    /// Health check status levels
+    enum health-level {
+        /// Component is healthy and operating normally
+        healthy,
+
+        /// Component is degraded but still functional
+        degraded,
+
+        /// Component is unhealthy and not functioning
+        unhealthy,
+    }
+
+    /// Individual health check result
+    record health-check-result {
+        /// Check name
+        name: string,
+
+        /// Check status
+        status: health-level,
+
+        /// Optional message
+        message: option<string>,
+
+        /// Check duration in microseconds
+        duration-us: option<u64>,
+    }
+
+    /// Detailed health check information
+    record health-details {
+        /// Overall health level
+        level: health-level,
+
+        /// Health check timestamp (ISO 8601)
+        timestamp: string,
+
+        /// Component version
+        version: option<string>,
+
+        /// Uptime in milliseconds
+        uptime-ms: option<u64>,
+
+        /// Additional health checks (subsystems)
+        checks: list<tuple<string, health-check-result>>,
+    }
+
+    /// Metrics/observability data point
+    record metric-data-point {
+        /// Metric name
+        name: string,
+
+        /// Metric value
+        value: f64,
+
+        /// Metric unit (requests, ms, bytes, etc.)
+        unit: string,
+
+        /// Timestamp (ISO 8601)
+        timestamp: string,
+
+        /// Metric tags/labels
+        tags: list<tuple<string, string>>,
+    }
+}
+
+/// Version utilities
+interface version {
+    use types.{protocol-version};
+
+    /// Parse semantic version string into components
+    /// Example: "1.2.3" -> {major: 1, minor: 2, patch: 3}
+    parse-version: func(version: string) -> result<protocol-version, string>;
+
+    /// Check if version is compatible
+    /// Returns true if 'provided' is compatible with 'required'
+    /// Compatible if major version matches and minor/patch >= required
+    is-compatible: func(required: protocol-version, provided: protocol-version) -> bool;
+
+    /// Format version as string
+    format-version: func(version: protocol-version) -> string;
+}
+
+/// Common utilities interface
+interface utils {
+    /// Generate UUID v7 (time-ordered)
+    generate-uuid-v7: func() -> string;
+
+    /// Get current ISO 8601 timestamp
+    current-timestamp: func() -> string;
+
+    /// Validate UUID format
+    validate-uuid: func(uuid: string) -> bool;
+
+    /// Validate ISO 8601 timestamp
+    validate-timestamp: func(timestamp: string) -> bool;
+}

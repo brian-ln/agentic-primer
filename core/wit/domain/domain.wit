@@ -1,0 +1,1158 @@
+// Convergence Domain Model - Consolidated
+// Complete domain model including graph, entities, queries, knowledge, and actors
+// This file consolidates all domain interfaces into a single package
+
+package convergence:domain@0.1.0;
+
+// ============================================================================
+// GRAPH PRIMITIVES
+// ============================================================================
+
+/// Address types and resolution interface
+interface address {
+    /// Edge reference for scoped addresses
+    record edge-ref {
+        source: string,
+        target: string,
+    }
+
+    /// Address scope determines how the address is resolved
+    variant address-scope {
+        node,
+        edge(edge-ref),
+        computed(string),
+    }
+
+    /// Address primitive - universal reference (@(id))
+    record address {
+        id: string,
+        namespace: option<string>,
+        scope: address-scope,
+        version: option<string>,
+    }
+
+    variant parse-error {
+        invalid-format(string),
+        missing-id,
+        invalid-scope(string),
+    }
+
+    variant resolve-error {
+        not-found(string),
+        ambiguous(list<string>),
+        invalid-scope,
+        permission-denied,
+    }
+
+    record routing-info {
+        canonical: address,
+        location: option<string>,
+        metadata: list<tuple<string, string>>,
+    }
+
+    parse: func(input: string) -> result<address, parse-error>;
+    serialize: func(addr: address) -> string;
+    resolve: func(addr: address) -> result<routing-info, resolve-error>;
+    create: func(id: string, namespace: option<string>, scope: address-scope, version: option<string>) -> address;
+    normalize: func(addr: address) -> address;
+    equals: func(a: address, b: address) -> bool;
+}
+
+/// Node operations interface
+interface node {
+    use address.{address};
+
+    variant property-value {
+        string-val(string),
+        number-val(f64),
+        bool-val(bool),
+        null-val,
+        address-ref(address),
+    }
+
+    record node-metadata {
+        created-at: string,
+        updated-at: string,
+        version: u64,
+    }
+
+    record node {
+        id: string,
+        node-type: option<string>,
+        properties: list<tuple<string, property-value>>,
+        data: option<string>,
+        metadata: node-metadata,
+    }
+
+    variant node-error {
+        not-found(string),
+        already-exists(string),
+        invalid-property(string),
+    }
+
+    create-node: func(id: string, node-type: option<string>) -> result<node, node-error>;
+    get-node: func(id: string) -> result<node, node-error>;
+    update-node: func(id: string, properties: list<tuple<string, property-value>>) -> result<_, node-error>;
+    delete-node: func(id: string) -> result<_, node-error>;
+    set-property: func(node-id: string, key: string, value: property-value) -> result<_, node-error>;
+    get-property: func(node-id: string, key: string) -> result<property-value, node-error>;
+}
+
+/// Edge operations interface
+interface edge {
+    use address.{address};
+    use node.{property-value};
+
+    record edge {
+        id: string,
+        source: address,
+        target: address,
+        edge-type: option<string>,
+        weight: f64,
+        properties: list<tuple<string, property-value>>,
+    }
+
+    variant edge-error {
+        not-found(string),
+        already-exists(string),
+        invalid-endpoints,
+    }
+
+    create-edge: func(id: string, source: address, target: address, edge-type: option<string>) -> result<edge, edge-error>;
+    get-edge: func(id: string) -> result<edge, edge-error>;
+    delete-edge: func(id: string) -> result<_, edge-error>;
+    set-weight: func(edge-id: string, weight: f64) -> result<_, edge-error>;
+}
+
+/// Graph traversal and operations
+interface graph {
+    use address.{address};
+    use node.{node};
+    use edge.{edge};
+
+    enum direction {
+        outgoing,
+        incoming,
+        bidirectional,
+    }
+
+    record traversal-options {
+        max-depth: option<u32>,
+        edge-types: option<list<string>>,
+        direction: direction,
+    }
+
+    record path {
+        nodes: list<node>,
+        edges: list<edge>,
+        total-weight: f64,
+    }
+
+    traverse: func(start: address, options: traversal-options) -> result<list<node>, string>;
+    shortest-path: func(start: address, end: address) -> result<path, string>;
+    neighbors: func(node: address, direction: direction) -> result<list<node>, string>;
+}
+
+// ============================================================================
+// ENTITIES
+// ============================================================================
+
+/// JSON value type for entity configuration
+/// Note: WIT doesn't support recursive types directly, so we use string serialization
+interface json {
+    /// JSON value represented as serialized string
+    /// Use standard JSON encoding/decoding for complex structures
+    type json-value = string;
+}
+
+/// Base entity interface
+interface entity {
+    use address.{address};
+    use json.{json-value};
+
+    /// Entity kind discriminator
+    enum entity-kind {
+        agent,
+        task,
+        session,
+        human,
+        model,
+        provider,
+        program,
+    }
+
+    /// Entity lifecycle states
+    enum entity-lifecycle {
+        draft,
+        published,
+        deprecated,
+    }
+
+    /// Entity metadata
+    record entity-metadata {
+        kind: entity-kind,
+        lifecycle: option<entity-lifecycle>,
+        version: u32,
+        created: u64,
+        modified: u64,
+    }
+
+    /// Base entity resource
+    resource entity {
+        /// Get entity's unique address
+        get-address: func() -> address;
+
+        /// Get entity kind
+        get-kind: func() -> entity-kind;
+
+        /// Get entity metadata
+        get-metadata: func() -> entity-metadata;
+
+        /// Get entity configuration as JSON
+        get-config: func() -> json-value;
+
+        /// Update entity configuration
+        update-config: func(config: json-value) -> result<_, string>;
+
+        /// Serialize to JSON
+        to-json: func() -> json-value;
+    }
+
+    /// Entity factory and query interface
+    create-entity: func(
+        id: string,
+        kind: entity-kind,
+        config: json-value
+    ) -> result<address, string>;
+
+    get-entity: func(addr: address) -> result<entity, string>;
+    delete-entity: func(addr: address) -> result<_, string>;
+    list-by-kind: func(kind: entity-kind) -> list<address>;
+    list-by-lifecycle: func(lifecycle: entity-lifecycle) -> list<address>;
+}
+
+/// Agent entity interface
+interface agent {
+    use address.{address};
+    use entity.{entity};
+
+    /// Agent execution state
+    enum agent-state {
+        idle,
+        thinking,
+        executing,
+        waiting,
+        completed,
+        error,
+    }
+
+    /// Agent harness configuration
+    record agent-harness {
+        max-turns: u32,
+        reflect-on-failure: bool,
+        checkpoint-every: u32,
+    }
+
+    /// Agent configuration
+    record agent-config {
+        name: string,
+        system-prompt: string,
+        tools: list<address>,
+        default-model: address,
+        harness: agent-harness,
+    }
+
+    /// Step execution result
+    record step-result {
+        done: bool,
+        turn: option<u32>,
+        reason: option<string>,
+        response: option<string>,
+        error: option<string>,
+    }
+
+    /// Agent resource
+    resource agent {
+        as-entity: func() -> entity;
+        get-state: func() -> agent-state;
+        get-config: func() -> agent-config;
+        get-current-task: func() -> option<address>;
+        get-current-session: func() -> option<address>;
+        get-turn-count: func() -> u32;
+        get-last-error: func() -> option<string>;
+    }
+
+    /// Agent operations
+    create-agent: func(
+        id: string,
+        name: string,
+        system-prompt: string,
+        default-model: address,
+        harness: option<agent-harness>
+    ) -> result<address, string>;
+
+    get-agent: func(addr: address) -> result<agent, string>;
+    configure-agent: func(addr: address, config: agent-config) -> result<_, string>;
+    assign-task: func(addr: address, task: address) -> result<_, string>;
+    step: func(addr: address) -> result<step-result, string>;
+    run: func(addr: address, max-turns: option<u32>) -> result<step-result, string>;
+    pause: func(addr: address, reason: option<string>) -> result<_, string>;
+    resume: func(addr: address, input: option<string>) -> result<_, string>;
+    stop: func(addr: address) -> result<_, string>;
+    set-error: func(addr: address, error: string) -> result<_, string>;
+    list-by-state: func(state: agent-state) -> list<address>;
+}
+
+/// Task entity interface
+interface task {
+    use address.{address};
+    use entity.{entity};
+    use json.{json-value};
+
+    /// Task lifecycle states
+    enum task-lifecycle {
+        pending,
+        assigned,
+        in-progress,
+        completed,
+        failed,
+    }
+
+    /// Task priority levels
+    enum task-priority {
+        p0,
+        p1,
+        p2,
+        p3,
+        p4,
+    }
+
+    /// Success criterion specification
+    record success-criterion {
+        criterion-type: string,
+        params: json-value,
+    }
+
+    /// Task specification
+    record task-spec {
+        inputs: list<string>,
+        outputs: list<string>,
+        constraints: list<string>,
+        success-criteria: list<success-criterion>,
+    }
+
+    /// Task configuration
+    record task-config {
+        title: string,
+        description: option<string>,
+        spec: option<task-spec>,
+        assignee: option<address>,
+        priority: option<task-priority>,
+    }
+
+    /// Task resource
+    resource task {
+        as-entity: func() -> entity;
+        get-lifecycle: func() -> task-lifecycle;
+        get-config: func() -> task-config;
+        get-result: func() -> option<json-value>;
+        get-failure-reason: func() -> option<string>;
+        evaluate-criteria: func() -> result<bool, string>;
+    }
+
+    /// Task operations
+    create-task: func(id: string, title: string, config: task-config) -> result<address, string>;
+    get-task: func(addr: address) -> result<task, string>;
+    update-task: func(addr: address, config: task-config) -> result<_, string>;
+    assign-task: func(addr: address, assignee: address) -> result<_, string>;
+    unassign-task: func(addr: address) -> result<_, string>;
+    start-task: func(addr: address) -> result<_, string>;
+    complete-task: func(addr: address, task-result: option<json-value>) -> result<_, string>;
+    fail-task: func(addr: address, reason: string) -> result<_, string>;
+    list-by-lifecycle: func(lifecycle: task-lifecycle) -> list<address>;
+    list-by-assignee: func(assignee: address) -> list<address>;
+    list-by-priority: func(priority: task-priority) -> list<address>;
+}
+
+/// Session entity interface
+interface session {
+    use address.{address};
+    use entity.{entity};
+
+    /// Session lifecycle states
+    enum session-lifecycle {
+        created,
+        active,
+        paused,
+        completed,
+    }
+
+    /// Message role
+    enum message-role {
+        user,
+        assistant,
+    }
+
+    /// Message usage statistics
+    record message-usage {
+        input-tokens: u32,
+        output-tokens: u32,
+    }
+
+    /// Session message entry
+    record session-message {
+        uuid: string,
+        parent-uuid: option<string>,
+        timestamp: string,
+        role: message-role,
+        content: string,
+        model: option<string>,
+        usage: option<message-usage>,
+    }
+
+    /// Session configuration
+    record session-config {
+        owner: option<address>,
+        default-model: address,
+        log-file: string,
+    }
+
+    /// Send message options
+    record send-message-options {
+        model: option<address>,
+        situation: option<string>,
+        system: option<string>,
+    }
+
+    /// Send message result
+    record send-message-result {
+        success: bool,
+        text: option<string>,
+        usage: option<message-usage>,
+        error: option<string>,
+        duration: u64,
+        model: string,
+    }
+
+    /// Session resource
+    resource session {
+        as-entity: func() -> entity;
+        get-lifecycle: func() -> session-lifecycle;
+        get-config: func() -> session-config;
+        get-history: func(limit: option<u32>) -> list<session-message>;
+        get-message-count: func() -> u32;
+    }
+
+    /// Session operations
+    create-session: func(id: string, default-model: address, owner: option<address>) -> result<address, string>;
+    get-session: func(addr: address) -> result<session, string>;
+    send-message: func(addr: address, message: string, options: option<send-message-options>) -> result<send-message-result, string>;
+    pause-session: func(addr: address) -> result<_, string>;
+    resume-session: func(addr: address) -> result<_, string>;
+    complete-session: func(addr: address) -> result<_, string>;
+    list-by-lifecycle: func(lifecycle: session-lifecycle) -> list<address>;
+    list-by-owner: func(owner: address) -> list<address>;
+}
+
+/// Human entity interface
+interface human {
+    use address.{address};
+    use entity.{entity};
+
+    /// Human presence states
+    enum human-state {
+        available,
+        busy,
+        away,
+        offline,
+    }
+
+    /// Notification channel
+    enum notification-channel {
+        terminal,
+        email,
+        slack,
+    }
+
+    /// Human permission
+    enum human-permission {
+        approve,
+        assign,
+        configure,
+        admin,
+    }
+
+    /// Human preferences
+    record human-preferences {
+        notification-channel: option<notification-channel>,
+        timezone: option<string>,
+    }
+
+    /// Human configuration
+    record human-config {
+        name: string,
+        email: option<string>,
+        preferences: option<human-preferences>,
+        permissions: list<human-permission>,
+    }
+
+    /// Approval request status
+    enum approval-status {
+        pending,
+        approved,
+        rejected,
+    }
+
+    /// Approval request
+    record approval-request {
+        id: string,
+        description: string,
+        requested-by: option<address>,
+        requested-at: u64,
+        status: approval-status,
+        resolved-at: option<u64>,
+        reason: option<string>,
+    }
+
+    /// Notification
+    record notification {
+        id: string,
+        message: string,
+        sent-at: u64,
+        channel: notification-channel,
+        read: bool,
+    }
+
+    /// Human resource
+    resource human {
+        as-entity: func() -> entity;
+        get-state: func() -> human-state;
+        get-config: func() -> human-config;
+        has-permission: func(permission: human-permission) -> bool;
+    }
+
+    /// Human operations
+    create-human: func(id: string, name: string, config: human-config, initial-state: option<human-state>) -> result<address, string>;
+    get-human: func(addr: address) -> result<human, string>;
+    update-human: func(addr: address, config: human-config) -> result<_, string>;
+    set-status: func(addr: address, state: human-state) -> result<_, string>;
+    notify: func(addr: address, message: string, channel: option<notification-channel>) -> result<notification, string>;
+    request-approval: func(addr: address, description: string, requested-by: option<address>) -> result<approval-request, string>;
+    approve: func(addr: address, approval-id: string) -> result<approval-request, string>;
+    reject: func(addr: address, approval-id: string, reason: option<string>) -> result<approval-request, string>;
+    get-pending-approvals: func(addr: address) -> list<approval-request>;
+    get-notifications: func(addr: address, unread-only: bool) -> list<notification>;
+    list-by-state: func(state: human-state) -> list<address>;
+}
+
+// ============================================================================
+// QUERY SYSTEM
+// ============================================================================
+
+/// Success criteria evaluation interface
+interface criteria {
+    use address.{address};
+    use json.{json-value};
+
+    /// Criterion evaluation result
+    enum criterion-result {
+        pass,
+        fail,
+        inconclusive,
+    }
+
+    /// Common criterion types
+    enum criterion-type {
+        file-exists,
+        word-count,
+        pattern-match,
+        custom,
+    }
+
+    /// File existence criterion parameters
+    record file-exists-params {
+        path: string,
+    }
+
+    /// Word count criterion parameters
+    record word-count-params {
+        min-words: option<u32>,
+        max-words: option<u32>,
+        text-source: string,
+    }
+
+    /// Pattern match criterion parameters
+    record pattern-match-params {
+        pattern: string,
+        text-source: string,
+        must-match: bool,
+    }
+
+    /// Custom criterion parameters
+    record custom-params {
+        evaluator-code: string,
+        params: json-value,
+    }
+
+    /// Criterion specification
+    variant criterion-spec {
+        file-exists(file-exists-params),
+        word-count(word-count-params),
+        pattern-match(pattern-match-params),
+        custom(custom-params),
+    }
+
+    /// Evaluation context
+    record eval-context {
+        task: address,
+        timestamp: u64,
+        context: json-value,
+    }
+
+    /// Evaluation result
+    record evaluation-result {
+        criterion-result: criterion-result,
+        reason: option<string>,
+        details: option<json-value>,
+    }
+
+    /// Criteria operations
+    evaluate-criterion: func(spec: criterion-spec, context: eval-context) -> result<evaluation-result, string>;
+    evaluate-all: func(specs: list<criterion-spec>, context: eval-context) -> result<evaluation-result, string>;
+    evaluate-any: func(specs: list<criterion-spec>, context: eval-context) -> result<evaluation-result, string>;
+    register-evaluator: func(name: string, evaluator-code: string) -> result<_, string>;
+    list-evaluators: func() -> list<string>;
+}
+
+/// Query DSL interface
+interface query {
+    use address.{address};
+    use node.{property-value};
+    use graph.{direction};
+    use json.{json-value};
+
+    /// Pattern specification
+    record pattern-spec {
+        variable: string,
+        labels: list<string>,
+        where-clause: list<tuple<string, property-value>>,
+    }
+
+    /// Relationship constraint
+    record relationship-constraint {
+        target-variable: string,
+        edge-type: option<string>,
+        direction: direction,
+        properties: list<tuple<string, property-value>>,
+    }
+
+    /// Traversal specification
+    record traversal-spec {
+        from-variable: string,
+        edge-type: option<string>,
+        direction: direction,
+        min-depth: option<u32>,
+        max-depth: option<u32>,
+        result-variable: string,
+    }
+
+    /// Aggregation operation
+    enum aggregation-op {
+        count,
+        collect,
+        group,
+        sum,
+        avg,
+    }
+
+    /// Aggregation specification
+    record aggregation-spec {
+        operation: aggregation-op,
+        variable: string,
+        group-by: option<string>,
+        result-variable: string,
+    }
+
+    /// Query definition
+    record query-definition {
+        patterns: list<pattern-spec>,
+        traversals: list<traversal-spec>,
+        aggregations: list<aggregation-spec>,
+        return-variables: list<string>,
+    }
+
+    /// Query execution statistics
+    record query-stats {
+        duration-ms: u64,
+        steps-executed: u32,
+        messages-sent: u32,
+        cache-hits: u32,
+        cache-misses: u32,
+        results-returned: u32,
+    }
+
+    /// Query result
+    record query-result {
+        bindings: list<tuple<string, list<address>>>,
+        stats: query-stats,
+        success: bool,
+        error: option<string>,
+    }
+
+    /// Query operations
+    compile: func(definition: query-definition) -> result<string, string>;
+    execute: func(plan-id: string) -> result<query-result, string>;
+    query-execute: func(definition: query-definition) -> result<query-result, string>;
+    explain: func(definition: query-definition) -> result<string, string>;
+    get-query-stats: func(plan-id: string) -> option<query-stats>;
+    clear-cache: func() -> result<_, string>;
+}
+
+// ============================================================================
+// KNOWLEDGE MANAGEMENT
+// ============================================================================
+
+/// Embedding and similarity search interface
+interface embedding {
+    use address.{address};
+
+    /// Embedding model information
+    record embedding-model {
+        name: string,
+        dimensions: u32,
+        provider: string,
+    }
+
+    /// Similarity search result
+    record similarity-result {
+        node: address,
+        similarity: f64,
+    }
+
+    /// Similarity search options
+    record similarity-options {
+        node-type: option<string>,
+        limit: u32,
+        min-similarity: f64,
+    }
+
+    /// Embedding statistics
+    record embedding-stats {
+        total-nodes: u32,
+        embedded-nodes: u32,
+        model: string,
+        dimensions: u32,
+    }
+
+    /// Embedding operations
+    get-model: func() -> embedding-model;
+    embed-text: func(text: string) -> result<list<f64>, string>;
+    embed-node: func(node: address) -> result<list<f64>, string>;
+    embed-nodes: func(nodes: list<address>) -> result<list<address>, string>;
+    get-node-embedding: func(node: address) -> option<list<f64>>;
+    has-embedding: func(node: address) -> bool;
+    cosine-similarity: func(a: list<f64>, b: list<f64>) -> result<f64, string>;
+    find-similar-to-text: func(text: string, options: similarity-options) -> result<list<similarity-result>, string>;
+    find-similar-to-node: func(node: address, options: similarity-options) -> result<list<similarity-result>, string>;
+    find-similar: func(vector: list<f64>, options: similarity-options) -> list<similarity-result>;
+    get-stats: func() -> embedding-stats;
+}
+
+/// Convergence detection interface
+interface convergence {
+    use address.{address};
+
+    /// Convergence signal strength
+    enum convergence-strength {
+        weak,
+        moderate,
+        strong,
+    }
+
+    /// Convergence detection result
+    record convergence-detection {
+        nodes: list<address>,
+        strength: convergence-strength,
+        similarity: f64,
+        theme: option<string>,
+        detected-at: u64,
+    }
+
+    /// Convergence tracking options
+    record convergence-options {
+        min-similarity: f64,
+        min-nodes: u32,
+        time-window: u64,
+    }
+
+    /// Convergence operations
+    detect-convergence: func(nodes: list<address>, options: convergence-options) -> result<list<convergence-detection>, string>;
+    monitor-convergence: func(node-type: option<string>, options: convergence-options) -> result<_, string>;
+    get-convergence-history: func(limit: u32) -> list<convergence-detection>;
+    are-converging: func(nodes: list<address>, threshold: f64) -> result<bool, string>;
+    extract-theme: func(nodes: list<address>) -> result<string, string>;
+}
+
+/// Session state management interface
+interface session-state {
+    use address.{address};
+    use json.{json-value};
+
+    /// Session context snapshot
+    record session-context {
+        session: address,
+        iteration: u32,
+        task: option<address>,
+        context: list<tuple<string, json-value>>,
+        captured-at: u64,
+    }
+
+    /// Knowledge artifact
+    record knowledge-artifact {
+        id: string,
+        artifact-type: string,
+        content: json-value,
+        source: address,
+        created-at: u64,
+        relevance: f64,
+    }
+
+    /// Session knowledge state
+    record session-knowledge {
+        session: address,
+        artifacts: list<knowledge-artifact>,
+        patterns: list<string>,
+        contexts: list<session-context>,
+    }
+
+    /// Session state operations
+    capture-context: func(session: address) -> result<session-context, string>;
+    get-context-history: func(session: address, limit: u32) -> list<session-context>;
+    store-artifact: func(session: address, artifact-type: string, content: json-value, source: address) -> result<knowledge-artifact, string>;
+    get-artifacts: func(session: address, artifact-type: option<string>) -> list<knowledge-artifact>;
+    extract-patterns: func(session: address) -> result<list<string>, string>;
+    get-session-knowledge: func(session: address) -> result<session-knowledge, string>;
+    clear-session-state: func(session: address) -> result<_, string>;
+    export-knowledge: func(session: address) -> result<json-value, string>;
+    import-knowledge: func(session: address, knowledge: json-value) -> result<_, string>;
+}
+
+// ============================================================================
+// ACTOR/PROGRAM SYSTEM
+// ============================================================================
+
+/// Actor communication interface
+interface actor {
+    use address.{address};
+
+    /// Message pattern
+    enum message-pattern {
+        tell,
+        ask,
+        stream-msg,
+    }
+
+    /// Actor lifecycle states
+    enum actor-state {
+        initializing,
+        ready,
+        active,
+        paused,
+        stopping,
+        stopped,
+        error,
+    }
+
+    /// Supervision strategy
+    enum supervision-strategy {
+        restart,
+        stop,
+        resume,
+        escalate,
+    }
+
+    /// Node type (from message protocol)
+    enum node-type {
+        producer,
+        consumer,
+        relay,
+        processor,
+        hybrid,
+    }
+
+    /// Node capabilities
+    record node-capabilities {
+        node-type: node-type,
+        message-types: list<string>,
+        async-processing: bool,
+        max-concurrent: u32,
+        rate-limit: option<u32>,
+    }
+
+    /// Node health
+    record node-health {
+        state: actor-state,
+        checked-at: string,
+        messages-processed: u64,
+        messages-failed: u64,
+        details: option<string>,
+    }
+
+    /// Actor metadata
+    record actor-metadata {
+        name: string,
+        actor-type: node-type,
+        patterns: list<message-pattern>,
+        capabilities: node-capabilities,
+        supervision: supervision-strategy,
+        version: string,
+        created: string,
+    }
+
+    /// Message envelope
+    record message-envelope {
+        id: string,
+        version: string,
+        source: string,
+        destination: string,
+        message-type: string,
+        payload: list<u8>,
+        timestamp: string,
+        correlation-id: option<string>,
+        metadata: list<tuple<string, string>>,
+    }
+
+    /// Message response
+    record message-response {
+        id: string,
+        correlation-id: string,
+        sender: address,
+        to: address,
+        success: bool,
+        payload: option<list<u8>>,
+        error: option<string>,
+        timestamp: string,
+    }
+
+    /// Stream event type
+    enum stream-event-type {
+        data,
+        end,
+        error,
+    }
+
+    /// Stream event
+    record stream-event {
+        id: string,
+        correlation-id: string,
+        sender: address,
+        event-type: stream-event-type,
+        payload: option<list<u8>>,
+        error: option<string>,
+        timestamp: string,
+    }
+
+    /// Actor statistics
+    record actor-stats {
+        state: actor-state,
+        messages-received: u64,
+        messages-sent: u64,
+        messages-failed: u64,
+        mailbox-size: u32,
+        uptime-ms: u64,
+        last-message-at: option<string>,
+    }
+
+    /// Actor resource
+    resource actor {
+        get-address: func() -> address;
+        get-metadata: func() -> actor-metadata;
+        health: func() -> node-health;
+        stats: func() -> actor-stats;
+        receive: func(message: message-envelope) -> result<_, string>;
+        ask: func(message: message-envelope, timeout-ms: u64) -> result<message-response, string>;
+        tell: func(to: address, message-type: string, payload: list<u8>) -> result<_, string>;
+        ask-actor: func(to: address, message-type: string, payload: list<u8>, timeout-ms: u64) -> result<message-response, string>;
+        shutdown: func() -> result<_, string>;
+    }
+
+    /// Actor system operations
+    create-actor: func(id: string, actor-type: node-type, config: list<tuple<string, string>>) -> result<actor, string>;
+    get-actor: func(addr: address) -> result<actor, string>;
+    register-actor: func(id: string, actor: actor) -> result<_, string>;
+    unregister-actor: func(id: string) -> result<_, string>;
+    list-actors: func() -> list<address>;
+    list-by-type: func(actor-type: node-type) -> list<address>;
+    send: func(message: message-envelope) -> result<option<message-response>, string>;
+}
+
+/// Program execution interface
+interface program {
+    use address.{address};
+    use entity.{entity-lifecycle};
+
+    /// Program runtime
+    enum program-runtime {
+        javascript,
+        python,
+        wasm,
+        native,
+        container,
+        custom,
+    }
+
+    /// Execution mode
+    enum execution-mode {
+        inline,
+        worker,
+        subprocess,
+        container,
+    }
+
+    /// Program state
+    variant program-state {
+        draft,
+        published,
+        deprecated,
+    }
+
+    /// Program metadata
+    record program-metadata {
+        name: string,
+        description: option<string>,
+        runtime: program-runtime,
+        execution-mode: execution-mode,
+        state: program-state,
+        version: u32,
+        input-schema: option<string>,
+        output-schema: option<string>,
+        created: string,
+        modified: string,
+        tags: list<string>,
+    }
+
+    /// Invocation request
+    record invocation-request {
+        id: string,
+        program: address,
+        input: option<list<u8>>,
+        timeout-ms: u64,
+        context: list<tuple<string, string>>,
+        timestamp: string,
+    }
+
+    /// Invocation result
+    record invocation-result {
+        request-id: string,
+        success: bool,
+        output: option<list<u8>>,
+        error: option<string>,
+        duration-ms: u64,
+        timestamp: string,
+        metadata: list<tuple<string, string>>,
+    }
+
+    /// Program statistics
+    record program-stats {
+        total-invocations: u64,
+        successful-invocations: u64,
+        failed-invocations: u64,
+        avg-duration-ms: f64,
+        last-invoked-at: option<string>,
+    }
+
+    /// Program creation options
+    record program-options {
+        input-schema: option<string>,
+        output-schema: option<string>,
+        description: option<string>,
+        tags: list<string>,
+    }
+
+    /// Program resource
+    resource program {
+        get-address: func() -> address;
+        get-metadata: func() -> program-metadata;
+        get-implementation: func() -> result<string, string>;
+        get-stats: func() -> program-stats;
+        get-state: func() -> program-state;
+        update: func(implementation: option<string>, input-schema: option<string>, output-schema: option<string>, description: option<string>) -> result<_, string>;
+        publish: func() -> result<_, string>;
+        deprecate: func() -> result<_, string>;
+        invoke: func(input: option<list<u8>>, timeout-ms: u64) -> result<invocation-result, string>;
+        validate-input: func(input: list<u8>) -> result<bool, string>;
+        validate-output: func(output: list<u8>) -> result<bool, string>;
+    }
+
+    /// Program operations
+    create-program: func(id: string, name: string, implementation: string, runtime: program-runtime, execution-mode: execution-mode, options: program-options) -> result<program, string>;
+    get-program: func(addr: address) -> result<program, string>;
+    delete-program: func(addr: address) -> result<_, string>;
+    list-programs: func() -> list<address>;
+    list-by-state: func(state: program-state) -> list<address>;
+    list-by-runtime: func(runtime: program-runtime) -> list<address>;
+    search-by-tags: func(tags: list<string>) -> list<address>;
+    invoke-program: func(addr: address, input: option<list<u8>>, timeout-ms: u64) -> result<invocation-result, string>;
+}
+
+// ============================================================================
+// WORLDS
+// ============================================================================
+
+/// Graph primitives world
+world domain-graph {
+    export address;
+    export node;
+    export edge;
+    export graph;
+}
+
+/// Entity management world
+world domain-entities {
+    export json;
+    export entity;
+    export agent;
+    export task;
+    export session;
+    export human;
+}
+
+/// Query and criteria world
+world domain-query {
+    export criteria;
+    export query;
+}
+
+/// Knowledge management world
+world domain-knowledge {
+    export embedding;
+    export convergence;
+    export session-state;
+}
+
+/// Actor/program world
+world domain-actors {
+    export actor;
+    export program;
+}
+
+/// Complete domain model world
+world domain {
+    export address;
+    export node;
+    export edge;
+    export graph;
+    export json;
+    export entity;
+    export agent;
+    export task;
+    export session;
+    export human;
+    export criteria;
+    export query;
+    export embedding;
+    export convergence;
+    export session-state;
+    export actor;
+    export program;
+}

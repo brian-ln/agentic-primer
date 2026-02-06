@@ -1,0 +1,347 @@
+// Agentic Primer Message-Graph Protocol
+// Message routing and node communication for Convergence and Simplify
+// Merged from UGS component.wit and gateway.wit
+
+package agentic-primer:message@0.1.0;
+
+interface types {
+    /// Error severity levels
+    enum error-severity {
+        info,
+        warning,
+        error,
+        critical,
+    }
+
+    /// Error categories
+    enum error-category {
+        configuration,
+        validation,
+        transport,
+        routing,
+        protocol,
+        resources,
+        authentication,
+        authorization,
+        timeout,
+        unknown,
+    }
+
+    /// Retry strategy information
+    record retry-info {
+        retryable: bool,
+        retry-after-ms: option<u64>,
+        max-attempts: option<u32>,
+    }
+
+    /// Detailed error information
+    record error-info {
+        code: string,
+        message: string,
+        severity: error-severity,
+        category: error-category,
+        details: option<string>,
+        timestamp: string,
+        correlation-id: option<string>,
+        retry-info: option<retry-info>,
+    }
+}
+
+/// Core message interface
+interface message {
+    use types.{error-info};
+
+    /// Message envelope for node communication
+    record message-envelope {
+        /// Unique message identifier (UUID v7)
+        id: string,
+
+        /// Protocol version (semver)
+        version: string,
+
+        /// Source node ID
+        source: string,
+
+        /// Destination node ID
+        destination: string,
+
+        /// Message type/operation
+        message-type: string,
+
+        /// Message payload (serialized bytes)
+        payload: list<u8>,
+
+        /// Timestamp (ISO 8601)
+        timestamp: string,
+
+        /// Correlation ID for request-response
+        correlation-id: option<string>,
+
+        /// Message metadata
+        metadata: list<tuple<string, string>>,
+    }
+
+    /// Node type classification
+    enum node-type {
+        /// Emits messages (e.g., Convergence supervisor)
+        producer,
+
+        /// Processes messages (e.g., Convergence worker)
+        consumer,
+
+        /// Forwards messages (e.g., relay node)
+        relay,
+
+        /// Transforms messages (e.g., adapter)
+        processor,
+
+        /// Hybrid (multiple roles)
+        hybrid,
+    }
+
+    /// Node lifecycle state
+    enum node-state {
+        /// Node is initializing
+        initializing,
+
+        /// Node is ready to receive messages
+        ready,
+
+        /// Node is processing messages
+        active,
+
+        /// Node is shutting down
+        stopping,
+
+        /// Node has stopped
+        stopped,
+
+        /// Node encountered an error
+        error,
+    }
+
+    /// Node capabilities
+    record node-capabilities {
+        /// Node type
+        node-type: node-type,
+
+        /// Supported message types
+        message-types: list<string>,
+
+        /// Can handle async messages
+        async-processing: bool,
+
+        /// Maximum concurrent messages
+        max-concurrent: u32,
+
+        /// Message rate limit (messages per second)
+        rate-limit: option<u32>,
+    }
+
+    /// Node health status
+    record node-health {
+        /// Current node state
+        state: node-state,
+
+        /// Health check timestamp
+        checked-at: string,
+
+        /// Messages processed
+        messages-processed: u64,
+
+        /// Messages failed
+        messages-failed: u64,
+
+        /// Additional health information
+        details: option<string>,
+    }
+
+    /// Node metadata for registration
+    record node-info {
+        /// Node unique identifier
+        id: string,
+
+        /// Node name
+        name: string,
+
+        /// Node version
+        version: string,
+
+        /// Node capabilities
+        capabilities: node-capabilities,
+
+        /// Node description
+        description: option<string>,
+    }
+}
+
+/// Message node interface
+interface node {
+    use types.{error-info};
+    use message.{message-envelope, node-type, node-capabilities, node-health, node-info};
+
+    /// Get node ID
+    id: func() -> string;
+
+    /// Get node name
+    name: func() -> string;
+
+    /// Get node type
+    get-node-type: func() -> node-type;
+
+    /// Get node information
+    info: func() -> node-info;
+
+    /// Initialize the node with configuration
+    initialize: func(config: string) -> result<_, error-info>;
+
+    /// Send a message from this node
+    send: func(message: message-envelope) -> result<_, error-info>;
+
+    /// Receive a message at this node
+    receive: func(message: message-envelope) -> result<_, error-info>;
+
+    /// Process a message and optionally produce a response
+    process: func(message: message-envelope) -> result<option<message-envelope>, error-info>;
+
+    /// Get node capabilities
+    capabilities: func() -> node-capabilities;
+
+    /// Check node health
+    health-check: func() -> node-health;
+
+    /// Shutdown the node gracefully
+    shutdown: func() -> result<_, error-info>;
+}
+
+/// Message routing interface
+interface router {
+    use types.{error-info};
+    use message.{message-envelope, node-capabilities};
+
+    /// Routing decision
+    enum routing-decision {
+        /// Route to specific node
+        route-to-node,
+
+        /// Broadcast to multiple nodes
+        broadcast,
+
+        /// Message does not match any routes
+        no-route,
+
+        /// Message rejected by policy
+        rejected,
+    }
+
+    /// Route information
+    record route-info {
+        /// Destination node ID
+        destination: string,
+
+        /// Routing decision
+        decision: routing-decision,
+
+        /// Route metadata
+        metadata: list<tuple<string, string>>,
+    }
+
+    /// Router statistics
+    record router-stats {
+        /// Total messages routed
+        messages-routed: u64,
+
+        /// Total messages failed
+        messages-failed: u64,
+
+        /// Active nodes
+        active-nodes: u32,
+
+        /// Router uptime in seconds
+        uptime-seconds: u64,
+    }
+
+    /// Register a node with the router
+    register-node: func(
+        node-id: string,
+        capabilities: node-capabilities
+    ) -> result<_, error-info>;
+
+    /// Unregister a node
+    unregister-node: func(node-id: string) -> result<_, error-info>;
+
+    /// Route a message to appropriate node(s)
+    route: func(message: message-envelope) -> result<list<route-info>, error-info>;
+
+    /// Send a message through the router
+    send: func(message: message-envelope) -> result<option<message-envelope>, error-info>;
+
+    /// Get router statistics
+    stats: func() -> router-stats;
+
+    /// List registered nodes
+    list-nodes: func() -> list<string>;
+
+    /// Get node capabilities by ID
+    get-node-capabilities: func(node-id: string) -> result<node-capabilities, error-info>;
+}
+
+/// Message delivery interface
+interface delivery {
+    use types.{error-info};
+    use message.{message-envelope};
+
+    /// Delivery status
+    enum delivery-status {
+        /// Message delivered successfully
+        delivered,
+
+        /// Message pending delivery
+        pending,
+
+        /// Message delivery failed
+        failed,
+
+        /// Message delivery timed out
+        timeout,
+
+        /// Message rejected by receiver
+        rejected,
+    }
+
+    /// Delivery receipt
+    record delivery-receipt {
+        /// Message ID
+        message-id: string,
+
+        /// Delivery status
+        status: delivery-status,
+
+        /// Delivery timestamp
+        delivered-at: option<string>,
+
+        /// Destination node ID
+        destination: string,
+
+        /// Delivery attempts
+        attempts: u32,
+
+        /// Error information (if failed)
+        error: option<error-info>,
+    }
+
+    /// Send message with delivery tracking
+    send-tracked: func(message: message-envelope) -> result<string, error-info>;
+
+    /// Get delivery status
+    get-status: func(message-id: string) -> result<delivery-receipt, error-info>;
+
+    /// Wait for delivery confirmation
+    wait-for-delivery: func(
+        message-id: string,
+        timeout-ms: u64
+    ) -> result<delivery-receipt, error-info>;
+
+    /// Retry failed delivery
+    retry-delivery: func(message-id: string) -> result<_, error-info>;
+}

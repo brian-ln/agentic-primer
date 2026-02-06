@@ -1,1 +1,39 @@
 .wt/
+
+# Generated bindings
+core/bindings/typescript/**/*
+!core/bindings/typescript/.gitkeep
+
+# Generated WASM components
+core/wasm/**/*.wasm
+*.wasm
+
+# Node modules
+node_modules/
+
+# Build artifacts
+dist/
+build/
+*.js.map
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+.env.local
+.env.*.local

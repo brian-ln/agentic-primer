@@ -1,0 +1,524 @@
+// Agentic Primer AI Provider Interface
+// Handles AI provider integrations (Anthropic, OpenAI, Google, etc.)
+// with cost tracking and usage monitoring
+// Adapted from UGS adapter.wit for AI-first platform
+
+package agentic-primer:provider@0.1.0;
+
+interface types {
+    /// Error severity levels
+    enum error-severity {
+        info,
+        warning,
+        error,
+        critical,
+    }
+
+    /// Error categories for classification
+    enum error-category {
+        configuration,
+        validation,
+        transport,
+        routing,
+        protocol,
+        resources,
+        authentication,
+        authorization,
+        timeout,
+        unknown,
+    }
+
+    /// Retry strategy information
+    record retry-info {
+        retryable: bool,
+        retry-after-ms: option<u64>,
+        max-attempts: option<u32>,
+    }
+
+    /// Detailed error information
+    record error-info {
+        code: string,
+        message: string,
+        severity: error-severity,
+        category: error-category,
+        details: option<string>,
+        timestamp: string,
+        correlation-id: option<string>,
+        retry-info: option<retry-info>,
+    }
+
+    /// Content encoding types
+    enum content-encoding {
+        none,
+        json,
+        messagepack,
+        protobuf,
+        cbor,
+        custom,
+    }
+}
+
+/// AI provider interface
+interface provider {
+    use types.{error-info, content-encoding};
+    /// Supported AI provider protocols
+    enum protocol-type {
+        /// OpenAI Chat Completions API format
+        openai-chat,
+
+        /// Anthropic Messages API format
+        anthropic-messages,
+
+        /// Google Gemini API format
+        google-gemini,
+
+        /// Cohere API format
+        cohere,
+
+        /// UGS native format (for compatibility)
+        ugs-native,
+
+        /// Custom protocol (with schema definition)
+        custom,
+    }
+
+    /// Message exchange pattern
+    enum exchange-pattern {
+        /// Single request, single response
+        request-response,
+
+        /// Single request, streaming response
+        request-stream,
+
+        /// Fire-and-forget (no response expected)
+        one-way,
+    }
+
+    /// Provider feature capabilities
+    record provider-capabilities {
+        /// Supports streaming responses
+        supports-streaming: bool,
+
+        /// Supports function calling / tool use
+        supports-function-calling: bool,
+
+        /// Supports vision/image inputs
+        supports-vision: bool,
+
+        /// Supports system messages
+        supports-system-messages: bool,
+
+        /// Supports conversation history
+        supports-conversation: bool,
+
+        /// Maximum context window size (tokens)
+        max-context-tokens: option<u32>,
+
+        /// Requests per minute rate limit
+        requests-per-minute: option<u32>,
+
+        /// Tokens per minute rate limit
+        tokens-per-minute: option<u32>,
+
+        /// Supported content encodings
+        supported-encodings: list<content-encoding>,
+    }
+
+    /// Provider configuration
+    record provider-config {
+        /// Provider protocol type
+        protocol: protocol-type,
+
+        /// Exchange pattern
+        exchange-pattern: exchange-pattern,
+
+        /// API endpoint URL
+        endpoint: option<string>,
+
+        /// Enable strict validation (reject invalid inputs)
+        strict-validation: bool,
+
+        /// Custom schema for custom protocol (JSON Schema)
+        custom-schema: option<string>,
+
+        /// Provider-specific configuration (JSON)
+        additional-config: option<string>,
+    }
+
+    /// Conversion warning
+    record conversion-warning {
+        /// Warning code
+        code: string,
+
+        /// Warning message
+        message: string,
+
+        /// Field path that caused warning (e.g., "messages[0].content.image")
+        field-path: option<string>,
+
+        /// Suggested action
+        suggestion: option<string>,
+    }
+
+    /// OpenAI format message
+    record openai-message {
+        /// Message role (system, user, assistant, function, tool)
+        role: string,
+
+        /// Message content (string or array of content parts)
+        content: string,
+
+        /// Optional function call name (for function calling)
+        function-call-name: option<string>,
+
+        /// Optional function call arguments (JSON)
+        function-call-args: option<string>,
+
+        /// Optional tool call ID
+        tool-call-id: option<string>,
+
+        /// Optional tool calls (JSON array)
+        tool-calls: option<string>,
+    }
+
+    /// Anthropic format message
+    record anthropic-message {
+        /// Message role (user, assistant)
+        role: string,
+
+        /// Message content (string or array of content blocks)
+        content: string,
+
+        /// Optional tool use ID
+        tool-use-id: option<string>,
+
+        /// Optional tool result (JSON)
+        tool-result: option<string>,
+    }
+
+    /// OpenAI Chat Completions request structure
+    record openai-chat-request {
+        /// Model identifier
+        model: string,
+
+        /// Messages in conversation
+        messages: list<openai-message>,
+
+        /// Optional temperature (0.0-2.0)
+        temperature: option<f32>,
+
+        /// Optional max tokens
+        max-tokens: option<u32>,
+
+        /// Optional top-p
+        top-p: option<f32>,
+
+        /// Optional streaming flag
+        streaming: option<bool>,
+
+        /// Optional functions (JSON array)
+        functions: option<string>,
+
+        /// Optional tools (JSON array)
+        tools: option<string>,
+
+        /// Additional parameters (JSON object)
+        additional-params: list<tuple<string, string>>,
+    }
+
+    /// Anthropic Messages request structure
+    record anthropic-messages-request {
+        /// Model identifier
+        model: string,
+
+        /// Messages in conversation
+        messages: list<anthropic-message>,
+
+        /// Optional system prompt
+        system: option<string>,
+
+        /// Maximum tokens to generate
+        max-tokens: u32,
+
+        /// Optional temperature (0.0-1.0)
+        temperature: option<f32>,
+
+        /// Optional top-p
+        top-p: option<f32>,
+
+        /// Optional top-k
+        top-k: option<u32>,
+
+        /// Optional streaming flag
+        streaming: option<bool>,
+
+        /// Optional tools (JSON array)
+        tools: option<string>,
+
+        /// Additional parameters (JSON object)
+        additional-params: list<tuple<string, string>>,
+    }
+
+    /// Protocol-specific request envelope
+    variant provider-request {
+        /// OpenAI Chat Completions request
+        openai-chat(openai-chat-request),
+
+        /// Anthropic Messages request
+        anthropic-messages(anthropic-messages-request),
+
+        /// Raw JSON payload for custom protocols
+        custom(string),
+    }
+
+    /// Token usage information
+    record token-usage {
+        /// Prompt tokens
+        prompt-tokens: u32,
+
+        /// Completion tokens
+        completion-tokens: u32,
+
+        /// Total tokens
+        total-tokens: u32,
+
+        /// Cache creation tokens (for Anthropic prompt caching)
+        cache-creation-tokens: option<u32>,
+
+        /// Cache read tokens (for Anthropic prompt caching)
+        cache-read-tokens: option<u32>,
+    }
+
+    /// Cost estimate information
+    record cost-estimate {
+        /// Estimated input cost (USD)
+        input-cost: f64,
+
+        /// Estimated output cost (USD)
+        output-cost: f64,
+
+        /// Total estimated cost (USD)
+        total-cost: f64,
+
+        /// Estimated input tokens
+        estimated-input-tokens: u32,
+
+        /// Estimated output tokens
+        estimated-output-tokens: u32,
+
+        /// Model used for estimation
+        model: string,
+
+        /// Pricing tier (if applicable)
+        pricing-tier: option<string>,
+    }
+
+    /// OpenAI response choice
+    record openai-choice {
+        /// Choice index
+        index: u32,
+
+        /// Message content
+        message: openai-message,
+
+        /// Finish reason (stop, length, function_call, tool_calls)
+        finish-reason: option<string>,
+    }
+
+    /// OpenAI Chat Completions response structure
+    record openai-chat-response {
+        /// Response ID
+        id: string,
+
+        /// Object type (e.g., "chat.completion")
+        object: string,
+
+        /// Creation timestamp (Unix epoch)
+        created: u64,
+
+        /// Model used
+        model: string,
+
+        /// Choices array
+        choices: list<openai-choice>,
+
+        /// Usage information
+        usage: option<token-usage>,
+    }
+
+    /// Anthropic content block
+    record anthropic-content-block {
+        /// Block type (text, tool_use, tool_result)
+        block-type: string,
+
+        /// Text content (for text blocks)
+        text: option<string>,
+
+        /// Tool use ID (for tool_use blocks)
+        tool-use-id: option<string>,
+
+        /// Tool use name (for tool_use blocks)
+        tool-use-name: option<string>,
+
+        /// Tool use input (JSON, for tool_use blocks)
+        tool-use-input: option<string>,
+    }
+
+    /// Anthropic Messages response structure
+    record anthropic-messages-response {
+        /// Response ID
+        id: string,
+
+        /// Object type (e.g., "message")
+        response-type: string,
+
+        /// Message role (always "assistant")
+        role: string,
+
+        /// Content blocks
+        content: list<anthropic-content-block>,
+
+        /// Model used
+        model: string,
+
+        /// Stop reason (end_turn, max_tokens, stop_sequence, tool_use)
+        stop-reason: option<string>,
+
+        /// Usage information
+        usage: option<token-usage>,
+    }
+
+    /// Protocol-specific response envelope
+    variant provider-response {
+        /// OpenAI Chat Completions response
+        openai-chat(openai-chat-response),
+
+        /// Anthropic Messages response
+        anthropic-messages(anthropic-messages-response),
+
+        /// Raw JSON payload for custom protocols
+        custom(string),
+    }
+
+    /// Streaming chunk types
+    enum chunk-type {
+        /// Message start
+        message-start,
+
+        /// Content delta (incremental content)
+        content-delta,
+
+        /// Tool use start
+        tool-use-start,
+
+        /// Tool use delta
+        tool-use-delta,
+
+        /// Message end
+        message-end,
+
+        /// Error chunk
+        error,
+    }
+
+    /// Streaming response chunk
+    record stream-chunk {
+        /// Chunk type
+        chunk-type: chunk-type,
+
+        /// Content delta (for content-delta chunks)
+        delta: option<string>,
+
+        /// Metadata (chunk index, timing, etc.)
+        metadata: list<tuple<string, string>>,
+    }
+
+    /// Initialize provider with configuration
+    init: func(config: provider-config) -> result<_, error-info>;
+
+    /// Get provider capabilities
+    capabilities: func(protocol: protocol-type) -> provider-capabilities;
+
+    /// Estimate cost before making request
+    /// Returns cost estimate based on input tokens and expected output
+    estimate-cost: func(request: provider-request) -> result<cost-estimate, error-info>;
+
+    /// Calculate actual cost from response usage
+    /// Returns actual cost based on token usage in response
+    calculate-cost: func(usage: token-usage, model: string) -> result<f64, error-info>;
+
+    /// Validate provider request format
+    /// Checks if request conforms to provider specification
+    validate: func(request: provider-request) -> result<_, error-info>;
+
+    /// Send request to provider
+    /// Returns provider response with usage information
+    send-request: func(request: provider-request) -> result<provider-response, error-info>;
+
+    /// Convert streaming chunk
+    /// Handles incremental streaming responses
+    convert-stream-chunk: func(
+        chunk: stream-chunk,
+        protocol: protocol-type
+    ) -> result<stream-chunk, error-info>;
+
+    /// Extract usage information from response
+    /// Returns token usage for cost tracking
+    extract-usage: func(response: provider-response) -> result<token-usage, error-info>;
+
+    /// Shutdown provider
+    shutdown: func() -> result<_, error-info>;
+}
+
+/// Provider metadata and discovery
+interface metadata {
+    use types.{error-info};
+    use provider.{protocol-type, provider-capabilities};
+
+    /// Provider model information
+    record model-info {
+        /// Model identifier
+        model-id: string,
+
+        /// Model display name
+        display-name: string,
+
+        /// Provider type
+        provider: protocol-type,
+
+        /// Context window size (tokens)
+        context-window: u32,
+
+        /// Input token cost per 1M tokens (USD)
+        input-cost-per-1m: f64,
+
+        /// Output token cost per 1M tokens (USD)
+        output-cost-per-1m: f64,
+
+        /// Cache write cost per 1M tokens (USD, if applicable)
+        cache-write-cost-per-1m: option<f64>,
+
+        /// Cache read cost per 1M tokens (USD, if applicable)
+        cache-read-cost-per-1m: option<f64>,
+
+        /// Model capabilities
+        capabilities: provider-capabilities,
+
+        /// Deprecated flag
+        deprecated: bool,
+    }
+
+    /// Get model information
+    get-model-info: func(model-id: string) -> result<model-info, error-info>;
+
+    /// List available models for provider
+    list-models: func(provider: protocol-type) -> list<model-info>;
+
+    /// Get recommended model for use case
+    /// Returns best model based on capabilities and cost
+    recommend-model: func(
+        provider: protocol-type,
+        required-capabilities: provider-capabilities,
+        max-cost-per-1m: option<f64>
+    ) -> result<model-info, error-info>;
+}
