@@ -14,3 +14,6 @@ export * from './domain.types.js';
 
 // Re-export all validators
 export * from './domain.validators.js';
+
+// Re-export shared message types (cross-runtime wire format)
+export * from './shared-message.js';
