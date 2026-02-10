@@ -63,6 +63,30 @@ export {
 
 // Actor base class
 export { Actor } from './actor.ts';
+export { ActorWithIntrospection } from './actor-introspection.ts';
+
+// Introspection protocol
+export {
+  type JSONSchema,
+  type MessageAcceptance,
+  type HandlerRegistration,
+  type ActorMetadata,
+  type IntrospectResponse,
+  type MessageAcceptanceMetadata,
+  type MessageConsequences,
+  type MessageExample,
+  type AcceptanceCriteria,
+  type PingResponse,
+  accepts,
+} from './introspection.ts';
+
+// Schema validator
+export {
+  type ValidationError,
+  validateJSONSchema,
+  validateJSONSchemaErrors,
+  findClosestMatch,
+} from './schema-validator.ts';
 
 // Message router
 export { MessageRouter, type MessageRouterConfig } from './router.ts';
