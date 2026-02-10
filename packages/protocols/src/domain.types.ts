@@ -1433,7 +1433,7 @@ export interface TransportCapabilities {
  */
 
 /**
- * Persistence snapshot metadata
+ * Actor checkpoint snapshot metadata
  */
 export interface SnapshotMetadata {
   id: string;

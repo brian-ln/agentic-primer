@@ -5,7 +5,7 @@
  * It spawns a simple counter actor to verify:
  * - DOActorSystem lifecycle
  * - Actor message routing
- * - DOPersistence table creation
+ * - DOActorCheckpoint table creation
  * - HTTP actor-message endpoint
  */
 import { DurableObject } from 'cloudflare:workers';

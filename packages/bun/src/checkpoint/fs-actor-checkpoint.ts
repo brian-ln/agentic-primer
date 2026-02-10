@@ -1,5 +1,5 @@
 /**
- * FsPersistence - File-system based persistence implementing IPersistence
+ * FsActorCheckpoint - File-system based actor checkpoint implementing IActorCheckpoint
  *
  * WAL (Write-Ahead Log) + Snapshots pattern for durable state.
  * Uses node:fs/promises (works on both Node and Bun).
@@ -8,9 +8,9 @@
 import { writeFile, readFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import type { IPersistence } from '@agentic-primer/actors';
+import type { IActorCheckpoint } from '@agentic-primer/actors';
 
-export class FsPersistence implements IPersistence {
+export class FsActorCheckpoint implements IActorCheckpoint {
   private readonly dataDir: string;
 
   constructor(dataDir: string) {

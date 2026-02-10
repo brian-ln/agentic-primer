@@ -126,8 +126,8 @@ describe('MiniflareProvisioner + DOActorSystem', () => {
     expect(res.status).toBe(404);
   });
 
-  it('DOPersistence tables are created', async () => {
-    // The DOActorSystem initializes DOPersistence which creates
+  it('DOActorCheckpoint tables are created', async () => {
+    // The DOActorSystem initializes DOActorCheckpoint which creates
     // _actor_snapshots and _actor_wal tables. We verify this
     // by checking the stats endpoint works (which means the DO
     // constructor completed successfully, including blockConcurrencyWhile).

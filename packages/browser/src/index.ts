@@ -64,3 +64,14 @@ export {
 export {
   ServiceWorkerTransport,
 } from './transports/service-worker-transport.ts';
+
+// Signal <-> Channel Bridges (browser-specific)
+export {
+  type BridgeSignal,
+  signalToChannel,
+  signalToChannelWithSubscribe,
+  channelToSignal,
+  domEventChannel,
+  eventTargetChannel,
+  mergeChannels,
+} from './bridges.ts';

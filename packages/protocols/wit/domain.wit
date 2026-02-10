@@ -1185,18 +1185,18 @@ interface serde {
 // STORAGE
 // ============================================================================
 
-/// Persistence interface for actor state snapshots and WAL
-interface persistence {
-    /// Persistence error
-    variant persistence-error {
+/// Actor checkpoint interface for state snapshots and WAL
+interface actor-checkpoint {
+    /// Checkpoint error
+    variant checkpoint-error {
         not-found(string),
         io-error(string),
         corruption(string),
         version-conflict(string),
     }
 
-    /// Snapshot metadata
-    record snapshot-metadata {
+    /// Checkpoint metadata
+    record checkpoint-metadata {
         id: string,
         version: u64,
         timestamp: string,
@@ -1211,15 +1211,15 @@ interface persistence {
         data: list<u8>,
     }
 
-    /// Persistence operations
-    initialize: func(namespace: string) -> result<_, persistence-error>;
-    load-snapshot: func(id: string) -> result<tuple<list<u8>, snapshot-metadata>, persistence-error>;
-    save-snapshot: func(id: string, data: list<u8>) -> result<snapshot-metadata, persistence-error>;
-    delete-snapshot: func(id: string) -> result<_, persistence-error>;
-    list-snapshots: func() -> result<list<snapshot-metadata>, persistence-error>;
-    append-wal: func(id: string, entry: wal-entry) -> result<u64, persistence-error>;
-    replay-wal: func(id: string, from-sequence: option<u64>) -> result<list<wal-entry>, persistence-error>;
-    compact-wal: func(id: string, up-to-sequence: u64) -> result<_, persistence-error>;
+    /// Checkpoint operations
+    initialize: func(namespace: string) -> result<_, checkpoint-error>;
+    load-snapshot: func(id: string) -> result<tuple<list<u8>, checkpoint-metadata>, checkpoint-error>;
+    save-snapshot: func(id: string, data: list<u8>) -> result<checkpoint-metadata, checkpoint-error>;
+    delete-snapshot: func(id: string) -> result<_, checkpoint-error>;
+    list-snapshots: func() -> result<list<checkpoint-metadata>, checkpoint-error>;
+    append-wal: func(id: string, entry: wal-entry) -> result<u64, checkpoint-error>;
+    replay-wal: func(id: string, from-sequence: option<u64>) -> result<list<wal-entry>, checkpoint-error>;
+    compact-wal: func(id: string, up-to-sequence: u64) -> result<_, checkpoint-error>;
 }
 
 /// SQL storage interface
@@ -1345,6 +1345,39 @@ interface key-value-storage {
     list: func(options: list-options) -> result<list-result, kv-error>;
 }
 
+/// Blob/object storage interface (S3/R2-compatible)
+interface blob-storage {
+    record blob-metadata {
+        key: string,
+        size: u64,
+        uploaded: string,
+        http-metadata: option<list<tuple<string, string>>>,
+        custom-metadata: option<list<tuple<string, string>>>,
+    }
+
+    record blob-object {
+        body: list<u8>,
+        metadata: option<list<tuple<string, string>>>,
+    }
+
+    record blob-list-result {
+        objects: list<blob-metadata>,
+        cursor: option<string>,
+    }
+
+    variant blob-error {
+        not-found(string),
+        io-error(string),
+        quota-exceeded,
+    }
+
+    get: func(key: string) -> result<option<blob-object>, blob-error>;
+    put: func(key: string, body: list<u8>, http-metadata: option<list<tuple<string, string>>>, custom-metadata: option<list<tuple<string, string>>>) -> result<_, blob-error>;
+    delete: func(key: string) -> result<_, blob-error>;
+    list: func(prefix: option<string>, limit: option<u32>, cursor: option<string>) -> result<blob-list-result, blob-error>;
+    head: func(key: string) -> result<option<blob-metadata>, blob-error>;
+}
+
 // ============================================================================
 // WORLDS
 // ============================================================================
@@ -1391,9 +1424,10 @@ world domain-infrastructure {
     export connection;
     export transport;
     export serde;
-    export persistence;
+    export actor-checkpoint;
     export sql-storage;
     export key-value-storage;
+    export blob-storage;
     export vector-store;
     export embedder;
 }
@@ -1420,9 +1454,10 @@ world domain {
     export connection;
     export transport;
     export serde;
-    export persistence;
+    export actor-checkpoint;
     export sql-storage;
     export key-value-storage;
+    export blob-storage;
     export vector-store;
     export embedder;
 }

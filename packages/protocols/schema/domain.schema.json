@@ -940,7 +940,7 @@
 
     "snapshot-metadata": {
       "type": "object",
-      "description": "Persistence snapshot metadata",
+      "description": "Actor checkpoint snapshot metadata",
       "properties": {
         "id": {"type": "string"},
         "version": {"type": "integer", "minimum": 0},

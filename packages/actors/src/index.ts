@@ -44,7 +44,7 @@ export {
 export {
   type IActorRegistry,
   MapActorRegistry,
-  type IPersistence,
+  type IActorCheckpoint,
   type ITransport,
   type ISerde,
   type ConnectionState,
@@ -140,6 +140,23 @@ export {
   calculateRestartBackoff,
   formatRestartStrategy,
 } from './supervision/strategies.ts';
+
+// Channels - unified async communication primitives
+export {
+  type Channel,
+  type ChannelOptions,
+  BaseChannel,
+  ChannelClosedError,
+  ChannelCancelledError,
+  StreamChannel,
+  createStreamChannel,
+  PortChannel,
+  createPortChannel,
+  type SetupFn,
+  type CleanupFn,
+  BridgeChannel,
+  createBridgeChannel,
+} from './channels/index.ts';
 
 // Transport and serialization implementations
 export { LocalTransport } from './local-transport.ts';

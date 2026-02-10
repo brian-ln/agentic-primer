@@ -1,7 +1,7 @@
 /**
- * DO SQLite-based persistence for the actor system.
+ * DO SQLite-based actor checkpoint for the actor system.
  *
- * Implements IPersistence from @agentic-primer/actors using Durable Object
+ * Implements IActorCheckpoint from @agentic-primer/actors using Durable Object
  * storage's embedded SQLite database (ctx.storage.sql).
  *
  * Uses two tables:
@@ -10,12 +10,12 @@
  *
  * All SQL operations via storage.sql.exec() are synchronous within the DO's
  * single-threaded execution model, but the interface returns Promises for
- * compatibility with the portable IPersistence contract.
+ * compatibility with the portable IActorCheckpoint contract.
  */
 
-import type { IPersistence } from '@agentic-primer/actors';
+import type { IActorCheckpoint } from '@agentic-primer/actors';
 
-export class DOPersistence implements IPersistence {
+export class DOActorCheckpoint implements IActorCheckpoint {
   private readonly storage: DurableObjectStorage;
 
   constructor(storage: DurableObjectStorage) {

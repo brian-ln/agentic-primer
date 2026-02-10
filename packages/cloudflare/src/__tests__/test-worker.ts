@@ -1,11 +1,11 @@
 /**
  * Test worker entry point for vitest-pool-workers.
  *
- * Exports a Durable Object class (TestDO) that exposes DOPersistence
+ * Exports a Durable Object class (TestDO) that exposes DOActorCheckpoint
  * methods via RPC for testing from within the Workers runtime.
  */
 import { DurableObject } from 'cloudflare:workers';
-import { DOPersistence } from '../do-persistence.ts';
+import { DOActorCheckpoint } from '../do-actor-checkpoint.ts';
 
 export interface Env {
   DB: D1Database;
@@ -15,38 +15,38 @@ export interface Env {
 }
 
 /**
- * Test Durable Object that wraps DOPersistence and exposes its methods
+ * Test Durable Object that wraps DOActorCheckpoint and exposes its methods
  * for integration testing via RPC (Durable Object stubs in vitest-pool-workers
  * support calling public methods directly).
  */
 export class TestDO extends DurableObject<Env> {
-  private persistence: DOPersistence;
+  private checkpoint: DOActorCheckpoint;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    this.persistence = new DOPersistence(ctx.storage);
+    this.checkpoint = new DOActorCheckpoint(ctx.storage);
   }
 
   async initialize(): Promise<void> {
-    await this.persistence.initialize();
+    await this.checkpoint.initialize();
   }
 
   async saveSnapshot(key: string, data: number[]): Promise<void> {
-    await this.persistence.saveSnapshot(key, new Uint8Array(data));
+    await this.checkpoint.saveSnapshot(key, new Uint8Array(data));
   }
 
   async loadSnapshot(key: string): Promise<number[] | null> {
-    const result = await this.persistence.loadSnapshot(key);
+    const result = await this.checkpoint.loadSnapshot(key);
     if (result === null) return null;
     return Array.from(result);
   }
 
   async appendWAL(key: string, entry: number[]): Promise<void> {
-    await this.persistence.appendWAL(key, new Uint8Array(entry));
+    await this.checkpoint.appendWAL(key, new Uint8Array(entry));
   }
 
   async replayWAL(key: string): Promise<number[][]> {
-    const entries = await this.persistence.replayWAL(key);
+    const entries = await this.checkpoint.replayWAL(key);
     return entries.map((e) => Array.from(e));
   }
 }

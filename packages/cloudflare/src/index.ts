@@ -6,17 +6,18 @@
  *
  * Provides:
  * - DOActorSystem: Abstract DO base class wrapping ActorSystem
- * - DOPersistence: IPersistence via DO SQLite
+ * - DOActorCheckpoint: IActorCheckpoint via DO SQLite
  * - Transports: Inter-DO (stub.fetch), Worker-to-Worker (service bindings), WebSocket bridge
- * - Storage adapters: D1 (SQL), KV (key-value), R2 (blob)
+ * - Storage adapters: D1 (SQL), KV (key-value), R2 (blob), Vectorize (vector)
+ * - AI adapters: WorkersAIEmbedder (embeddings)
  * - Types: Address schemes, alarm scheduling, environment helpers
  */
 
 // DO Actor System
 export { DOActorSystem, type DOActorSystemConfig } from './do-actor-system.ts';
 
-// Persistence
-export { DOPersistence } from './do-persistence.ts';
+// Actor Checkpoint
+export { DOActorCheckpoint } from './do-actor-checkpoint.ts';
 
 // Transports
 export { DOTransport, type DOTransportConfig } from './transports/do-transport.ts';
@@ -27,6 +28,7 @@ export { WebSocketBridge } from './transports/websocket-bridge.ts';
 export { D1Storage } from './storage/d1-storage.ts';
 export { KVStorage } from './storage/kv-storage.ts';
 export { R2Storage } from './storage/r2-storage.ts';
+export { VectorizeStore } from './storage/vectorize-store.ts';
 // Re-export storage interfaces from actors for backward-compatible imports
 export type {
   ISqlStorage,
@@ -36,7 +38,12 @@ export type {
   SqlError,
   IKeyValueStorage,
   IBlobStorage,
+  IVectorStore,
+  IEmbedder,
 } from '@agentic-primer/actors';
+
+// AI adapters
+export { WorkersAIEmbedder, type WorkersAIEmbedderConfig } from './workers-ai-embedder.ts';
 
 // Provisioner
 export {

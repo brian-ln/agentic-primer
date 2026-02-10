@@ -1,8 +1,8 @@
 /**
- * Integration tests for DOPersistence.
+ * Integration tests for DOActorCheckpoint.
  *
  * These tests run inside the Workers runtime via vitest-pool-workers.
- * They use a TestDO Durable Object that wraps DOPersistence and exposes
+ * They use a TestDO Durable Object that wraps DOActorCheckpoint and exposes
  * its methods via RPC stubs.
  */
 import {
@@ -19,7 +19,7 @@ function getStub(): DurableObjectStub<TestDO> {
   return env.TEST_DO.get(id);
 }
 
-describe('DOPersistence', () => {
+describe('DOActorCheckpoint', () => {
   let stub: DurableObjectStub<TestDO>;
 
   beforeEach(() => {

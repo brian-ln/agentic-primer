@@ -34,8 +34,8 @@ export class MapActorRegistry implements IActorRegistry {
   }
 }
 
-/** Persistence interface - decouples GraphStore from node:fs */
-export interface IPersistence {
+/** Actor checkpoint interface - decouples actor state snapshots/WAL from storage */
+export interface IActorCheckpoint {
   initialize(): Promise<void>;
   loadSnapshot(key: string): Promise<Uint8Array | null>;
   saveSnapshot(key: string, data: Uint8Array): Promise<void>;

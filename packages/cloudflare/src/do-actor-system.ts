@@ -2,7 +2,7 @@
  * DOActorSystem — Abstract Durable Object base class wrapping ActorSystem
  *
  * Maps Durable Object lifecycle to ActorSystem:
- * - constructor: Creates ActorSystem + DOPersistence + WebSocketBridge
+ * - constructor: Creates ActorSystem + DOActorCheckpoint + WebSocketBridge
  * - fetch: Routes WebSocket upgrades and HTTP actor messages
  * - alarm: Delivers scheduled messages to actors
  * - webSocketMessage/webSocketClose: Delegates to WebSocketBridge
@@ -26,7 +26,7 @@
  */
 
 import { ActorSystem, address, type ActorSystemConfig } from '@agentic-primer/actors';
-import { DOPersistence } from './do-persistence.ts';
+import { DOActorCheckpoint } from './do-actor-checkpoint.ts';
 import { WebSocketBridge } from './transports/websocket-bridge.ts';
 import type { AlarmSchedule } from './types.ts';
 
@@ -45,7 +45,7 @@ export abstract class DOActorSystem<Env = unknown> implements DurableObject {
   protected readonly ctx: DurableObjectState;
   protected readonly env: Env;
   protected readonly actorSystem: ActorSystem;
-  protected readonly persistence: DOPersistence;
+  protected readonly checkpoint: DOActorCheckpoint;
   protected readonly wsBridge: WebSocketBridge;
 
   constructor(ctx: DurableObjectState, env: Env) {
@@ -59,8 +59,8 @@ export abstract class DOActorSystem<Env = unknown> implements DurableObject {
       ...config.systemConfig,
     });
 
-    // Set up DO SQLite persistence
-    this.persistence = new DOPersistence(ctx.storage);
+    // Set up DO SQLite actor checkpoint
+    this.checkpoint = new DOActorCheckpoint(ctx.storage);
 
     // Set up WebSocket bridge
     this.wsBridge = new WebSocketBridge(ctx, this.actorSystem);
@@ -68,7 +68,7 @@ export abstract class DOActorSystem<Env = unknown> implements DurableObject {
     // Initialize inside blockConcurrencyWhile to ensure
     // schema + actors are ready before handling requests
     ctx.blockConcurrencyWhile(async () => {
-      await this.persistence.initialize();
+      await this.checkpoint.initialize();
       await this.configure(this.actorSystem);
     });
   }
