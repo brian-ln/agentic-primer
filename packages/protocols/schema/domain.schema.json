@@ -871,6 +871,133 @@
       },
       "required": ["request-id", "success", "duration-ms", "timestamp", "metadata"],
       "additionalProperties": false
+    },
+
+    "canonical-address": {
+      "type": "string",
+      "pattern": "^@\\(.+\\)$",
+      "description": "Canonical address format: @(path). Runtime-agnostic actor reference."
+    },
+
+    "shared-message": {
+      "type": "object",
+      "description": "Cross-runtime wire format for messages crossing runtime boundaries",
+      "properties": {
+        "id": {"type": "string", "format": "uuid", "description": "Globally unique message ID"},
+        "from": {"$ref": "#/definitions/canonical-address", "description": "Sender canonical address"},
+        "to": {"$ref": "#/definitions/canonical-address", "description": "Recipient canonical address"},
+        "type": {"type": "string", "minLength": 1, "description": "Message type discriminator"},
+        "payload": {"description": "JSON-serializable payload"},
+        "pattern": {
+          "type": "string",
+          "enum": ["tell", "ask"],
+          "description": "Message pattern"
+        },
+        "correlationId": {"type": ["string", "null"], "format": "uuid", "description": "For ask/reply correlation"},
+        "timestamp": {"type": "integer", "minimum": 0, "description": "Epoch milliseconds"},
+        "metadata": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Extensible context (trace IDs, routing hints, etc.)"
+        },
+        "ttl": {"type": ["integer", "null"], "minimum": 1, "description": "Time-to-live in milliseconds"},
+        "signature": {"type": ["string", "null"], "description": "Base64-encoded HMAC signature"}
+      },
+      "required": ["id", "from", "to", "type", "pattern", "timestamp"],
+      "additionalProperties": false
+    },
+
+    "connection-state": {
+      "type": "string",
+      "enum": ["disconnected", "connecting", "connected", "disconnecting"],
+      "description": "Transport connection states"
+    },
+
+    "health-status": {
+      "type": "string",
+      "enum": ["unknown", "healthy", "degraded", "unhealthy"],
+      "description": "Connection health status"
+    },
+
+    "content-type": {
+      "type": "string",
+      "enum": ["json", "msgpack", "protobuf", "cbor"],
+      "description": "Serialization content type"
+    },
+
+    "transport-capabilities": {
+      "type": "object",
+      "description": "Transport capability advertisement",
+      "properties": {
+        "supports-ask": {"type": "boolean"},
+        "supports-streaming": {"type": "boolean"},
+        "max-message-size": {"type": ["integer", "null"], "minimum": 1},
+        "protocols": {"type": "array", "items": {"type": "string"}}
+      },
+      "required": ["supports-ask", "supports-streaming", "protocols"],
+      "additionalProperties": false
+    },
+
+    "snapshot-metadata": {
+      "type": "object",
+      "description": "Persistence snapshot metadata",
+      "properties": {
+        "id": {"type": "string"},
+        "version": {"type": "integer", "minimum": 0},
+        "timestamp": {"type": "string", "format": "date-time"},
+        "size-bytes": {"type": "integer", "minimum": 0}
+      },
+      "required": ["id", "version", "timestamp", "size-bytes"],
+      "additionalProperties": false
+    },
+
+    "wal-entry": {
+      "type": "object",
+      "description": "Write-ahead log entry",
+      "properties": {
+        "sequence": {"type": "integer", "minimum": 0},
+        "timestamp": {"type": "string", "format": "date-time"},
+        "operation": {"type": "string"},
+        "data": {"type": "string", "description": "Base64-encoded binary data"}
+      },
+      "required": ["sequence", "timestamp", "operation", "data"],
+      "additionalProperties": false
+    },
+
+    "transport-config": {
+      "type": "object",
+      "description": "Transport configuration",
+      "properties": {
+        "protocol": { "type": "string" },
+        "remote-address": { "type": ["string", "null"] },
+        "reconnect": { "type": "boolean" },
+        "max-retries": { "type": ["integer", "null"], "minimum": 0 }
+      },
+      "required": ["protocol", "reconnect"],
+      "additionalProperties": false
+    },
+
+    "sql-row": {
+      "type": "object",
+      "description": "SQL query result row",
+      "properties": {
+        "columns": { "type": "array", "items": { "type": "string" } },
+        "values": { "type": "array", "items": { "type": ["string", "null"] } }
+      },
+      "required": ["columns", "values"],
+      "additionalProperties": false
+    },
+
+    "sql-result": {
+      "type": "object",
+      "description": "SQL query result",
+      "properties": {
+        "rows": { "type": "array", "items": { "$ref": "#/definitions/sql-row" } },
+        "rows-affected": { "type": "integer", "minimum": 0 },
+        "last-insert-rowid": { "type": ["integer", "null"] }
+      },
+      "required": ["rows", "rows-affected"],
+      "additionalProperties": false
     }
   }
 }

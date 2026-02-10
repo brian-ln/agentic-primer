@@ -1,31 +1,33 @@
 /**
  * SharedMessage - Cross-Runtime Wire Format
  *
- * The shared envelope for messages crossing runtime boundaries.
- * Each actor system (simplify, brianln.ai, system-meta-model) converts
- * its internal message format to/from SharedMessage at bridge boundaries.
+ * Provides refined TypeScript types on top of generated schema types,
+ * plus converter functions for each runtime.
+ *
+ * The generated types (domain.types.ts) define SharedMessage and CanonicalAddress
+ * from the JSON Schema. This module re-exports them with template literal
+ * refinements and adds converter functions.
  *
  * Spec: ~/knowledge/specs/formal-model/layer-5-projections.md Sec 5.1
- *
- * NOT generated — hand-authored as the convergence point.
  */
 
 import { z } from 'zod';
+import type {
+  SharedMessage as GeneratedSharedMessage,
+  ConnectionState,
+  HealthStatus,
+  ContentType,
+} from './domain.types.js';
 
 // ---------------------------------------------------------------------------
-// Canonical Address
+// Refined Canonical Address (template literal)
 // ---------------------------------------------------------------------------
 
 /**
  * Canonical address format: @(path)
- * Runtime-agnostic. Each runtime translates to/from its native format:
- *   simplify:          @(namespace/id)    → identity (already canonical)
- *   brianln.ai browser: local://name      → @(name)
- *   brianln.ai DO:     remote://do/name   → @(name)
- *   brianln.ai worker: remote://worker/n  → @(n)
- *   system-meta-model: "actor-name"       → @(actor-name)
+ * Runtime-agnostic. Each runtime translates to/from its native format.
  *
- * Spec: Layer 5 Sec 5.2
+ * Refines the generated CanonicalAddress (plain string) with a template literal.
  */
 export type CanonicalAddress = `@(${string})`;
 
@@ -36,14 +38,12 @@ export type Runtime = 'local' | 'cloudflare' | 'browser' | 'beam';
 
 /**
  * Convert a runtime-specific address to canonical form.
- * Strips protocol prefixes, wraps in @().
  */
 export function toCanonical(runtimeAddr: string, runtime: Runtime): CanonicalAddress {
   let path: string;
 
   switch (runtime) {
     case 'local':
-      // simplify: @(path) is already canonical
       if (runtimeAddr.startsWith('@(') && runtimeAddr.endsWith(')')) {
         return runtimeAddr as CanonicalAddress;
       }
@@ -51,12 +51,10 @@ export function toCanonical(runtimeAddr: string, runtime: Runtime): CanonicalAdd
       break;
 
     case 'browser':
-      // brianln.ai browser: local://name → @(name)
       path = runtimeAddr.replace(/^local:\/\//, '');
       break;
 
     case 'cloudflare':
-      // brianln.ai CF: remote://do/name or remote://worker://name or worker://name
       path = runtimeAddr
         .replace(/^remote:\/\/do\//, '')
         .replace(/^remote:\/\/worker\//, '')
@@ -65,7 +63,6 @@ export function toCanonical(runtimeAddr: string, runtime: Runtime): CanonicalAdd
       break;
 
     case 'beam':
-      // BEAM: tuple string form → just use the path
       path = runtimeAddr;
       break;
 
@@ -88,7 +85,7 @@ export function fromCanonical(canonical: CanonicalAddress, runtime: Runtime): st
 
   switch (runtime) {
     case 'local':
-      return canonical; // identity
+      return canonical;
     case 'browser':
       return `local://${path}`;
     case 'cloudflare':
@@ -101,39 +98,22 @@ export function fromCanonical(canonical: CanonicalAddress, runtime: Runtime): st
 }
 
 // ---------------------------------------------------------------------------
-// SharedMessage
+// Refined SharedMessage (uses template literal CanonicalAddress)
 // ---------------------------------------------------------------------------
 
 /**
- * SharedMessage - the cross-runtime wire format.
- *
- * Every message crossing a runtime boundary is serialized as SharedMessage.
- * Internal messages within a single runtime stay in that runtime's native format.
+ * SharedMessage - the cross-runtime wire format with refined types.
+ * Extends the generated type with template literal CanonicalAddress.
  */
-export interface SharedMessage {
-  /** Globally unique message ID (crypto.randomUUID()) */
-  readonly id: string;
-  /** Sender canonical address */
+export interface SharedMessage extends Omit<GeneratedSharedMessage, 'from' | 'to' | 'payload' | 'metadata'> {
   readonly from: CanonicalAddress;
-  /** Recipient canonical address */
   readonly to: CanonicalAddress;
-  /** Message type discriminator */
-  readonly type: string;
-  /** JSON-serializable payload */
   readonly payload: unknown;
-  /** Message pattern */
-  readonly pattern: 'tell' | 'ask';
-  /** For ask/reply correlation */
-  readonly correlationId: string | null;
-  /** Epoch milliseconds */
-  readonly timestamp: number;
-  /** Extensible context (trace IDs, routing hints, etc.) */
   readonly metadata: Record<string, unknown>;
-  /** Time-to-live in milliseconds (null = no expiry) */
-  readonly ttl: number | null;
-  /** Base64-encoded HMAC signature (null = unsigned) */
-  readonly signature: string | null;
 }
+
+// Re-export infrastructure types from generated
+export type { ConnectionState, HealthStatus, ContentType };
 
 // ---------------------------------------------------------------------------
 // Zod Validators
@@ -162,10 +142,6 @@ export const sharedMessageSchema = z.object({
 // Converter: simplify Message ↔ SharedMessage
 // ---------------------------------------------------------------------------
 
-/**
- * Simplify's internal message shape (subset of fields we need).
- * Full type is in simplify/src/messaging/message.ts
- */
 interface SimplifyMessage {
   id: string;
   pattern: 'tell' | 'ask' | 'stream';
@@ -212,10 +188,6 @@ export function sharedToSimplify(msg: SharedMessage): SimplifyMessage {
 // Converter: brianln.ai ActorMessage ↔ SharedMessage
 // ---------------------------------------------------------------------------
 
-/**
- * brianln.ai's internal message shape.
- * Full type is in brianln.ai/src/actors/types.ts
- */
 interface BrianActorMessage {
   type: string;
   payload?: unknown;
@@ -224,7 +196,6 @@ interface BrianActorMessage {
   timestamp?: number;
 }
 
-/** brianln.ai address types */
 type BrianActorAddress =
   | `local://${string}`
   | `worker://${string}`

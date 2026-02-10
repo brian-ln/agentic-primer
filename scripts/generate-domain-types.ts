@@ -13,9 +13,9 @@ import { readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { compile, Options } from 'json-schema-to-typescript';
 
-const SCHEMA_PATH = join(__dirname, '../core/wit/domain/domain.schema.json');
-const TYPES_OUTPUT = join(__dirname, '../core/wit/domain/domain.types.ts');
-const VALIDATORS_OUTPUT = join(__dirname, '../core/wit/domain/domain.validators.ts');
+const SCHEMA_PATH = join(__dirname, '../packages/protocols/schema/domain.schema.json');
+const TYPES_OUTPUT = join(__dirname, '../packages/protocols/src/domain.types.ts');
+const VALIDATORS_OUTPUT = join(__dirname, '../packages/protocols/src/domain.validators.ts');
 
 interface JsonSchema {
   $schema: string;

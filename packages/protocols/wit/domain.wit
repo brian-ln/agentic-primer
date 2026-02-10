@@ -1096,6 +1096,256 @@ interface program {
 }
 
 // ============================================================================
+// TRANSPORT & SERIALIZATION
+// ============================================================================
+
+/// Connection state for transports
+interface connection {
+    /// Transport connection states
+    enum connection-state {
+        disconnected,
+        connecting,
+        connected,
+        disconnecting,
+    }
+
+    /// Connection health status
+    enum health-status {
+        unknown,
+        healthy,
+        degraded,
+        unhealthy,
+    }
+
+    /// Connection info
+    record connection-info {
+        state: connection-state,
+        health: health-status,
+        connected-at: option<string>,
+        latency-ms: option<f64>,
+        remote-address: option<string>,
+    }
+}
+
+/// Transport interface for inter-actor communication across boundaries
+interface transport {
+    use connection.{connection-state, connection-info};
+
+    /// Transport error
+    variant transport-error {
+        connection-failed(string),
+        send-failed(string),
+        timeout(string),
+        serialization-error(string),
+        disconnected,
+    }
+
+    /// Transport capabilities
+    record transport-capabilities {
+        supports-ask: bool,
+        supports-streaming: bool,
+        max-message-size: option<u64>,
+        protocols: list<string>,
+    }
+
+    /// Transport operations
+    connect: func(remote-address: string) -> result<_, transport-error>;
+    disconnect: func() -> result<_, transport-error>;
+    send: func(recipient: string, message-type: string, payload: list<u8>) -> result<_, transport-error>;
+    on-receive: func(handler-id: string) -> result<_, transport-error>;
+    get-state: func() -> connection-state;
+    get-info: func() -> connection-info;
+    get-capabilities: func() -> transport-capabilities;
+}
+
+/// Serialization/deserialization interface
+interface serde {
+    /// Serde error
+    variant serde-error {
+        serialize-failed(string),
+        deserialize-failed(string),
+        unsupported-format(string),
+    }
+
+    /// Content type for serialized data
+    enum content-type {
+        json,
+        msgpack,
+        protobuf,
+        cbor,
+    }
+
+    /// Serde operations
+    serialize: func(data: list<u8>, content-type: content-type) -> result<list<u8>, serde-error>;
+    deserialize: func(data: list<u8>, content-type: content-type) -> result<list<u8>, serde-error>;
+    get-content-type: func() -> content-type;
+}
+
+// ============================================================================
+// STORAGE
+// ============================================================================
+
+/// Persistence interface for actor state snapshots and WAL
+interface persistence {
+    /// Persistence error
+    variant persistence-error {
+        not-found(string),
+        io-error(string),
+        corruption(string),
+        version-conflict(string),
+    }
+
+    /// Snapshot metadata
+    record snapshot-metadata {
+        id: string,
+        version: u64,
+        timestamp: string,
+        size-bytes: u64,
+    }
+
+    /// WAL entry
+    record wal-entry {
+        sequence: u64,
+        timestamp: string,
+        operation: string,
+        data: list<u8>,
+    }
+
+    /// Persistence operations
+    initialize: func(namespace: string) -> result<_, persistence-error>;
+    load-snapshot: func(id: string) -> result<tuple<list<u8>, snapshot-metadata>, persistence-error>;
+    save-snapshot: func(id: string, data: list<u8>) -> result<snapshot-metadata, persistence-error>;
+    delete-snapshot: func(id: string) -> result<_, persistence-error>;
+    list-snapshots: func() -> result<list<snapshot-metadata>, persistence-error>;
+    append-wal: func(id: string, entry: wal-entry) -> result<u64, persistence-error>;
+    replay-wal: func(id: string, from-sequence: option<u64>) -> result<list<wal-entry>, persistence-error>;
+    compact-wal: func(id: string, up-to-sequence: u64) -> result<_, persistence-error>;
+}
+
+/// SQL storage interface
+interface sql-storage {
+    /// SQL error
+    variant sql-error {
+        query-failed(string),
+        constraint-violation(string),
+        connection-error(string),
+    }
+
+    /// SQL value types
+    variant sql-value {
+        null-val,
+        integer(s64),
+        real(f64),
+        text(string),
+        blob(list<u8>),
+    }
+
+    /// SQL result row
+    type sql-row = list<sql-value>;
+
+    /// SQL query result
+    record sql-result {
+        columns: list<string>,
+        rows: list<sql-row>,
+        rows-affected: u64,
+        last-insert-rowid: option<s64>,
+    }
+
+    /// SQL operations
+    execute: func(sql: string, params: list<sql-value>) -> result<sql-result, sql-error>;
+    batch: func(statements: list<tuple<string, list<sql-value>>>) -> result<list<sql-result>, sql-error>;
+}
+
+/// Vector similarity search interface
+interface vector-store {
+    /// Vector search result
+    record vector-result {
+        id: string,
+        similarity: f64,
+        metadata: option<list<tuple<string, string>>>,
+    }
+
+    /// Vector query options
+    record vector-query-options {
+        limit: option<u32>,
+        min-similarity: option<f64>,
+        filter: option<list<tuple<string, string>>>,
+    }
+
+    /// Vector store errors
+    variant vector-error {
+        not-found(string),
+        dimension-mismatch(string),
+        io-error(string),
+    }
+
+    /// Operations
+    index: func(id: string, vector: list<f64>, metadata: option<list<tuple<string, string>>>) -> result<_, vector-error>;
+    query: func(vector: list<f64>, options: option<vector-query-options>) -> result<list<vector-result>, vector-error>;
+    delete: func(id: string) -> result<_, vector-error>;
+}
+
+/// Embedding generation interface
+interface embedder {
+    /// Embedding model info
+    record embedder-info {
+        dimensions: u32,
+        model-name: string,
+    }
+
+    /// Embedder errors
+    variant embedder-error {
+        model-error(string),
+        input-too-long(string),
+    }
+
+    /// Operations
+    embed: func(text: string) -> result<list<f64>, embedder-error>;
+    embed-batch: func(texts: list<string>) -> result<list<list<f64>>, embedder-error>;
+    get-info: func() -> embedder-info;
+}
+
+/// Key-value storage interface
+interface key-value-storage {
+    /// KV error
+    variant kv-error {
+        not-found(string),
+        io-error(string),
+        quota-exceeded,
+    }
+
+    /// KV entry metadata
+    record kv-metadata {
+        key: string,
+        size-bytes: u64,
+        created-at: string,
+        updated-at: string,
+        expires-at: option<string>,
+    }
+
+    /// List options
+    record list-options {
+        prefix: option<string>,
+        cursor: option<string>,
+        limit: option<u32>,
+    }
+
+    /// List result
+    record list-result {
+        keys: list<kv-metadata>,
+        cursor: option<string>,
+        complete: bool,
+    }
+
+    /// KV operations
+    get: func(key: string) -> result<list<u8>, kv-error>;
+    put: func(key: string, value: list<u8>, ttl-seconds: option<u64>) -> result<_, kv-error>;
+    delete: func(key: string) -> result<_, kv-error>;
+    has: func(key: string) -> result<bool, kv-error>;
+    list: func(options: list-options) -> result<list-result, kv-error>;
+}
+
+// ============================================================================
 // WORLDS
 // ============================================================================
 
@@ -1136,6 +1386,18 @@ world domain-actors {
     export program;
 }
 
+/// Transport and storage world
+world domain-infrastructure {
+    export connection;
+    export transport;
+    export serde;
+    export persistence;
+    export sql-storage;
+    export key-value-storage;
+    export vector-store;
+    export embedder;
+}
+
 /// Complete domain model world
 world domain {
     export address;
@@ -1155,4 +1417,12 @@ world domain {
     export session-state;
     export actor;
     export program;
+    export connection;
+    export transport;
+    export serde;
+    export persistence;
+    export sql-storage;
+    export key-value-storage;
+    export vector-store;
+    export embedder;
 }

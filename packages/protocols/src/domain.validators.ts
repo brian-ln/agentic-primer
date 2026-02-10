@@ -173,6 +173,56 @@ export const invocationResultSchema = z.object({
   metadata: z.array(z.tuple([z.string(), z.string()]))
 }).strict();
 
+// canonical-address
+export const canonicalAddressSchema = z.string();
+
+// connection-state
+export const connectionStateSchema = z.enum(['disconnected', 'connecting', 'connected', 'disconnecting']);
+
+// health-status
+export const healthStatusSchema = z.enum(['unknown', 'healthy', 'degraded', 'unhealthy']);
+
+// content-type
+export const contentTypeSchema = z.enum(['json', 'msgpack', 'protobuf', 'cbor']);
+
+// transport-capabilities
+export const transportCapabilitiesSchema = z.object({
+  'supports-ask': z.boolean(),
+  'supports-streaming': z.boolean(),
+  'max-message-size': z.number().int().min(1).nullable().optional(),
+  protocols: z.array(z.string())
+}).strict();
+
+// snapshot-metadata
+export const snapshotMetadataSchema = z.object({
+  id: z.string(),
+  version: z.number().int().min(0),
+  timestamp: z.string().datetime(),
+  'size-bytes': z.number().int().min(0)
+}).strict();
+
+// wal-entry
+export const walEntrySchema = z.object({
+  sequence: z.number().int().min(0),
+  timestamp: z.string().datetime(),
+  operation: z.string(),
+  data: z.string()
+}).strict();
+
+// transport-config
+export const transportConfigSchema = z.object({
+  protocol: z.string(),
+  'remote-address': z.string().nullable().optional(),
+  reconnect: z.boolean(),
+  'max-retries': z.number().int().min(0).nullable().optional()
+}).strict();
+
+// sql-row
+export const sqlRowSchema = z.object({
+  columns: z.array(z.string()),
+  values: z.array(z.string().nullable())
+}).strict();
+
 // address-scope
 export const addressScopeSchema = z.union([z.literal('node'), z.object({
   edge: edgeRefSchema
@@ -257,6 +307,13 @@ export const programMetadataSchema = z.object({
   created: z.string().datetime(),
   modified: z.string().datetime(),
   tags: z.array(z.string())
+}).strict();
+
+// sql-result
+export const sqlResultSchema = z.object({
+  rows: z.array(sqlRowSchema),
+  'rows-affected': z.number().int().min(0),
+  'last-insert-rowid': z.number().int().nullable().optional()
 }).strict();
 
 // address
@@ -406,6 +463,21 @@ export const sessionContextSchema = z.object({
   'captured-at': z.number().int().min(0)
 }).strict();
 
+// shared-message
+export const sharedMessageSchema = z.object({
+  id: z.string().uuid(),
+  from: canonicalAddressSchema,
+  to: canonicalAddressSchema,
+  type: z.string(),
+  payload: z.unknown().optional(),
+  pattern: z.enum(['tell', 'ask']),
+  correlationId: z.string().uuid().nullable().optional(),
+  timestamp: z.number().int().min(0),
+  metadata: z.object({}).optional(),
+  ttl: z.number().int().min(1).nullable().optional(),
+  signature: z.string().nullable().optional()
+}).strict();
+
 // Export all validators
 export const DomainValidators = {
   edgeRef: edgeRefSchema,
@@ -445,6 +517,15 @@ export const DomainValidators = {
   executionMode: executionModeSchema,
   programState: programStateSchema,
   invocationResult: invocationResultSchema,
+  canonicalAddress: canonicalAddressSchema,
+  connectionState: connectionStateSchema,
+  healthStatus: healthStatusSchema,
+  contentType: contentTypeSchema,
+  transportCapabilities: transportCapabilitiesSchema,
+  snapshotMetadata: snapshotMetadataSchema,
+  walEntry: walEntrySchema,
+  transportConfig: transportConfigSchema,
+  sqlRow: sqlRowSchema,
   addressScope: addressScopeSchema,
   traversalOptions: traversalOptionsSchema,
   entityMetadata: entityMetadataSchema,
@@ -455,6 +536,7 @@ export const DomainValidators = {
   providerConfig: providerConfigSchema,
   evaluationResult: evaluationResultSchema,
   programMetadata: programMetadataSchema,
+  sqlResult: sqlResultSchema,
   address: addressSchema,
   humanConfig: humanConfigSchema,
   propertyValue: propertyValueSchema,
@@ -471,6 +553,7 @@ export const DomainValidators = {
   agentConfig: agentConfigSchema,
   sessionConfig: sessionConfigSchema,
   sessionContext: sessionContextSchema,
+  sharedMessage: sharedMessageSchema,
 };
 
 // Helper function to validate any domain entity

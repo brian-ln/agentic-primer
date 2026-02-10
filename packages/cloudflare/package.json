@@ -1,0 +1,35 @@
+{
+  "name": "@agentic-primer/cloudflare",
+  "version": "0.1.0",
+  "description": "Cloudflare runtime adapter for the actor platform",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:node": "vitest run --config vitest.node.config.ts"
+  },
+  "dependencies": {
+    "@agentic-primer/actors": "workspace:*",
+    "@agentic-primer/protocols": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.12.10",
+    "@cloudflare/workers-types": "^4.20250109.0",
+    "@vitest/runner": "~3.2.4",
+    "@vitest/snapshot": "~3.2.4",
+    "miniflare": "^4.20260205.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.4"
+  },
+  "peerDependencies": {
+    "@cloudflare/workers-types": ">=4.0.0"
+  }
+}

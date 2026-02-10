@@ -1,0 +1,25 @@
+{
+  "name": "@agentic-primer/bun",
+  "version": "0.1.0",
+  "description": "Bun runtime adapter for the actor platform",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "bun test src/__tests__/"
+  },
+  "dependencies": {
+    "@agentic-primer/actors": "workspace:*",
+    "@libsql/client": "^0.17.0"
+  },
+  "devDependencies": {
+    "bun-types": "^1.3.9"
+  }
+}

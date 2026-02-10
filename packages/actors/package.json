@@ -1,0 +1,21 @@
+{
+  "name": "@agentic-primer/actors",
+  "version": "0.1.0",
+  "description": "Portable actor core - web platform baseline",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test --experimental-strip-types src/__tests__/*.test.ts"
+  },
+  "dependencies": {
+    "@agentic-primer/protocols": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

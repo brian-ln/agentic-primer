@@ -1,0 +1,26 @@
+{
+  "name": "@agentic-primer/browser",
+  "version": "0.1.0",
+  "description": "Browser runtime adapter for the actor platform",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "node --experimental-strip-types --test src/__tests__/*.ts"
+  },
+  "dependencies": {
+    "@agentic-primer/actors": "workspace:*",
+    "@preact/signals-core": "^1.13.0",
+    "lit-html": "^3.3.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}
