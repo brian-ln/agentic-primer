@@ -6,10 +6,9 @@
  *
  * Uses IMessageRouter interface instead of concrete MessageRouter.
  *
- * Auto-validation: If a schema is registered for a message type via
- * registerMessageSchema(), the base Actor will automatically validate
- * payloads before calling receive(). Subclasses can override this
- * behavior by setting enableAutoValidation = false.
+ * Auto-validation: Actors can define message schemas as a class property.
+ * If schemas are defined, payloads will be automatically validated before
+ * handleMessage() is called. Set enableAutoValidation = false to disable.
  */
 
 import type {
@@ -32,43 +31,29 @@ import {
 import type { JSONSchema } from './introspection.ts';
 import { validateJSONSchemaErrors } from './schema-validator.ts';
 
-/**
- * Global message type → schema registry for auto-validation
- * Populated by generated validator registration code at startup
- */
-const globalMessageSchemaRegistry = new Map<string, JSONSchema>();
-
-/**
- * Register a message schema for auto-validation
- *
- * @param messageType - Message type (e.g., "create", "query")
- * @param schema - JSON Schema for payload validation
- */
-export function registerMessageSchema(messageType: string, schema: JSONSchema): void {
-  globalMessageSchemaRegistry.set(messageType, schema);
-}
-
-/**
- * Check if a message type has a registered schema
- */
-export function hasMessageSchema(messageType: string): boolean {
-  return globalMessageSchemaRegistry.has(messageType);
-}
-
-/**
- * Get registered schema for a message type (if any)
- */
-export function getMessageSchema(messageType: string): JSONSchema | undefined {
-  return globalMessageSchemaRegistry.get(messageType);
-}
-
 export class Actor implements MessageHandler {
   readonly address: Address;
   protected router: IMessageRouter;
 
   /**
+   * Message schemas for auto-validation
+   *
+   * Define schemas for message types this actor handles.
+   * Can be static (shared across instances) or instance property.
+   *
+   * @example
+   * ```typescript
+   * protected schemas = new Map<string, JSONSchema>([
+   *   ['create', { type: 'object', properties: { name: { type: 'string' } } }],
+   *   ['update', { type: 'object', properties: { id: { type: 'string' } } }],
+   * ]);
+   * ```
+   */
+  protected schemas?: Map<string, JSONSchema>;
+
+  /**
    * Enable/disable auto-validation for this actor
-   * Set to false in constructor to disable schema validation
+   * Set to false to disable schema validation
    */
   protected enableAutoValidation = true;
 
@@ -80,15 +65,15 @@ export class Actor implements MessageHandler {
   /**
    * Receive a message with optional auto-validation
    *
-   * If enableAutoValidation is true and a schema is registered for the
+   * If enableAutoValidation is true and schemas are defined for the
    * message type, the payload will be validated before handleMessage() is called.
    *
    * Subclasses should override handleMessage(), not this method.
    */
   async receive(message: Message): Promise<MessageResponse> {
     // Auto-validate if enabled and schema exists
-    if (this.enableAutoValidation) {
-      const schema = getMessageSchema(message.type);
+    if (this.enableAutoValidation && this.schemas) {
+      const schema = this.schemas.get(message.type);
       if (schema && message.payload) {
         const errors = validateJSONSchemaErrors(message.payload, schema);
         if (errors.length > 0) {

@@ -1,55 +1,47 @@
 # Actor Auto-Validation
 
-The base `Actor` class supports optional automatic payload validation using JSON Schema.
+The base `Actor` class supports optional automatic payload validation using JSON Schema defined as class properties.
 
 ## Features
 
-- **Zero-overhead when unused**: No validation overhead if schemas aren't registered
+- **Zero-overhead when unused**: No validation overhead if schemas aren't defined
 - **Opt-in/opt-out**: Enable or disable per-actor via `enableAutoValidation` flag
-- **Global registry**: Schemas registered once, applied automatically
+- **Co-located schemas**: Schemas defined directly in the actor class
 - **Detailed errors**: Validation failures return descriptive error messages
 - **Type-safe**: Works with TypeScript types and JSON Schema
+- **Runtime configurable**: Schemas can be modified at runtime if needed
 
 ## Basic Usage
 
-### 1. Register Message Schemas
+### Define Schemas in Your Actor
 
-Register JSON Schema definitions for your message types at application startup:
-
-```typescript
-import { registerMessageSchema } from '@agentic-primer/actors';
-
-// Register schemas for your message types
-registerMessageSchema('create-user', {
-  type: 'object',
-  properties: {
-    name: { type: 'string', minLength: 1 },
-    email: { type: 'string', pattern: '^[^@]+@[^@]+\\.[^@]+$' },
-    age: { type: ['number', 'integer'], minimum: 0, maximum: 150 },
-  },
-  required: ['name', 'email'],
-});
-
-registerMessageSchema('update-user', {
-  type: 'object',
-  properties: {
-    id: { type: 'string' },
-    name: { type: 'string', minLength: 1 },
-  },
-  required: ['id'],
-});
-```
-
-### 2. Implement Your Actor
-
-Extend `Actor` and implement `handleMessage()` (not `receive()`):
+Define message schemas as a protected property in your actor class:
 
 ```typescript
 import { Actor, type Message, type MessageResponse } from '@agentic-primer/actors';
+import type { JSONSchema } from '@agentic-primer/actors';
 
 class UserActor extends Actor {
-  // Auto-validation is enabled by default
-  // Set this.enableAutoValidation = false in constructor to disable
+  // Define schemas for message types this actor handles
+  protected schemas = new Map<string, JSONSchema>([
+    ['create-user', {
+      type: 'object',
+      properties: {
+        name: { type: 'string', minLength: 1 },
+        email: { type: 'string', pattern: '^[^@]+@[^@]+\\.[^@]+$' },
+        age: { type: ['number', 'integer'], minimum: 0, maximum: 150 },
+      },
+      required: ['name', 'email'],
+    }],
+    ['update-user', {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        name: { type: 'string', minLength: 1 },
+      },
+      required: ['id'],
+    }],
+  ]);
 
   protected async handleMessage(message: Message): Promise<MessageResponse> {
     // Payload is already validated when this is called
@@ -69,19 +61,12 @@ class UserActor extends Actor {
     // ...
     return createResponse(message, { id: 'user-123', name, email, age });
   }
-
-  private async handleUpdate(message: Message): Promise<MessageResponse> {
-    const { id, name } = message.payload;
-    // payload is guaranteed to be valid here
-    // ...
-    return createResponse(message, { id, name });
-  }
 }
 ```
 
-### 3. Send Messages
+### Send Messages
 
-When you send messages to actors with registered schemas, validation happens automatically:
+When you send messages to actors with defined schemas, validation happens automatically:
 
 ```typescript
 // Valid message - will be processed
@@ -99,12 +84,112 @@ const response = await userActor.ask(address('user-actor'), 'create-user', {
 });
 
 console.log(response.success); // false
-console.log(response.error); // "Invalid payload: $.name: String length 0 is less than minimum 1; ..."
+console.log(response.error);
+// "Invalid payload: $.name: String length 0 is less than minimum 1;
+//  $.email: String does not match pattern: ^[^@]+@[^@]+\.[^@]+$;
+//  $.age: Number 200 exceeds maximum 150"
+```
+
+## Schema Organization Patterns
+
+### Pattern 1: Inline Schemas (Simple)
+
+For simple actors, define schemas inline:
+
+```typescript
+class SimpleActor extends Actor {
+  protected schemas = new Map([
+    ['action', { type: 'object', properties: { id: { type: 'string' } } }],
+  ]);
+}
+```
+
+### Pattern 2: External Schema Constants (Reusable)
+
+For shared or complex schemas, define them as constants:
+
+```typescript
+// schemas/user-schemas.ts
+import type { JSONSchema } from '@agentic-primer/actors';
+
+export const CREATE_USER_SCHEMA: JSONSchema = {
+  type: 'object',
+  properties: {
+    name: { type: 'string', minLength: 1 },
+    email: { type: 'string', pattern: '^[^@]+@[^@]+\\.[^@]+$' },
+  },
+  required: ['name', 'email'],
+};
+
+export const UPDATE_USER_SCHEMA: JSONSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    name: { type: 'string' },
+  },
+  required: ['id'],
+};
+
+// actors/user-actor.ts
+import { CREATE_USER_SCHEMA, UPDATE_USER_SCHEMA } from '../schemas/user-schemas.ts';
+
+class UserActor extends Actor {
+  protected schemas = new Map([
+    ['create-user', CREATE_USER_SCHEMA],
+    ['update-user', UPDATE_USER_SCHEMA],
+  ]);
+}
+```
+
+### Pattern 3: Static Schemas (Shared Across Instances)
+
+Use static properties to share schemas across all actor instances:
+
+```typescript
+class UserActor extends Actor {
+  // Shared by all UserActor instances
+  protected static MESSAGE_SCHEMAS = new Map<string, JSONSchema>([
+    ['create-user', CREATE_USER_SCHEMA],
+    ['update-user', UPDATE_USER_SCHEMA],
+  ]);
+
+  constructor(id: string, router: IMessageRouter) {
+    super(id, router);
+    this.schemas = UserActor.MESSAGE_SCHEMAS;
+  }
+}
+```
+
+### Pattern 4: Runtime Configuration
+
+Modify schemas dynamically:
+
+```typescript
+class ConfigurableActor extends Actor {
+  protected schemas = new Map<string, JSONSchema>();
+
+  // Public API to configure validation
+  addSchema(messageType: string, schema: JSONSchema): void {
+    this.schemas.set(messageType, schema);
+  }
+
+  removeSchema(messageType: string): void {
+    this.schemas.delete(messageType);
+  }
+
+  updateSchema(messageType: string, schema: JSONSchema): void {
+    this.schemas.set(messageType, schema);
+  }
+}
+
+// Usage
+const actor = new ConfigurableActor('config', router);
+actor.addSchema('dynamic-message', mySchema);
 ```
 
 ## Disabling Auto-Validation
 
-To opt out of auto-validation for a specific actor:
+### Disable for Entire Actor
 
 ```typescript
 class ManualValidationActor extends Actor {
@@ -115,84 +200,26 @@ class ManualValidationActor extends Actor {
 
   protected async handleMessage(message: Message): Promise<MessageResponse> {
     // Do your own validation here
-    // ...
-  }
-}
-```
-
-## Checking Schema Registration
-
-Query the global registry to check if schemas are registered:
-
-```typescript
-import { hasMessageSchema, getMessageSchema } from '@agentic-primer/actors';
-
-if (hasMessageSchema('create-user')) {
-  const schema = getMessageSchema('create-user');
-  console.log('Schema registered:', schema);
-}
-```
-
-## Generated Validators
-
-For TypeScript-first projects, you can generate validator registrations from your type definitions:
-
-1. Define your message payload types:
-
-```typescript
-interface CreateUserPayload {
-  name: string;
-  email: string;
-  age: number;
-}
-```
-
-2. Generate JSON Schema from TypeScript types (using tools like `typescript-json-schema` or `@anatine/zod-to-openapi`)
-
-3. Generate registration code that calls `registerMessageSchema()` at startup
-
-4. Import and call the registration function in your app initialization
-
-## Migration from @accepts Decorator
-
-If you're using `ActorWithIntrospection` and the `@accepts` decorator, you have two options:
-
-### Option 1: Keep using @accepts (Recommended for complex actors)
-
-```typescript
-import { ActorWithIntrospection, accepts } from '@agentic-primer/actors';
-
-class ComplexActor extends ActorWithIntrospection {
-  @accepts({
-    description: 'Create a new user',
-    payload: { type: 'object', properties: { name: { type: 'string' } } },
-    consequences: {
-      category: 'write',
-      sideEffects: ['database-write'],
-      canUndo: false,
-      requiresConfirm: false,
-    },
-  })
-  async createUser(message: Message): Promise<MessageResponse> {
-    // ...
-  }
-}
-```
-
-### Option 2: Migrate to base Actor with auto-validation (Simpler)
-
-```typescript
-import { Actor } from '@agentic-primer/actors';
-
-// Register at startup
-registerMessageSchema('create', createUserSchema);
-
-class SimpleActor extends Actor {
-  protected async handleMessage(message: Message): Promise<MessageResponse> {
-    if (message.type === 'create') {
-      return this.handleCreate(message);
+    if (!this.isValid(message.payload)) {
+      return createErrorResponse(message, 'Invalid payload');
     }
     // ...
+  }
+}
+```
+
+### Disable for Specific Message Types
+
+```typescript
+class SelectiveValidationActor extends Actor {
+  protected schemas = new Map([
+    ['validated-type', mySchema],
+    // 'unvalidated-type' has no schema - won't be validated
+  ]);
+
+  protected async handleMessage(message: Message): Promise<MessageResponse> {
+    // 'validated-type' validated automatically
+    // 'unvalidated-type' skips validation
   }
 }
 ```
@@ -209,20 +236,62 @@ Each error shows:
 - `$.path`: JSONPath to the invalid field
 - `description`: What validation rule failed
 
+Multiple errors are concatenated with semicolons.
+
 ## Performance
 
-- **Schema lookup**: O(1) hash map lookup per message
-- **No schema registered**: Single map lookup, no validation overhead
-- **Schema registered**: Full JSON Schema validation (microseconds for typical payloads)
-- **Validation disabled**: Zero overhead, bypasses both lookup and validation
+- **No schemas defined**: Zero overhead (single `if (this.schemas)` check)
+- **Schema defined**: O(1) map lookup + validation (microseconds for typical payloads)
+- **Validation disabled**: Zero overhead (single `if (this.enableAutoValidation)` check)
+
+## Migration from ActorWithIntrospection
+
+If you're using `ActorWithIntrospection` with the `@accepts` decorator:
+
+### Current (decorator-based):
+
+```typescript
+class ComplexActor extends ActorWithIntrospection {
+  @accepts({
+    description: 'Create a user',
+    payload: { type: 'object', properties: { name: { type: 'string' } } },
+    consequences: { category: 'write', sideEffects: [], canUndo: false, requiresConfirm: false },
+  })
+  async createUser(message: Message): Promise<MessageResponse> { }
+}
+```
+
+### New (schema property):
+
+```typescript
+class SimpleActor extends Actor {
+  protected schemas = new Map([
+    ['createUser', { type: 'object', properties: { name: { type: 'string' } } }],
+  ]);
+
+  protected async handleMessage(message: Message): Promise<MessageResponse> {
+    if (message.type === 'createUser') {
+      return this.handleCreate(message);
+    }
+  }
+}
+```
+
+**When to use each:**
+- **@accepts decorator**: Complex actors needing rich metadata (consequences, examples, introspection)
+- **Schema property**: Simple actors just needing validation
+
+Both can coexist in the same codebase.
 
 ## Best Practices
 
-1. **Register schemas at startup**: Call `registerMessageSchema()` during application initialization, not in hot paths
+1. **Define schemas in actor class**: Keep schemas close to handlers, not in global state
 2. **Use type unions for numbers**: JSON Schema distinguishes `integer` from `number`, use `{ type: ['number', 'integer'] }` to accept both
 3. **Provide patterns for strings**: Use `pattern` for email, URLs, IDs to catch malformed data early
 4. **Set reasonable limits**: Use `minLength`, `maxLength`, `minimum`, `maximum` to prevent attacks
-5. **Keep schemas portable**: JSON Schema can be used across languages (TypeScript, Rust, Python, etc.)
+5. **Extract complex schemas**: Put reusable schemas in a schemas/ directory
+6. **Use static for shared schemas**: If all instances use the same schemas, make them static
+7. **Keep schemas portable**: JSON Schema works across languages (TypeScript, Rust, Python, etc.)
 
 ## See Also
 

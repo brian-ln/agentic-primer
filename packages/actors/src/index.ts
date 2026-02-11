@@ -62,12 +62,7 @@ export {
 } from './interfaces.ts';
 
 // Actor base class
-export {
-  Actor,
-  registerMessageSchema,
-  hasMessageSchema,
-  getMessageSchema,
-} from './actor.ts';
+export { Actor } from './actor.ts';
 export { ActorWithIntrospection } from './actor-introspection.ts';
 
 // Introspection protocol
