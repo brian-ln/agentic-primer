@@ -5,6 +5,11 @@
  * Ported from simplify/src/messaging/actor.ts, decoupled from GraphStore.
  *
  * Uses IMessageRouter interface instead of concrete MessageRouter.
+ *
+ * Auto-validation: If a schema is registered for a message type via
+ * registerMessageSchema(), the base Actor will automatically validate
+ * payloads before calling receive(). Subclasses can override this
+ * behavior by setting enableAutoValidation = false.
  */
 
 import type {
@@ -20,22 +25,93 @@ import type { IMessageRouter } from './interfaces.ts';
 import {
   address,
   createMessage,
+  createErrorResponse,
   generateCorrelationId,
   generateMessageId,
 } from './message.ts';
+import type { JSONSchema } from './introspection.ts';
+import { validateJSONSchemaErrors } from './schema-validator.ts';
+
+/**
+ * Global message type → schema registry for auto-validation
+ * Populated by generated validator registration code at startup
+ */
+const globalMessageSchemaRegistry = new Map<string, JSONSchema>();
+
+/**
+ * Register a message schema for auto-validation
+ *
+ * @param messageType - Message type (e.g., "create", "query")
+ * @param schema - JSON Schema for payload validation
+ */
+export function registerMessageSchema(messageType: string, schema: JSONSchema): void {
+  globalMessageSchemaRegistry.set(messageType, schema);
+}
+
+/**
+ * Check if a message type has a registered schema
+ */
+export function hasMessageSchema(messageType: string): boolean {
+  return globalMessageSchemaRegistry.has(messageType);
+}
+
+/**
+ * Get registered schema for a message type (if any)
+ */
+export function getMessageSchema(messageType: string): JSONSchema | undefined {
+  return globalMessageSchemaRegistry.get(messageType);
+}
 
 export class Actor implements MessageHandler {
   readonly address: Address;
   protected router: IMessageRouter;
+
+  /**
+   * Enable/disable auto-validation for this actor
+   * Set to false in constructor to disable schema validation
+   */
+  protected enableAutoValidation = true;
 
   constructor(id: string, router: IMessageRouter) {
     this.address = address(id);
     this.router = router;
   }
 
-  /** Receive a message. Override in subclasses. */
+  /**
+   * Receive a message with optional auto-validation
+   *
+   * If enableAutoValidation is true and a schema is registered for the
+   * message type, the payload will be validated before handleMessage() is called.
+   *
+   * Subclasses should override handleMessage(), not this method.
+   */
   async receive(message: Message): Promise<MessageResponse> {
-    throw new Error('receive() must be implemented by subclass');
+    // Auto-validate if enabled and schema exists
+    if (this.enableAutoValidation) {
+      const schema = getMessageSchema(message.type);
+      if (schema && message.payload) {
+        const errors = validateJSONSchemaErrors(message.payload, schema);
+        if (errors.length > 0) {
+          return createErrorResponse(
+            message,
+            `Invalid payload: ${errors.map(e => `${e.path}: ${e.message}`).join('; ')}`
+          );
+        }
+      }
+    }
+
+    // Call the actual handler
+    return this.handleMessage(message);
+  }
+
+  /**
+   * Handle a validated message. Override in subclasses.
+   *
+   * This method is called after auto-validation (if enabled).
+   * Subclasses should implement their message handling logic here.
+   */
+  protected async handleMessage(message: Message): Promise<MessageResponse> {
+    throw new Error('handleMessage() must be implemented by subclass');
   }
 
   /** Optional streaming support. */
