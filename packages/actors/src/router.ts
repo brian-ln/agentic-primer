@@ -25,8 +25,8 @@ import {
   createErrorResponse,
   generateCorrelationId,
 } from './message.ts';
-import { parseAddressInfo, isHierarchicalPath } from './address-parser.ts';
-import { PathCache, type PathCacheConfig } from './path-cache.ts';
+import { parseAddressInfo, isHierarchicalPath } from './routing/address-parser.ts';
+import { PathCache, type PathCacheConfig } from './routing/path-cache.ts';
 import type { DeadLetterEntry } from './types.ts';
 
 export interface MessageRouterConfig {

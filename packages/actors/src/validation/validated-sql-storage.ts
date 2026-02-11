@@ -14,7 +14,7 @@
  * ```
  */
 
-import type { ISqlStorage, SqlValue, SqlResult } from './interfaces.ts';
+import type { ISqlStorage, SqlValue, SqlResult } from '../interfaces.ts';
 import {
   validateSqlQuery,
   validateSqlParams,

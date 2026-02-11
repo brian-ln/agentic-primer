@@ -10,7 +10,7 @@
  * - KV limits: https://developers.cloudflare.com/kv/platform/limits/
  */
 
-import type { SqlValue } from './interfaces.ts';
+import type { SqlValue } from '../interfaces.ts';
 
 /**
  * Validate SQL query for dangerous patterns and size limits.

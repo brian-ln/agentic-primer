@@ -12,7 +12,7 @@
  * TTL: 1 hour default (claim checks are short-lived)
  */
 
-import type { IKeyValueStorage } from './interfaces.ts';
+import type { IKeyValueStorage } from '../interfaces.ts';
 import type { ClaimCheckReference } from './claim-check.ts';
 
 /**

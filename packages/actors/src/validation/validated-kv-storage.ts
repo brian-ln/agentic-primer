@@ -14,7 +14,7 @@
  * ```
  */
 
-import type { IKeyValueStorage } from './interfaces.ts';
+import type { IKeyValueStorage } from '../interfaces.ts';
 import { validateKvKey, validateKvValue } from './storage-validation.ts';
 
 /**

@@ -6,7 +6,7 @@
  * Used by Actor base class for acceptance criteria checking.
  */
 
-import type { JSONSchema } from './introspection.ts';
+import type { JSONSchema } from '../introspection.ts';
 
 export interface ValidationError {
   path: string;

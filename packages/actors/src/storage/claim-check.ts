@@ -13,7 +13,7 @@
  * - https://www.enterpriseintegrationpatterns.com/patterns/messaging/StoreInLibrary.html
  */
 
-import type { JSONSchema } from './introspection.ts';
+import type { JSONSchema } from '../introspection.ts';
 
 /**
  * Claim check threshold: 100KB

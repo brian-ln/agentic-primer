@@ -18,7 +18,7 @@ import {
   createResponse,
   createErrorResponse,
 } from './message.ts';
-import { parsePath, validatePath } from './path-resolver.ts';
+import { parsePath, validatePath } from './routing/path-resolver.ts';
 
 /**
  * Supervisor that routes messages hierarchically by path delegation.

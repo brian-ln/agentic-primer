@@ -4,7 +4,7 @@
  * No serialization needed, fastest transport.
  */
 
-import type { ITransport, ConnectionState } from './interfaces.ts';
+import type { ITransport, ConnectionState } from '../interfaces.ts';
 
 export class LocalTransport implements ITransport {
   private receiveHandler?: (sender: string, message: unknown) => void;

@@ -5,8 +5,8 @@
  * Ported from simplify/src/messaging/address-parser.ts
  */
 
-import type { Address } from './message.ts';
-import { parseAddress } from './message.ts';
+import type { Address } from '../message.ts';
+import { parseAddress } from '../message.ts';
 
 export interface ParsedAddressInfo {
   address: Address;

@@ -4,7 +4,7 @@
  * Uses web platform APIs only (TextEncoder/TextDecoder).
  */
 
-import type { ISerde } from './interfaces.ts';
+import type { ISerde } from '../interfaces.ts';
 
 /**
  * JSON serialization (default).

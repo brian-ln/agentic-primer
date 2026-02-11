@@ -19,9 +19,9 @@ import {
   validateBatchSize,
   validateKvKey,
   validateKvValue,
-} from '../storage-validation.ts';
-import { ValidatedSqlStorage } from '../validated-sql-storage.ts';
-import { ValidatedKvStorage } from '../validated-kv-storage.ts';
+} from '../validation/storage-validation.ts';
+import { ValidatedSqlStorage } from '../validation/validated-sql-storage.ts';
+import { ValidatedKvStorage } from '../validation/validated-kv-storage.ts';
 import type { ISqlStorage, IKeyValueStorage, SqlValue, SqlResult } from '../interfaces.ts';
 
 // ============================================================================

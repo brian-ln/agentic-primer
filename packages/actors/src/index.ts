@@ -86,7 +86,7 @@ export {
   validateJSONSchema,
   validateJSONSchemaErrors,
   findClosestMatch,
-} from './schema-validator.ts';
+} from './validation/schema-validator.ts';
 
 // Message router
 export { MessageRouter, type MessageRouterConfig } from './router.ts';
@@ -108,13 +108,13 @@ export {
   getLocalName,
   joinPath,
   isChildOf,
-} from './path-resolver.ts';
+} from './routing/path-resolver.ts';
 
 export {
   type ParsedAddressInfo,
   parseAddressInfo,
   isHierarchicalPath,
-} from './address-parser.ts';
+} from './routing/address-parser.ts';
 
 export {
   PatternError,
@@ -127,9 +127,9 @@ export {
   hasWildcards,
   hasAlternatives,
   estimateComplexity,
-} from './path-patterns.ts';
+} from './routing/path-patterns.ts';
 
-export { PathCache, type PathCacheConfig, type CacheMetrics } from './path-cache.ts';
+export { PathCache, type PathCacheConfig, type CacheMetrics } from './routing/path-cache.ts';
 
 // Supervision
 export {
@@ -183,8 +183,8 @@ export {
 } from './channels/index.ts';
 
 // Transport and serialization implementations
-export { LocalTransport } from './local-transport.ts';
-export { JsonSerde } from './serde.ts';
+export { LocalTransport } from './transport/local-transport.ts';
+export { JsonSerde } from './transport/serde.ts';
 
 // Storage validation (defense-in-depth)
 export {
@@ -193,10 +193,10 @@ export {
   validateBatchSize,
   validateKvKey,
   validateKvValue,
-} from './storage-validation.ts';
+} from './validation/storage-validation.ts';
 
-export { ValidatedSqlStorage } from './validated-sql-storage.ts';
-export { ValidatedKvStorage } from './validated-kv-storage.ts';
+export { ValidatedSqlStorage } from './validation/validated-sql-storage.ts';
+export { ValidatedKvStorage } from './validation/validated-kv-storage.ts';
 
 // Claim check pattern
 export {
@@ -204,6 +204,6 @@ export {
   type ClaimCheckReference,
   shouldUseClaimCheck,
   isClaimCheckReference,
-} from './claim-check.ts';
+} from './storage/claim-check.ts';
 
-export { ClaimCheckStore } from './claim-check-store.ts';
+export { ClaimCheckStore } from './storage/claim-check-store.ts';

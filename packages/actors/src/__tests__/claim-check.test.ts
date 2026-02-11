@@ -16,8 +16,8 @@ import {
   shouldUseClaimCheck,
   isClaimCheckReference,
   type ClaimCheckReference,
-} from '../claim-check.ts';
-import { ClaimCheckStore } from '../claim-check-store.ts';
+} from '../storage/claim-check.ts';
+import { ClaimCheckStore } from '../storage/claim-check-store.ts';
 import { Actor } from '../actor.ts';
 import { MessageRouter } from '../router.ts';
 import { address, createMessage } from '../message.ts';

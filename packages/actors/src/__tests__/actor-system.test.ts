@@ -4,8 +4,8 @@ import { ActorSystem } from '../actor-system.ts';
 import { Actor } from '../actor.ts';
 import { MessageRouter } from '../router.ts';
 import { SupervisorBase, LeafActor } from '../supervisor.ts';
-import { LocalTransport } from '../local-transport.ts';
-import { JsonSerde } from '../serde.ts';
+import { LocalTransport } from '../transport/local-transport.ts';
+import { JsonSerde } from '../transport/serde.ts';
 import type { ActorBehavior, ActorSystemConfig } from '../types.ts';
 import type { Message, MessageResponse, Address } from '../message.ts';
 import {
@@ -24,7 +24,7 @@ import {
   getLocalName,
   joinPath,
   isChildOf,
-} from '../path-resolver.ts';
+} from '../routing/path-resolver.ts';
 
 // --- ActorSystem: Functional Behaviors ---
 

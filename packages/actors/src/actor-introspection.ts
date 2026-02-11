@@ -28,7 +28,7 @@ import {
   validateJSONSchema,
   validateJSONSchemaErrors,
   findClosestMatch,
-} from './schema-validator.ts';
+} from './validation/schema-validator.ts';
 import { Actor as BaseActor } from './actor.ts';
 import type { IMessageRouter } from './interfaces.ts';
 

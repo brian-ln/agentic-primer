@@ -29,9 +29,9 @@ import {
   generateMessageId,
 } from './message.ts';
 import type { JSONSchema } from './introspection.ts';
-import { validateJSONSchemaErrors } from './schema-validator.ts';
-import { shouldUseClaimCheck, isClaimCheckReference } from './claim-check.ts';
-import type { ClaimCheckStore } from './claim-check-store.ts';
+import { validateJSONSchemaErrors } from './validation/schema-validator.ts';
+import { shouldUseClaimCheck, isClaimCheckReference } from './storage/claim-check.ts';
+import type { ClaimCheckStore } from './storage/claim-check-store.ts';
 
 export class Actor implements MessageHandler {
   readonly address: Address;
