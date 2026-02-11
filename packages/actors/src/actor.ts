@@ -30,6 +30,8 @@ import {
 } from './message.ts';
 import type { JSONSchema } from './introspection.ts';
 import { validateJSONSchemaErrors } from './schema-validator.ts';
+import { shouldUseClaimCheck, isClaimCheckReference } from './claim-check.ts';
+import type { ClaimCheckStore } from './claim-check-store.ts';
 
 export class Actor implements MessageHandler {
   readonly address: Address;
@@ -57,6 +59,15 @@ export class Actor implements MessageHandler {
    */
   protected enableAutoValidation = true;
 
+  /**
+   * Optional claim check store for large message payloads
+   *
+   * If set, payloads > 100KB will be stored externally and a reference
+   * passed in the message envelope. Receiving actors with a claim check
+   * store will automatically retrieve the full payload.
+   */
+  protected claimCheckStore?: ClaimCheckStore;
+
   constructor(id: string, router: IMessageRouter) {
     this.address = address(id);
     this.router = router;
@@ -71,6 +82,22 @@ export class Actor implements MessageHandler {
    * Subclasses should override handleMessage(), not this method.
    */
   async receive(message: Message): Promise<MessageResponse> {
+    // Auto-retrieve claim check if present
+    if (message.metadata?.['claim-check'] && this.claimCheckStore) {
+      try {
+        if (isClaimCheckReference(message.payload)) {
+          message.payload = await this.claimCheckStore.retrieve(message.payload);
+          // Optional: delete after retrieval (one-time use)
+          // await this.claimCheckStore.delete(message.payload);
+        }
+      } catch (error) {
+        return createErrorResponse(
+          message,
+          `Failed to retrieve claim check: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+
     // Auto-validate if enabled and schema exists
     if (this.enableAutoValidation && this.schemas) {
       const schema = this.schemas.get(message.type);
@@ -116,10 +143,26 @@ export class Actor implements MessageHandler {
 
   /** Send a message and wait for response (ask pattern). */
   async ask<T = unknown>(to: Address, type: string, payload: unknown): Promise<MessageResponse<T>> {
-    const message = createMessage(to, type, payload, {
+    let actualPayload = payload;
+    let metadata: Record<string, any> | undefined;
+
+    // Check if payload should use claim check
+    if (this.claimCheckStore && shouldUseClaimCheck(payload)) {
+      try {
+        const ref = await this.claimCheckStore.store(payload);
+        actualPayload = ref;
+        metadata = { 'claim-check': true };
+      } catch (error) {
+        // Fall back to inline payload on storage failure
+        console.warn('Claim check storage failed, sending inline:', error);
+      }
+    }
+
+    const message = createMessage(to, type, actualPayload, {
       pattern: 'ask',
       from: this.address,
       correlationId: generateCorrelationId(),
+      metadata,
     });
     return await this.router.ask<T>(message);
   }

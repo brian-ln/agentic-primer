@@ -185,3 +185,25 @@ export {
 // Transport and serialization implementations
 export { LocalTransport } from './local-transport.ts';
 export { JsonSerde } from './serde.ts';
+
+// Storage validation (defense-in-depth)
+export {
+  validateSqlQuery,
+  validateSqlParams,
+  validateBatchSize,
+  validateKvKey,
+  validateKvValue,
+} from './storage-validation.ts';
+
+export { ValidatedSqlStorage } from './validated-sql-storage.ts';
+export { ValidatedKvStorage } from './validated-kv-storage.ts';
+
+// Claim check pattern
+export {
+  CLAIM_CHECK_THRESHOLD,
+  type ClaimCheckReference,
+  shouldUseClaimCheck,
+  isClaimCheckReference,
+} from './claim-check.ts';
+
+export { ClaimCheckStore } from './claim-check-store.ts';
