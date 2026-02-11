@@ -1,20 +1,20 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { ActorSystem } from '../actor-system.ts';
-import { Actor } from '../actor.ts';
-import { MessageRouter } from '../router.ts';
-import { SupervisorBase, LeafActor } from '../supervisor.ts';
-import { LocalTransport } from '../transport/local-transport.ts';
-import { JsonSerde } from '../transport/serde.ts';
-import type { ActorBehavior, ActorSystemConfig } from '../types.ts';
-import type { Message, MessageResponse, Address } from '../message.ts';
+import { ActorSystem } from '../src/actor-system.ts';
+import { Actor } from '../src/actor.ts';
+import { MessageRouter } from '../src/router.ts';
+import { SupervisorBase, LeafActor } from '../src/supervisor.ts';
+import { LocalTransport } from '../src/transport/local-transport.ts';
+import { JsonSerde } from '../src/transport/serde.ts';
+import type { ActorBehavior, ActorSystemConfig } from '../src/types.ts';
+import type { Message, MessageResponse, Address } from '../src/message.ts';
 import {
   address,
   parseAddress,
   createMessage,
   createResponse,
   createErrorResponse,
-} from '../message.ts';
+} from '../src/message.ts';
 import {
   parsePath,
   validatePath,
@@ -24,7 +24,7 @@ import {
   getLocalName,
   joinPath,
   isChildOf,
-} from '../routing/path-resolver.ts';
+} from '../src/routing/path-resolver.ts';
 
 // --- ActorSystem: Functional Behaviors ---
 

@@ -13,8 +13,8 @@ import {
   createBridgeChannel,
   ChannelClosedError,
   ChannelCancelledError,
-} from '../channels/index.ts';
-import type { AsyncStreamMessage, Address } from '../message.ts';
+} from '../src/channels/index.ts';
+import type { AsyncStreamMessage, Address } from '../src/message.ts';
 
 // --- StreamChannel ---
 

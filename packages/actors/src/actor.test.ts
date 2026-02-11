@@ -14,8 +14,8 @@ import {
   address,
   MapActorRegistry,
   MessageRouter,
-} from '../index.ts';
-import type { JSONSchema } from '../introspection.ts';
+} from './index.ts';
+import type { JSONSchema } from './introspection.ts';
 
 describe('Actor auto-validation', () => {
   let router: MessageRouter;
