@@ -1,0 +1,470 @@
+{
+  "timestamp": "2026-02-06T17:31:48.301Z",
+  "filesScanned": 171,
+  "flatIdUsages": [
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/src/migration/analyzer.ts",
+      "line": 307,
+      "column": 20,
+      "flatId": "flat-id",
+      "type": "alias-registration",
+      "context": "      }\n\n      // Pattern 4: registerAlias('flat-id', 'path')\n      const aliasMatches = line.matchAll(/registerAlias\\s*\\(\\s*['\"`]([^/'\"`]+)['\"`]\\s*,\\s*['\"`]([^'\"`]+)['\"`]/g);\n      for (const match of aliasMatches) {",
+      "complexity": "simple",
+      "recommendation": "Alias already created for migration. Monitor usage and remove after transition."
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/src/migration/refactor.ts",
+      "line": 346,
+      "column": 13,
+      "flatId": "${proposal.flatId}",
+      "type": "alias-registration",
+      "context": "      for (const proposal of proposals) {\n        aliasLines.push(\n          `  registerAlias('${proposal.flatId}', '${proposal.proposedPath}'); // ${proposal.reasoning}`\n        );\n      }",
+      "complexity": "simple",
+      "recommendation": "Alias already created for migration. Monitor usage and remove after transition."
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/src/migration/planner.ts",
+      "line": 342,
+      "column": 20,
+      "flatId": "${proposal.flatId}",
+      "type": "alias-registration",
+      "context": "            line: -1, // Insert at appropriate location\n            before: '',\n            after: `registerAlias('${proposal.flatId}', '${proposal.proposedPath}');`,\n            type: 'insert',\n          },",
+      "complexity": "simple",
+      "recommendation": "Alias already created for migration. Monitor usage and remove after transition."
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/src/migration/planner.ts",
+      "line": 400,
+      "column": 21,
+      "flatId": "${proposal.flatId}",
+      "type": "address-call",
+      "context": "            file,\n            line: usage.line,\n            before: `address('${proposal.flatId}')`,\n            after: `address('${proposal.proposedPath}')`,\n            type: 'replace',",
+      "complexity": "simple",
+      "recommendation": "Replace address('domain/${proposal.flatId}') with address('appropriate/path/${proposal.flatId}')"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/src/migration/planner.ts",
+      "line": 401,
+      "column": 20,
+      "flatId": "${proposal.proposedPath}",
+      "type": "address-call",
+      "context": "            line: usage.line,\n            before: `address('${proposal.flatId}')`,\n            after: `address('${proposal.proposedPath}')`,\n            type: 'replace',\n          })),",
+      "complexity": "simple",
+      "recommendation": "Replace address('domain/${proposal.proposedPath}') with address('appropriate/path/${proposal.proposedPath}')"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/src/migration/planner.ts",
+      "line": 421,
+      "column": 21,
+      "flatId": "${proposal.flatId}",
+      "type": "alias-registration",
+      "context": "            file: 'src/migration/aliases.ts',\n            line: -1,\n            before: `registerAlias('${proposal.flatId}', '${proposal.proposedPath}');`,\n            after: '',\n            type: 'delete',",
+      "complexity": "simple",
+      "recommendation": "Alias already created for migration. Monitor usage and remove after transition."
+    }
+  ],
+  "actorRegistrations": [
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/demo-actors-only.ts",
+      "line": 33,
+      "actorId": "tools/bash",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "\n  // Register tool actors so they can be addressed via @(id)\n  router.registerActor('tools/bash', bashTool);\n  router.registerActor('tools/read', readTool);\n  router.registerActor('tools/write', writeTool);"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/demo-actors-only.ts",
+      "line": 34,
+      "actorId": "tools/read",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "  // Register tool actors so they can be addressed via @(id)\n  router.registerActor('tools/bash', bashTool);\n  router.registerActor('tools/read', readTool);\n  router.registerActor('tools/write', writeTool);\n"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/demo-actors-only.ts",
+      "line": 35,
+      "actorId": "tools/write",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "  router.registerActor('tools/bash', bashTool);\n  router.registerActor('tools/read', readTool);\n  router.registerActor('tools/write', writeTool);\n\n  console.log('✓ Actors initialized and registered:');"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/demo-filesystem-actor.ts",
+      "line": 34,
+      "actorId": "test/filesystem",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "  // Create and register FileSystemActor\n  const fsActor = new FileSystemActor(router, dataDir);\n  router.registerActor('test/filesystem', fsActor);\n\n  console.log('✓ FileSystemActor initialized with basePath:', dataDir);"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/test-streaming-live.ts",
+      "line": 39,
+      "actorId": "domain/streaming-test",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "  // Create and register streaming actor\n  const actor = new StreamingActor('streaming-test', router);\n  router.registerActor('domain/streaming-test', actor);\n\n  console.log('1️⃣ Testing basic streaming:');"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/test-integration.ts",
+      "line": 92,
+      "actorId": "test/session",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "\n  // Register actors\n  router.registerActor('test/session', sessionActor);\n  router.registerActor('test/filesystem', fsActor);\n  router.registerActor('test/code-execution', codeActor);"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/test-integration.ts",
+      "line": 93,
+      "actorId": "test/filesystem",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "  // Register actors\n  router.registerActor('test/session', sessionActor);\n  router.registerActor('test/filesystem', fsActor);\n  router.registerActor('test/code-execution', codeActor);\n});"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/test-integration.ts",
+      "line": 94,
+      "actorId": "test/code-execution",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "  router.registerActor('test/session', sessionActor);\n  router.registerActor('test/filesystem', fsActor);\n  router.registerActor('test/code-execution', codeActor);\n});\n"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/test-integration.ts",
+      "line": 135,
+      "actorId": "test/session-mock",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "      modelManager\n    );\n    router.registerActor('test/session-mock', mockSessionActor);\n\n    // Stream inference with callback"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/test-integration.ts",
+      "line": 267,
+      "actorId": "test/quick-mock",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "      modelManager\n    );\n    router.registerActor('test/quick-mock', quickMockActor);\n\n    for (let i = 0; i < 10; i++) {"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/examples/workflows/build-pipeline.ts",
+      "line": 101,
+      "actorId": "domain/tasks",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "\n  // Register actors\n  router.registerActor('domain/tasks', taskActor);\n  router.registerActor('domain/relationships', relationshipActor);\n  router.registerActor('domain/orchestrator', orchestrator);"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/examples/workflows/build-pipeline.ts",
+      "line": 102,
+      "actorId": "domain/relationships",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "  // Register actors\n  router.registerActor('domain/tasks', taskActor);\n  router.registerActor('domain/relationships', relationshipActor);\n  router.registerActor('domain/orchestrator', orchestrator);\n"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/examples/workflows/build-pipeline.ts",
+      "line": 103,
+      "actorId": "domain/orchestrator",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "  router.registerActor('domain/tasks', taskActor);\n  router.registerActor('domain/relationships', relationshipActor);\n  router.registerActor('domain/orchestrator', orchestrator);\n\n  // Define workflow"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/demo-task-knowledge.ts",
+      "line": 31,
+      "actorId": "services/knowledge",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "\n// Register actors with router\nrouter.registerActor('services/knowledge', knowledgeActor);\nrouter.registerActor('domain/relationships', relationshipActor);\nrouter.registerActor('domain/tasks', taskActor);"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/demo-task-knowledge.ts",
+      "line": 32,
+      "actorId": "domain/relationships",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "// Register actors with router\nrouter.registerActor('services/knowledge', knowledgeActor);\nrouter.registerActor('domain/relationships', relationshipActor);\nrouter.registerActor('domain/tasks', taskActor);\n"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/demo-task-knowledge.ts",
+      "line": 33,
+      "actorId": "domain/tasks",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "router.registerActor('services/knowledge', knowledgeActor);\nrouter.registerActor('domain/relationships', relationshipActor);\nrouter.registerActor('domain/tasks', taskActor);\n\n// Get an existing session_id from the database for demo purposes"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/test-stress.ts",
+      "line": 123,
+      "actorId": "demo/stress-session",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "\n  // Register actors\n  router.registerActor('demo/stress-session', sessionActor);\n  router.registerActor('test/filesystem', fsActor);\n  router.registerActor('test/code-execution', codeActor);"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/test-stress.ts",
+      "line": 124,
+      "actorId": "test/filesystem",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "  // Register actors\n  router.registerActor('demo/stress-session', sessionActor);\n  router.registerActor('test/filesystem', fsActor);\n  router.registerActor('test/code-execution', codeActor);\n  router.registerActor('test/mock-session', mockSessionActor);"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/test-stress.ts",
+      "line": 125,
+      "actorId": "test/code-execution",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "  router.registerActor('demo/stress-session', sessionActor);\n  router.registerActor('test/filesystem', fsActor);\n  router.registerActor('test/code-execution', codeActor);\n  router.registerActor('test/mock-session', mockSessionActor);\n"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/test-stress.ts",
+      "line": 126,
+      "actorId": "test/mock-session",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "  router.registerActor('test/filesystem', fsActor);\n  router.registerActor('test/code-execution', codeActor);\n  router.registerActor('test/mock-session', mockSessionActor);\n\n  console.log('✓ System initialized\\n');"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/test-streaming-integration.ts",
+      "line": 72,
+      "actorId": "test/actor",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "  // Test 3: Custom actor streaming works\n  console.log('✓ Test 3: Custom actor streaming works');\n  router.registerActor('test/actor', testActor);\n\n  let receivedTokens: string[] = [];"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/test-streaming-integration.ts",
+      "line": 164,
+      "actorId": "test/non-streaming",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "\n  const nonStreamingActor = new NonStreamingActor('non-streaming', router);\n  router.registerActor('test/non-streaming', nonStreamingActor);\n\n  try {"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/demo-code-execution-actor.ts",
+      "line": 24,
+      "actorId": "test/code-execution",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "  // Create and register UnsafeCodeComputeActor with 5 second default timeout\n  const codeActor = new UnsafeCodeComputeActor(router, { timeout: 5000, iUnderstandThisIsUnsafe: true });\n  router.registerActor('test/code-execution', codeActor);\n\n  console.log('✓ UnsafeCodeComputeActor initialized with 5s timeout');"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/demo-streaming.ts",
+      "line": 80,
+      "actorId": "demo/stream-session",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "\n  // Register actor with router\n  router.registerActor('demo/stream-session', sessionActor);\n\n  console.log('✓ SessionActor initialized with streaming support\\n');"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/src/messaging/hierarchical-routing-poc.ts",
+      "line": 199,
+      "actorId": "services/inference",
+      "isHierarchical": true,
+      "type": "supervisor.addChild",
+      "context": "  }));\n\n  domainSupervisor.addChild('services/inference', inferenceActor);\n  domainSupervisor.addChild('services/program-executor', programExecutorActor);\n"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/src/messaging/hierarchical-routing-poc.ts",
+      "line": 200,
+      "actorId": "services/program-executor",
+      "isHierarchical": true,
+      "type": "supervisor.addChild",
+      "context": "\n  domainSupervisor.addChild('services/inference', inferenceActor);\n  domainSupervisor.addChild('services/program-executor', programExecutorActor);\n\n  // Channels supervisor"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/src/messaging/hierarchical-routing-poc.ts",
+      "line": 220,
+      "actorId": "channels/slack",
+      "isHierarchical": true,
+      "type": "supervisor.addChild",
+      "context": "  }));\n\n  channelsSupervisor.addChild('channels/slack', slackActor);\n  channelsSupervisor.addChild('channels/telegram', telegramActor);\n"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/src/messaging/hierarchical-routing-poc.ts",
+      "line": 221,
+      "actorId": "channels/telegram",
+      "isHierarchical": true,
+      "type": "supervisor.addChild",
+      "context": "\n  channelsSupervisor.addChild('channels/slack', slackActor);\n  channelsSupervisor.addChild('channels/telegram', telegramActor);\n\n  // Add supervisors to root"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/src/messaging/hierarchical-routing-poc.ts",
+      "line": 224,
+      "actorId": "domain/domain",
+      "isHierarchical": true,
+      "type": "supervisor.addChild",
+      "context": "\n  // Add supervisors to root\n  root.addChild('domain/domain', domainSupervisor);\n  root.addChild('domain/channels', channelsSupervisor);\n"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/src/messaging/hierarchical-routing-poc.ts",
+      "line": 225,
+      "actorId": "domain/channels",
+      "isHierarchical": true,
+      "type": "supervisor.addChild",
+      "context": "  // Add supervisors to root\n  root.addChild('domain/domain', domainSupervisor);\n  root.addChild('domain/channels', channelsSupervisor);\n\n  return root;"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/src/messaging/__tests__/streaming-benchmark.ts",
+      "line": 58,
+      "actorId": "bench/1k",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "  {\n    const actor = new BenchmarkActor('bench-1k', router, 1000);\n    router.registerActor('bench/1k', actor);\n\n    const startTime = performance.now();"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/src/messaging/__tests__/streaming-benchmark.ts",
+      "line": 82,
+      "actorId": "bench/10k",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "  {\n    const actor = new BenchmarkActor('bench-10k', router, 10000);\n    router.registerActor('bench/10k', actor);\n\n    const startTime = performance.now();"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/src/messaging/__tests__/streaming-benchmark.ts",
+      "line": 106,
+      "actorId": "bench/100k",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "  {\n    const actor = new BenchmarkActor('bench-100k', router, 100000);\n    router.registerActor('bench/100k', actor);\n\n    const startTime = performance.now();"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/src/messaging/__tests__/streaming-benchmark.ts",
+      "line": 130,
+      "actorId": "bench/backpressure",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "  {\n    const actor = new BenchmarkActor('bench-bp', router, 1000);\n    router.registerActor('bench/backpressure', actor);\n\n    const startTime = performance.now();"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/src/messaging/supervisor-base.ts",
+      "line": 51,
+      "actorId": "services/inference",
+      "isHierarchical": true,
+      "type": "supervisor.addChild",
+      "context": " *\n *     // Add children\n *     this.addChild('services/inference', new InferenceActor('inference', router));\n *     this.addChild('services/executor', new ExecutorActor('executor', router));\n *   }"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/src/messaging/supervisor-base.ts",
+      "line": 52,
+      "actorId": "services/executor",
+      "isHierarchical": true,
+      "type": "supervisor.addChild",
+      "context": " *     // Add children\n *     this.addChild('services/inference', new InferenceActor('inference', router));\n *     this.addChild('services/executor', new ExecutorActor('executor', router));\n *   }\n *"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/src/messaging/supervisor-base.ts",
+      "line": 104,
+      "actorId": "services/inference",
+      "isHierarchical": true,
+      "type": "supervisor.addChild",
+      "context": "   * @example\n   * ```typescript\n   * supervisor.addChild('services/inference', inferenceActor);\n   * // Child now addressable as: domain/inference\n   * ```"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/src/messaging/supervisor-base.ts",
+      "line": 294,
+      "actorId": "services/inference",
+      "isHierarchical": true,
+      "type": "supervisor.addChild",
+      "context": " * });\n *\n * supervisor.addChild('services/inference', inferenceActor);\n * // Now addressable as: domain/inference\n * ```"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/src/migration/analyzer.ts",
+      "line": 288,
+      "actorId": "test/flat-id",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "      // }\n\n      // Pattern 3: router.registerActor('test/flat-id', ...)\n      const registerMatches = line.matchAll(/\\.registerActor\\s*\\(\\s*['\"`]([^/'\"`]+)['\"`]/g);\n      for (const match of registerMatches) {"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/src/migration/analyzer.ts",
+      "line": 337,
+      "actorId": "test/id",
+      "isHierarchical": true,
+      "type": "router.registerActor",
+      "context": "      const line = lines[i];\n\n      // router.registerActor('test/id', actor)\n      const registerMatches = line.matchAll(/\\.registerActor\\s*\\(\\s*['\"`]([^'\"`]+)['\"`]/g);\n      for (const match of registerMatches) {"
+    },
+    {
+      "file": "/Users/bln/play/agentic-primer/simplify/src/migration/analyzer.ts",
+      "line": 351,
+      "actorId": "test/id",
+      "isHierarchical": true,
+      "type": "supervisor.addChild",
+      "context": "      }\n\n      // supervisor.addChild('test/id', actor)\n      const addChildMatches = line.matchAll(/\\.addChild\\s*\\(\\s*['\"`]([^'\"`]+)['\"`]/g);\n      for (const match of addChildMatches) {"
+    }
+  ],
+  "stats": {
+    "totalFlatIds": 6,
+    "totalActors": 41,
+    "hierarchicalActors": 41,
+    "flatActors": 0,
+    "migrationProgress": 100
+  },
+  "byComplexity": {
+    "simple": [
+      {
+        "file": "/Users/bln/play/agentic-primer/simplify/src/migration/analyzer.ts",
+        "line": 307,
+        "column": 20,
+        "flatId": "flat-id",
+        "type": "alias-registration",
+        "context": "      }\n\n      // Pattern 4: registerAlias('flat-id', 'path')\n      const aliasMatches = line.matchAll(/registerAlias\\s*\\(\\s*['\"`]([^/'\"`]+)['\"`]\\s*,\\s*['\"`]([^'\"`]+)['\"`]/g);\n      for (const match of aliasMatches) {",
+        "complexity": "simple",
+        "recommendation": "Alias already created for migration. Monitor usage and remove after transition."
+      },
+      {
+        "file": "/Users/bln/play/agentic-primer/simplify/src/migration/refactor.ts",
+        "line": 346,
+        "column": 13,
+        "flatId": "${proposal.flatId}",
+        "type": "alias-registration",
+        "context": "      for (const proposal of proposals) {\n        aliasLines.push(\n          `  registerAlias('${proposal.flatId}', '${proposal.proposedPath}'); // ${proposal.reasoning}`\n        );\n      }",
+        "complexity": "simple",
+        "recommendation": "Alias already created for migration. Monitor usage and remove after transition."
+      },
+      {
+        "file": "/Users/bln/play/agentic-primer/simplify/src/migration/planner.ts",
+        "line": 342,
+        "column": 20,
+        "flatId": "${proposal.flatId}",
+        "type": "alias-registration",
+        "context": "            line: -1, // Insert at appropriate location\n            before: '',\n            after: `registerAlias('${proposal.flatId}', '${proposal.proposedPath}');`,\n            type: 'insert',\n          },",
+        "complexity": "simple",
+        "recommendation": "Alias already created for migration. Monitor usage and remove after transition."
+      },
+      {
+        "file": "/Users/bln/play/agentic-primer/simplify/src/migration/planner.ts",
+        "line": 400,
+        "column": 21,
+        "flatId": "${proposal.flatId}",
+        "type": "address-call",
+        "context": "            file,\n            line: usage.line,\n            before: `address('${proposal.flatId}')`,\n            after: `address('${proposal.proposedPath}')`,\n            type: 'replace',",
+        "complexity": "simple",
+        "recommendation": "Replace address('domain/${proposal.flatId}') with address('appropriate/path/${proposal.flatId}')"
+      },
+      {
+        "file": "/Users/bln/play/agentic-primer/simplify/src/migration/planner.ts",
+        "line": 401,
+        "column": 20,
+        "flatId": "${proposal.proposedPath}",
+        "type": "address-call",
+        "context": "            line: usage.line,\n            before: `address('${proposal.flatId}')`,\n            after: `address('${proposal.proposedPath}')`,\n            type: 'replace',\n          })),",
+        "complexity": "simple",
+        "recommendation": "Replace address('domain/${proposal.proposedPath}') with address('appropriate/path/${proposal.proposedPath}')"
+      },
+      {
+        "file": "/Users/bln/play/agentic-primer/simplify/src/migration/planner.ts",
+        "line": 421,
+        "column": 21,
+        "flatId": "${proposal.flatId}",
+        "type": "alias-registration",
+        "context": "            file: 'src/migration/aliases.ts',\n            line: -1,\n            before: `registerAlias('${proposal.flatId}', '${proposal.proposedPath}');`,\n            after: '',\n            type: 'delete',",
+        "complexity": "simple",
+        "recommendation": "Alias already created for migration. Monitor usage and remove after transition."
+      }
+    ],
+    "moderate": [],
+    "complex": []
+  },
+  "byFile": {}
+}

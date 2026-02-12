@@ -1,0 +1,49 @@
+═══════════════════════════════════════════════════════
+  Migration Analysis Report
+═══════════════════════════════════════════════════════
+
+Analysis Date: 2026-02-06T17:31:48.301Z
+Files Scanned: 171
+
+STATISTICS
+───────────────────────────────────────────────────────
+  Total Flat ID Usages:     6
+  Total Actors:             41
+  Hierarchical Actors:      41
+  Flat ID Actors:           0
+  Migration Progress:       100.00%
+
+BY COMPLEXITY
+───────────────────────────────────────────────────────
+  Simple:     6 (quick fixes)
+  Moderate:   0 (requires review)
+  Complex:    0 (structural changes)
+
+SIMPLE MIGRATIONS (Top 5)
+───────────────────────────────────────────────────────
+  📄 src/migration/analyzer.ts:307
+     Flat ID: "flat-id"
+     Action:  Alias already created for migration. Monitor usage and remove after transition.
+
+  📄 src/migration/refactor.ts:346
+     Flat ID: "${proposal.flatId}"
+     Action:  Alias already created for migration. Monitor usage and remove after transition.
+
+  📄 src/migration/planner.ts:342
+     Flat ID: "${proposal.flatId}"
+     Action:  Alias already created for migration. Monitor usage and remove after transition.
+
+  📄 src/migration/planner.ts:400
+     Flat ID: "${proposal.flatId}"
+     Action:  Replace address('domain/${proposal.flatId}') with address('appropriate/path/${proposal.flatId}')
+
+  📄 src/migration/planner.ts:401
+     Flat ID: "${proposal.proposedPath}"
+     Action:  Replace address('domain/${proposal.proposedPath}') with address('appropriate/path/${proposal.proposedPath}')
+
+NEXT STEPS
+───────────────────────────────────────────────────────
+  1. Review complex migrations and plan hierarchy
+  2. Run migration planner: npm run migrate:plan
+  3. Execute migrations: npm run migrate:execute
+  4. Verify: npm run migrate:verify

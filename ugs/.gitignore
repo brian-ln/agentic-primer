@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+bun.lockb
+
+# Environment files
+.env
+.env.local
+
+# Logs
+*.log
+logs/
+
+# Snapshots and data
+*.snapshot
+data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+.test-data/
+**/.test-tmp/
+
+# Coverage reports
+coverage/
+*.coverage
+.nyc_output/
+
+# Test artifacts  
+test-streaming-live.ts
+*-live.ts
+
+# Exploration/scratch files
+AGENTS.md
+OPENCLAW_*.md
+coverage-analysis.md
+data-test-dsl-helpers-*

@@ -1,0 +1,4218 @@
+#!/usr/bin/env bun
+/**
+ * UGS - Universal Graph System CLI
+ * Agent-first design with human-friendly mode available
+ */
+
+import GraphStore, { Node, Edge, Address, $ } from './src/graph.ts';
+import { ProgramManager } from './src/entities/program.ts';
+import { ProviderManager } from './src/entities/provider.ts';
+import { ModelManager } from './src/entities/model.ts';
+import { InformationManager } from './src/entities/information.ts';
+import { HumanManager, HumanState } from './src/entities/human.ts';
+import { TaskManager, TaskState, TaskPriority } from './src/entities/task.ts';
+import { SessionManager, SessionState } from './src/entities/session.ts';
+import { AgentManager, AgentState } from './src/entities/agent.ts';
+import { EmbeddingManager } from './src/entities/embedding.ts';
+import { createContextFromEnv, runWithContextAsync } from './src/context.ts';
+import { join } from 'node:path';
+import { existsSync } from 'node:fs';
+
+interface OutputFormat {
+  isAgent: boolean;
+  structured: boolean;
+  verbose: boolean;
+}
+
+interface HelpTopic {
+  name: string;
+  description: string;
+  details?: string[];
+  examples?: string[];
+  seeAlso?: string[];
+}
+
+class UGSCLI {
+  private store: GraphStore;
+  private programManager: ProgramManager;
+  private providerManager: ProviderManager;
+  private modelManager: ModelManager;
+  private informationManager: InformationManager;
+  private humanManager: HumanManager;
+  private taskManager: TaskManager;
+  private sessionManager: SessionManager;
+  private agentManager: AgentManager;
+  private embeddingManager: EmbeddingManager;
+  private commands: Map<string, any> = new Map();
+  private helpTopics: Map<string, HelpTopic> = new Map();
+  private dataDir: string;
+  private outputFormat: OutputFormat;
+
+  constructor(dataDir?: string) {
+    this.dataDir = dataDir || process.env.UGS_DATA_DIR || './data';
+    this.store = new GraphStore(this.dataDir);
+    this.programManager = new ProgramManager(this.store);
+    this.providerManager = new ProviderManager(this.store);
+    this.modelManager = new ModelManager(this.store, this.providerManager);
+    this.informationManager = new InformationManager(this.store);
+    this.humanManager = new HumanManager(this.store);
+    this.taskManager = new TaskManager(this.store);
+    this.sessionManager = new SessionManager(this.store, this.modelManager, this.dataDir);
+    this.agentManager = new AgentManager(this.store, this.taskManager, this.modelManager);
+    this.embeddingManager = new EmbeddingManager(this.store);
+
+    // Determine actor type and output format
+    this.outputFormat = this.determineOutputFormat();
+
+    this.setupCommands();
+    this.setupHelpTopics();
+  }
+
+  private determineOutputFormat(): OutputFormat {
+    const args = process.argv;
+    
+    // Explicit flags take precedence
+    if (args.includes('--human')) {
+      return { isAgent: false, structured: false, verbose: true };
+    }
+    if (args.includes('--agent')) {
+      return { isAgent: true, structured: true, verbose: false };
+    }
+    
+    // Environment variable
+    const actor = process.env.UGS_ACTOR?.toLowerCase();
+    if (actor === 'human') {
+      return { isAgent: false, structured: false, verbose: true };
+    }
+    
+    // Default to agent-optimized (actor === 'agent' or undefined)
+    return { isAgent: true, structured: true, verbose: false };
+  }
+
+  private output(data: any, humanMessage?: string): void {
+    if (this.outputFormat.isAgent) {
+      // Agent-optimized: structured, parseable output
+      if (typeof data === 'object') {
+        console.log(JSON.stringify(data, null, 0)); // Compact JSON
+      } else {
+        console.log(data);
+      }
+    } else {
+      // Human-friendly: verbose, descriptive output  
+      if (humanMessage) {
+        console.log(humanMessage);
+      } else if (typeof data === 'object') {
+        console.log(JSON.stringify(data, null, 2)); // Pretty JSON
+      } else {
+        console.log(data);
+      }
+    }
+  }
+
+  private log(message: string): void {
+    if (!this.outputFormat.isAgent) {
+      console.log(message);
+    }
+    // Agents get no logging noise unless it's structured data
+  }
+
+  private error(message: string, code: number = 1): void {
+    if (this.outputFormat.isAgent) {
+      console.error(JSON.stringify({ error: message, code }));
+    } else {
+      console.error(`❌ Error: ${message}`);
+    }
+    process.exit(code);
+  }
+
+  private success(message: string, data?: any): void {
+    if (this.outputFormat.isAgent) {
+      this.output({ success: true, message, data });
+    } else {
+      console.log(`✓ ${message}`);
+      if (data) this.output(data);
+    }
+  }
+
+  private setupHelpTopics(): void {
+    // Core Concepts
+    this.helpTopics.set('concepts', {
+      name: 'Core Concepts',
+      description: 'What UGS is and how it works',
+      details: [
+        'UGS is a graph database: nodes (entities) connected by edges (relationships)',
+        'Nodes have IDs, types, and properties (key-value pairs)',
+        'Edges are directional with optional types and weights', 
+        'Event sourcing: all changes logged, snapshots for performance',
+        'Indexing: fast lookups by type, property, or full-text search',
+        'Addressing: @(id) notation for referencing any element'
+      ],
+      examples: [
+        './ugs add-node alice person name=Alice,team=engineering',
+        './ugs add-edge reports_to alice bob manages',
+        './ugs get alice     # Get node by ID',
+        './ugs search Alice  # Full-text search'
+      ],
+      seeAlso: ['getting-started', 'workflow', 'addressing']
+    });
+
+    this.helpTopics.set('getting-started', {
+      name: 'Getting Started Guide',
+      description: 'Step-by-step introduction to UGS',
+      details: [
+        '1. Load demo data: ./ugs load-demo',
+        '2. Explore graph: ./ugs stats',
+        '3. Search nodes: ./ugs search <term>',
+        '4. Find paths: ./ugs path <from> <to>',
+        '5. Traverse graph: ./ugs traverse <start>',
+        '6. Create snapshot: ./ugs snapshot',
+        '7. For automation: set UGS_ACTOR=agent'
+      ],
+      examples: [
+        './ugs load-demo                    # Load sample data',
+        './ugs stats                        # See graph overview',
+        './ugs search alice                 # Find Alice',
+        './ugs path alice auth_proj         # Path from Alice to project',
+        './ugs traverse alice 2             # Explore from Alice'
+      ],
+      seeAlso: ['concepts', 'workflow', 'examples']
+    });
+
+    this.helpTopics.set('workflow', {
+      name: 'Common Workflows',
+      description: 'How to use UGS effectively for different tasks',
+      details: [
+        'Knowledge Mapping: model domains with typed nodes and relationships',
+        'Project Management: tasks, people, dependencies, and assignments',
+        'Network Analysis: find paths, measure connectivity, detect communities',
+        'Content Organization: hierarchical and cross-linked structures',
+        'Process Modeling: workflows with states, transitions, and actors',
+        'Research: citations, topics, authors, and collaboration networks'
+      ],
+      examples: [
+        '# Knowledge base: ./ugs add-node concept1 topic describes=\"AI Ethics\"',
+        '# Project mgmt: ./ugs add-edge task1 milestone1 belongs_to',
+        '# Network: ./ugs path person1 person2  # Connection analysis',
+        '# Content: ./ugs traverse document1 3 both  # Related content'
+      ],
+      seeAlso: ['examples', 'patterns', 'integration']
+    });
+
+    this.helpTopics.set('addressing', {
+      name: 'Addressing System',
+      description: 'Universal @(id) notation for referencing elements',
+      details: [
+        'Every node and edge has a unique ID for direct access',
+        '@(id) syntax provides universal addressing across contexts',
+        'Future: temporal addressing @(id:version) for versioned access',
+        'IDs can be meaningful (alice, task_1) or generated (uuid)',
+        'Case-sensitive and must be unique across entire graph'
+      ],
+      examples: [
+        './ugs get @(alice)         # Direct node access',
+        './ugs add-edge e1 @(task1) @(project1) belongs_to',
+        '# Future: ./ugs get @(alice:2023-01-15)  # Temporal'
+      ],
+      seeAlso: ['concepts', 'temporal', 'integration']
+    });
+
+    this.helpTopics.set('patterns', {
+      name: 'Design Patterns',
+      description: 'Proven approaches for modeling with graphs',
+      details: [
+        'Hub-and-spoke: central nodes connected to many others',
+        'Hierarchy: parent-child relationships with tree structure',
+        'Many-to-many: complex relationship networks',
+        'State machines: nodes as states, edges as transitions',
+        'Dependency graphs: task/component ordering and prerequisites',
+        'Tagging: flexible categorization with tag nodes'
+      ],
+      examples: [
+        '# Hub: ./ugs add-edge user1 project1 member_of',
+        '# Hierarchy: ./ugs add-edge child parent parent_child',
+        '# State: ./ugs add-edge todo doing transition weight=1',
+        '# Tags: ./ugs add-edge post1 tag_ai tagged_with'
+      ],
+      seeAlso: ['workflow', 'examples', 'best-practices']
+    });
+
+    this.helpTopics.set('integration', {
+      name: 'Integration & Automation',
+      description: 'Using UGS with scripts, agents, and other tools',
+      details: [
+        'Agent-first design: structured JSON output by default',
+        'Batch operations: ./ugs command args for single operations',
+        'Interactive mode: ./ugs session for exploration',
+        'Scripting: parse JSON responses for automation',
+        'Environment config: UGS_ACTOR, UGS_DATA_DIR variables',
+        'Pipeline integration: stdin/stdout compatible'
+      ],
+      examples: [
+        'UGS_ACTOR=agent ./ugs stats | jq .nodes      # Extract node count',
+        'echo "search alice" | ./ugs session          # Pipe commands',
+        'for user in users.txt; do ./ugs add-node $user person; done'
+      ],
+      seeAlso: ['actor-model', 'automation', 'scripting']
+    });
+
+    this.helpTopics.set('examples', {
+      name: 'Real-world Examples',
+      description: 'Complete examples for common use cases',
+      details: [
+        'Build a project management graph with teams, tasks, and dependencies',
+        'Create a knowledge base with topics, documents, and citations',
+        'Model an organization with people, roles, and reporting structure',
+        'Track research with papers, authors, and collaboration networks',
+        'Organize content with hierarchical categories and cross-references'
+      ],
+      examples: [
+        './ugs load-demo                                    # See demo data',
+        './ugs add-node paper1 research title=\"AI Safety\"   # Research node',
+        './ugs add-edge paper1 author1 written_by           # Authorship',
+        './ugs path author1 topic1                          # Research connections'
+      ],
+      seeAlso: ['getting-started', 'workflow', 'patterns']
+    });
+
+    this.helpTopics.set('actor-model', {
+      name: 'Actor Model',
+      description: 'Agent-first design with human mode override',
+      details: [
+        'Default: Agent-optimized (structured, parseable output)',
+        'Human mode: Verbose, descriptive output with emojis',
+        'Controlled by UGS_ACTOR environment variable or flags',
+        'Agent output: Compact JSON, no logging noise',
+        'Human output: Pretty formatting, helpful messages'
+      ],
+      examples: [
+        'UGS_ACTOR=agent ./ugs stats     # Structured output',
+        'UGS_ACTOR=human ./ugs stats     # Verbose output', 
+        './ugs --agent stats             # Force agent mode',
+        './ugs --human stats             # Force human mode'
+      ],
+      seeAlso: ['integration', 'automation', 'scripting']
+    });
+
+    this.helpTopics.set('best-practices', {
+      name: 'Best Practices',
+      description: 'Guidelines for effective graph modeling',
+      details: [
+        'Use meaningful IDs when possible (alice vs uuid-4829)',
+        'Choose consistent node types (person, task, document)',
+        'Leverage properties for rich metadata and searchability',
+        'Model relationships explicitly rather than embedding in properties',
+        'Use edge weights for ranking, priority, or distance',
+        'Regular snapshots for performance on large graphs',
+        'Consider bidirectional relationships (friend_of vs friends)'
+      ],
+      examples: [
+        './ugs add-node alice person name=Alice,role=dev,team=backend',
+        './ugs add-edge e1 alice task1 assigned_to priority=high',
+        './ugs snapshot                    # Regular state saves'
+      ],
+      seeAlso: ['patterns', 'workflow', 'performance']
+    });
+
+    this.helpTopics.set('performance', {
+      name: 'Performance & Scaling',
+      description: 'Optimizing UGS for large graphs',
+      details: [
+        'Snapshots reduce startup time on large graphs (10k+ nodes)',
+        'Indexing provides O(1) lookups by type and properties',
+        'Full-text search automatically indexes node content',
+        'Event log enables point-in-time recovery and audit trails',
+        'Configurable data directory for storage optimization',
+        'Batch operations faster than individual commands'
+      ],
+      examples: [
+        './ugs snapshot                         # Force snapshot creation',
+        'UGS_DATA_DIR=/fast-ssd/data ./ugs      # Custom storage location',
+        './ugs events 100                       # Check recent activity'
+      ],
+      seeAlso: ['best-practices', 'persistence', 'automation']
+    });
+  }
+
+  private setupCommands(): void {
+    this.commands.set('add-node', {
+      description: 'Add a new node: add-node <id> [type] [key=value,key=value...]',
+      handler: async (args: string[]) => {
+        if (args.length === 0) {
+          this.error('Missing required argument: id');
+        }
+        
+        const [id, type, propsStr] = args;
+        const properties = this.parseProperties(propsStr);
+        const node = await this.store.addNode(id, type || null, properties);
+        
+        this.success(`Added node: ${node.id} (${node.type || 'untyped'})`, {
+          operation: 'add-node',
+          id: node.id,
+          type: node.type,
+          properties: Object.fromEntries(node.properties)
+        });
+      }
+    });
+
+    this.commands.set('add-edge', {
+      description: 'Add a new edge: add-edge <id> <from> <to> [type] [weight]',
+      handler: async (args: string[]) => {
+        if (args.length < 3) {
+          this.error('Missing required arguments: id, from, to');
+        }
+        
+        const [id, from, to, type, weightStr] = args;
+        const weight = weightStr ? parseFloat(weightStr) : 1;
+        const edge = await this.store.addEdge(id, from, to, type || null, {}, weight);
+        
+        this.success(`Added edge: ${edge.from} -[${edge.type || 'untyped'}]-> ${edge.to}`, {
+          operation: 'add-edge',
+          id: edge.id,
+          from: edge.from,
+          to: edge.to,
+          type: edge.type,
+          weight: edge.weight
+        });
+      }
+    });
+
+    this.commands.set('get', {
+      description: 'Get node or edge by ID: get <id>',
+      handler: async (args: string[]) => {
+        if (args.length === 0) {
+          this.error('Missing required argument: id');
+        }
+        
+        const element = this.store.get(args[0]);
+        if (element) {
+          this.output(element.toJSON(), `Found ${element instanceof Node ? 'node' : 'edge'}: ${element.id}`);
+        } else {
+          if (this.outputFormat.isAgent) {
+            this.output({ found: false, id: args[0] });
+          } else {
+            console.log(`❌ Not found: ${args[0]}`);
+          }
+        }
+      }
+    });
+
+    this.commands.set('update-node', {
+      description: 'Update node properties: update-node <id> [key=value,key=value...]',
+      handler: async (args: string[]) => {
+        if (args.length === 0) {
+          this.error('Missing required argument: id');
+        }
+        
+        const [id, propsStr] = args;
+        const node = this.store.get(id);
+        
+        if (!node || !(node instanceof Node)) {
+          this.error(`Node not found: ${id}`);
+        }
+        
+        if (!propsStr) {
+          this.error('Missing properties to update');
+        }
+        
+        // Parse new properties
+        const updates = this.parseProperties(propsStr);
+        
+        // Update node properties
+        for (const [key, value] of Object.entries(updates)) {
+          node.properties.set(key, value);
+        }
+        
+        // Update modified timestamp
+        node.modified = Date.now();
+        
+        // Persist the update event
+        await this.store.persistEvent({
+          type: 'NodeUpdated',
+          data: { 
+            id: node.id, 
+            updates,
+            properties: Object.fromEntries(node.properties)
+          },
+          timestamp: Date.now()
+        });
+        
+        // Update indices if they exist
+        this.store.updateNodeIndices(node);
+        
+        this.success(`Updated node: ${node.id}`, {
+          operation: 'update-node',
+          id: node.id,
+          updates,
+          properties: Object.fromEntries(node.properties)
+        });
+      }
+    });
+
+    this.commands.set('set-property', {
+      description: 'Set single property: set-property <id> <key> <value>',
+      handler: async (args: string[]) => {
+        if (args.length < 3) {
+          this.error('Usage: set-property <id> <key> <value>');
+        }
+        
+        const [id, key, value] = args;
+        const node = this.store.get(id);
+        
+        if (!node || !(node instanceof Node)) {
+          this.error(`Node not found: ${id}`);
+        }
+        
+        // Parse value (try to detect type)
+        let parsedValue: any = value;
+        if (!isNaN(Number(value))) {
+          parsedValue = Number(value);
+        } else if (value.toLowerCase() === 'true') {
+          parsedValue = true;
+        } else if (value.toLowerCase() === 'false') {
+          parsedValue = false;
+        } else if (value.toLowerCase() === 'null') {
+          parsedValue = null;
+        }
+        
+        const oldValue = node.properties.get(key);
+        node.properties.set(key, parsedValue);
+        node.modified = Date.now();
+        
+        // Persist the update
+        await this.store.persistEvent({
+          type: 'NodeUpdated',
+          data: { 
+            id: node.id,
+            property: key,
+            oldValue,
+            newValue: parsedValue
+          },
+          timestamp: Date.now()
+        });
+        
+        // Update indices
+        this.store.updateNodeIndices(node);
+        
+        this.success(`Set ${key}=${parsedValue} on ${id}`, {
+          operation: 'set-property',
+          id: node.id,
+          property: key,
+          value: parsedValue,
+          oldValue
+        });
+      }
+    });
+
+    this.commands.set('remove-property', {
+      description: 'Remove property: remove-property <id> <key>',
+      handler: async (args: string[]) => {
+        if (args.length < 2) {
+          this.error('Usage: remove-property <id> <key>');
+        }
+        
+        const [id, key] = args;
+        const node = this.store.get(id);
+        
+        if (!node || !(node instanceof Node)) {
+          this.error(`Node not found: ${id}`);
+        }
+        
+        const oldValue = node.properties.get(key);
+        if (!node.properties.has(key)) {
+          this.error(`Property '${key}' not found on node ${id}`);
+        }
+        
+        node.properties.delete(key);
+        node.modified = Date.now();
+        
+        // Persist the update
+        await this.store.persistEvent({
+          type: 'NodeUpdated',
+          data: { 
+            id: node.id,
+            removedProperty: key,
+            oldValue
+          },
+          timestamp: Date.now()
+        });
+        
+        // Update indices
+        this.store.updateNodeIndices(node);
+        
+        this.success(`Removed property '${key}' from ${id}`, {
+          operation: 'remove-property',
+          id: node.id,
+          property: key,
+          oldValue
+        });
+      }
+    });
+
+    this.commands.set('find-by-property', {
+      description: 'Find nodes by property: find-by-property <key> <value>',
+      handler: async (args: string[]) => {
+        if (args.length < 2) {
+          this.error('Missing required arguments: key, value');
+        }
+        
+        const [key, value] = args;
+        const nodes = this.store.getByProperty(key, value);
+        
+        this.output(nodes.map(n => n.toJSON()), `Found ${nodes.length} nodes with ${key}=${value}`);
+      }
+    });
+
+    this.commands.set('list-properties', {
+      description: 'List all property keys in use: list-properties [type]',
+      handler: async (args: string[]) => {
+        const type = args[0];
+        const nodes = type ? this.store.getByType(type) : Array.from(this.store.nodes.values());
+        
+        const propertyKeys = new Set<string>();
+        for (const node of nodes) {
+          for (const key of node.properties.keys()) {
+            propertyKeys.add(key);
+          }
+        }
+        
+        const sortedKeys = Array.from(propertyKeys).sort();
+        this.output(sortedKeys, `Found ${sortedKeys.length} property keys${type ? ` in type '${type}'` : ''}`);
+      }
+    });
+
+    this.commands.set('search', {
+      description: 'Full-text search: search <query>',
+      handler: async (args: string[]) => {
+        if (args.length === 0) {
+          this.error('Missing required argument: query');
+        }
+        
+        const query = args.join(' ');
+        const nodes = this.store.search(query);
+        
+        if (this.outputFormat.isAgent) {
+          this.output({
+            query,
+            results: nodes.map(n => n.toJSON()),
+            count: nodes.length
+          });
+        } else {
+          console.log(`🔍 Found ${nodes.length} nodes for "${query}":`);
+          nodes.forEach(node => {
+            const name = node.properties.get('name') || node.properties.get('title') || node.id;
+            console.log(`  • ${node.id} (${node.type}): ${name}`);
+          });
+        }
+      }
+    });
+
+    this.commands.set('list-type', {
+      description: 'List all nodes of type: list-type <type>',
+      handler: async (args: string[]) => {
+        if (args.length === 0) {
+          this.error('Missing required argument: type');
+        }
+        
+        const nodes = this.store.getByType(args[0]);
+        
+        if (this.outputFormat.isAgent) {
+          this.output({
+            type: args[0],
+            nodes: nodes.map(n => n.toJSON()),
+            count: nodes.length
+          });
+        } else {
+          console.log(`📋 Found ${nodes.length} nodes of type '${args[0]}':`);
+          nodes.forEach(node => {
+            const name = node.properties.get('name') || node.properties.get('title') || node.id;
+            console.log(`  • ${node.id}: ${name}`);
+          });
+        }
+      }
+    });
+
+    this.commands.set('path', {
+      description: 'Find shortest path: path <from> <to>',
+      handler: async (args: string[]) => {
+        if (args.length < 2) {
+          this.error('Missing required arguments: from, to');
+        }
+        
+        const [from, to] = args;
+        const result = this.store.findShortestPath(from, to);
+        
+        if (result) {
+          if (this.outputFormat.isAgent) {
+            this.output({
+              from,
+              to,
+              path: result.path,
+              distance: result.distance,
+              nodes: result.nodes.map(n => n.toJSON())
+            });
+          } else {
+            console.log(`🗺️  Path from ${from} to ${to} (distance: ${result.distance}):`);
+            console.log(`   ${result.path.join(' → ')}`);
+          }
+        } else {
+          if (this.outputFormat.isAgent) {
+            this.output({ from, to, path: null, found: false });
+          } else {
+            console.log(`❌ No path found from ${from} to ${to}`);
+          }
+        }
+      }
+    });
+
+    this.commands.set('traverse', {
+      description: 'Traverse from node: traverse <start> [depth] [direction]',
+      handler: async (args: string[]) => {
+        if (args.length === 0) {
+          this.error('Missing required argument: start');
+        }
+        
+        const [start, depthStr, direction] = args;
+        const depth = depthStr ? parseInt(depthStr) : 2;
+        const results = this.store.traverse(start, { 
+          maxDepth: depth, 
+          direction: direction || 'both',
+          maxResults: 20 
+        });
+        
+        if (this.outputFormat.isAgent) {
+          this.output({
+            start,
+            depth,
+            direction: direction || 'both',
+            results: results.map(r => ({
+              node: r.node.toJSON(),
+              depth: r.depth,
+              path: r.path
+            })),
+            count: results.length
+          });
+        } else {
+          console.log(`🌐 Traversal from ${start} (depth ${depth}):`);
+          results.forEach(({node, depth, path}) => {
+            const name = node.properties.get('name') || node.properties.get('title') || node.id;
+            console.log(`  Depth ${depth}: ${name} (${node.type}) via ${path.join(' → ')}`);
+          });
+        }
+      }
+    });
+
+    this.commands.set('stats', {
+      description: 'Show graph statistics',
+      handler: async () => {
+        const stats = {
+          dataDirectory: this.dataDir,
+          actor: this.outputFormat.isAgent ? 'agent' : 'human',
+          nodes: this.store.stats.nodeCount,
+          edges: this.store.stats.edgeCount,
+          events: this.store.stats.eventCount,
+          indices: this.store.stats.indexCount,
+          lastSnapshot: this.store.stats.lastSnapshot,
+          files: {
+            wal: existsSync(join(this.dataDir, 'events.wal')),
+            snapshot: existsSync(join(this.dataDir, 'snapshot.json'))
+          }
+        };
+
+        if (this.outputFormat.isAgent) {
+          this.output(stats);
+        } else {
+          console.log('📊 UGS Graph Statistics:');
+          console.log(`  Actor Mode: ${stats.actor}`);
+          console.log(`  Data Directory: ${stats.dataDirectory}`);
+          console.log(`  Nodes: ${stats.nodes}`);
+          console.log(`  Edges: ${stats.edges}`);
+          console.log(`  Events: ${stats.events}`);
+          console.log(`  Indices: ${stats.indices}`);
+          console.log(`  Last Snapshot: Event #${stats.lastSnapshot}`);
+          
+          // Show most connected in human mode
+          const connected = this.store.getMostConnected(5);
+          if (connected.length > 0) {
+            console.log('\n🔗 Most Connected:');
+            connected.forEach(({id, total, in: inDeg, out}) => {
+              const node = this.store.nodes.get(id);
+              const name = node?.properties.get('name') || node?.properties.get('title') || id;
+              console.log(`  ${name}: ${total} total (${inDeg} in, ${out} out)`);
+            });
+          }
+        }
+      }
+    });
+
+    this.commands.set('events', {
+      description: 'Show recent events: events [limit]',
+      handler: async (args: string[]) => {
+        const limit = args[0] ? parseInt(args[0]) : 10;
+        const events = this.store.getEventHistory(limit);
+        
+        if (this.outputFormat.isAgent) {
+          this.output({
+            limit,
+            events,
+            count: events.length
+          });
+        } else {
+          console.log(`📋 Last ${events.length} events:`);
+          events.forEach(event => {
+            console.log(`  [${new Date(event.timestamp).toISOString()}] ${event.type}: ${event.data.id || 'N/A'}`);
+          });
+        }
+      }
+    });
+
+    this.commands.set('help', {
+      description: 'Show help: help [topic]',
+      handler: async (args: string[]) => {
+        if (args.length === 0) {
+          this.showGeneralHelp();
+        } else {
+          this.showTopicHelp(args[0]);
+        }
+      }
+    });
+
+    this.commands.set('load-demo', {
+      description: 'Load demo data for testing',
+      handler: async () => this.loadDemoData()
+    });
+
+    this.commands.set('roots', {
+      description: 'Find root nodes (no incoming edges): roots [limit]',
+      handler: async (args: string[]) => {
+        const limit = args[0] ? parseInt(args[0]) : 20;
+        const allNodes = Array.from(this.store.nodes.values());
+        
+        const roots = allNodes.filter(node => {
+          const inDegree = this.store.getNodeDegree(node.id).in;
+          return inDegree === 0;
+        });
+        
+        const limitedRoots = roots.slice(0, limit);
+        
+        if (this.outputFormat.isAgent) {
+          this.output({
+            roots: limitedRoots.map(n => n.toJSON()),
+            count: limitedRoots.length,
+            totalRoots: roots.length,
+            limit
+          });
+        } else {
+          console.log(`🌳 Found ${roots.length} root nodes (showing ${limitedRoots.length}):\n`);
+          limitedRoots.forEach(node => {
+            const name = node.properties.get('name') || node.properties.get('title') || node.id;
+            const outDegree = this.store.getNodeDegree(node.id).out;
+            console.log(`  • ${node.id} (${node.type || 'untyped'}): ${name} → ${outDegree} connections`);
+          });
+        }
+      }
+    });
+
+    this.commands.set('entry-points', {
+      description: 'Find likely entry points to explore: entry-points [limit]',
+      handler: async (args: string[]) => {
+        const limit = args[0] ? parseInt(args[0]) : 10;
+        
+        // Get nodes with high connectivity or specific characteristics
+        const allNodes = Array.from(this.store.nodes.values());
+        const entryPoints: Array<{node: any, score: number, reason: string}> = [];
+        
+        allNodes.forEach(node => {
+          const degree = this.store.getNodeDegree(node.id);
+          let score = 0;
+          const reasons: string[] = [];
+          
+          // Root nodes (no incoming edges) are natural entry points
+          if (degree.in === 0) {
+            score += 10;
+            reasons.push('root');
+          }
+          
+          // High-connectivity nodes are important hubs
+          if (degree.total >= 3) {
+            score += degree.total;
+            reasons.push(`hub(${degree.total})`);
+          }
+          
+          // Certain node types are natural entry points
+          const entryTypes = ['person', 'project', 'plan', 'milestone', 'user', 'system'];
+          if (entryTypes.includes(node.type || '')) {
+            score += 5;
+            reasons.push(`type:${node.type}`);
+          }
+          
+          // Nodes with common "entry" properties
+          if (node.properties.has('name') || node.properties.has('title')) {
+            score += 2;
+            reasons.push('named');
+          }
+          
+          if (score > 0) {
+            entryPoints.push({
+              node: node.toJSON(),
+              score,
+              reason: reasons.join(', ')
+            });
+          }
+        });
+        
+        // Sort by score and limit
+        const topEntryPoints = entryPoints
+          .sort((a, b) => b.score - a.score)
+          .slice(0, limit);
+        
+        if (this.outputFormat.isAgent) {
+          this.output({
+            entryPoints: topEntryPoints,
+            count: topEntryPoints.length,
+            criteria: 'roots, hubs, types, named nodes'
+          });
+        } else {
+          console.log(`🚪 Top ${topEntryPoints.length} entry points to explore:\n`);
+          topEntryPoints.forEach(({node, score, reason}) => {
+            const name = node.properties.name || node.properties.title || node.id;
+            const degree = this.store.getNodeDegree(node.id);
+            console.log(`  • ${node.id} (${node.type || 'untyped'}): ${name}`);
+            console.log(`    Score: ${score} | Reason: ${reason} | Connections: ${degree.in}→${degree.out}`);
+          });
+          console.log(`\n💡 Try: traverse <node_id> 2 out`);
+        }
+      }
+    });
+
+    this.commands.set('types', {
+      description: 'List all node types in the graph: types',
+      handler: async (args: string[]) => {
+        const typeMap = new Map<string, number>();
+        
+        for (const node of this.store.nodes.values()) {
+          const type = node.type || 'untyped';
+          typeMap.set(type, (typeMap.get(type) || 0) + 1);
+        }
+        
+        const sortedTypes = Array.from(typeMap.entries())
+          .sort((a, b) => b[1] - a[1]); // Sort by count descending
+        
+        if (this.outputFormat.isAgent) {
+          this.output({
+            types: sortedTypes.map(([type, count]) => ({ type, count })),
+            totalTypes: sortedTypes.length
+          });
+        } else {
+          console.log(`📋 Found ${sortedTypes.length} node types:\n`);
+          sortedTypes.forEach(([type, count]) => {
+            console.log(`  • ${type}: ${count} nodes`);
+          });
+          console.log(`\n💡 Try: list-type <type> | entry-points`);
+        }
+      }
+    });
+
+    this.commands.set('scopes', {
+      description: 'List all scopes in use: scopes',
+      handler: async (args: string[]) => {
+        const scopeMap = new Map<string, number>();
+        
+        for (const node of this.store.nodes.values()) {
+          const scope = node.id.includes(':') ? node.id.split(':', 1)[0] : 'default';
+          scopeMap.set(scope, (scopeMap.get(scope) || 0) + 1);
+        }
+        
+        const sortedScopes = Array.from(scopeMap.entries())
+          .sort((a, b) => b[1] - a[1]);
+        
+        if (this.outputFormat.isAgent) {
+          this.output({
+            scopes: sortedScopes.map(([scope, count]) => ({ scope, count })),
+            totalScopes: sortedScopes.length
+          });
+        } else {
+          console.log(`🏷️  Found ${sortedScopes.length} scopes:\n`);
+          sortedScopes.forEach(([scope, count]) => {
+            console.log(`  • ${scope}: ${count} nodes`);
+          });
+          console.log(`\n💡 Try: list-scope <scope> | find-by-property`);
+        }
+      }
+    });
+
+    this.commands.set('list-scope', {
+      description: 'List all nodes in a scope: list-scope <scope>',
+      handler: async (args: string[]) => {
+        if (args.length === 0) {
+          this.error('Missing required argument: scope');
+        }
+        
+        const targetScope = args[0];
+        const scopedNodes = Array.from(this.store.nodes.values()).filter(node => {
+          const scope = node.id.includes(':') ? node.id.split(':', 1)[0] : 'default';
+          return scope === targetScope;
+        });
+        
+        if (this.outputFormat.isAgent) {
+          this.output({
+            scope: targetScope,
+            nodes: scopedNodes.map(n => n.toJSON()),
+            count: scopedNodes.length
+          });
+        } else {
+          console.log(`📂 Found ${scopedNodes.length} nodes in '${targetScope}' scope:\n`);
+          scopedNodes.forEach(node => {
+            const name = node.properties.get('name') || node.properties.get('title') || node.id;
+            console.log(`  • ${node.id} (${node.type || 'untyped'}): ${name}`);
+          });
+        }
+      }
+    });
+
+    this.commands.set('user', {
+      description: 'Enter user scope context or run user command: user [command] [args...]',
+      handler: async (args: string[]) => {
+        if (args.length === 0) {
+          await this.enterScopeContext('user');
+        } else {
+          // Run command in user scope context
+          await this.runInScope('user', args);
+        }
+      }
+    });
+
+    this.commands.set('project', {
+      description: 'Enter project scope context or run project command: project [command] [args...]',
+      handler: async (args: string[]) => {
+        if (args.length === 0) {
+          await this.enterScopeContext('project');
+        } else {
+          // Run command in project scope context
+          await this.runInScope('project', args);
+        }
+      }
+    });
+
+    this.commands.set('scratch', {
+      description: 'Enter scratch scope context or run scratch command: scratch [command] [args...]',
+      handler: async (args: string[]) => {
+        if (args.length === 0) {
+          await this.enterScopeContext('scratch');
+        } else {
+          // Run command in scratch scope context  
+          await this.runInScope('scratch', args);
+        }
+      }
+    });
+
+    // Tag command for managing node tags
+    this.commands.set('tag', {
+      description: 'Manage node tags: tag <add|remove|list> <node-id> [tags...]',
+      handler: async (args: string[]) => {
+        if (args.length === 0) {
+          this.showTagHelp();
+          return;
+        }
+
+        const subcommand = args[0];
+        const subArgs = args.slice(1);
+
+        switch (subcommand) {
+          case 'add':
+            await this.handleTagAdd(subArgs);
+            break;
+          case 'remove':
+            await this.handleTagRemove(subArgs);
+            break;
+          case 'list':
+            await this.handleTagList(subArgs);
+            break;
+          default:
+            this.error(`Unknown tag subcommand: ${subcommand}. Use 'tag' for help.`);
+        }
+      }
+    });
+
+    // Nodes command for listing and filtering nodes
+    this.commands.set('nodes', {
+      description: 'List nodes with optional filters: nodes [--tag <tag>] [--type <type>] [--limit <n>]',
+      handler: async (args: string[]) => {
+        const { named } = this.parseNamedArgs(args);
+        const tag = named['tag'];
+        const type = named['type'];
+        const limit = named['limit'] ? parseInt(named['limit']) : 50;
+
+        let nodes: Node[];
+
+        if (tag) {
+          nodes = this.store.getByTag(tag);
+          if (type) {
+            nodes = nodes.filter(n => n.type === type);
+          }
+        } else if (type) {
+          nodes = this.store.getByType(type);
+        } else {
+          nodes = Array.from(this.store.nodes.values());
+        }
+
+        const limitedNodes = nodes.slice(0, limit);
+
+        if (this.outputFormat.isAgent) {
+          this.output({
+            nodes: limitedNodes.map(n => n.toJSON()),
+            count: limitedNodes.length,
+            total: nodes.length,
+            filters: { tag, type, limit }
+          });
+        } else {
+          const filterDesc = [];
+          if (tag) filterDesc.push(`tag: ${tag}`);
+          if (type) filterDesc.push(`type: ${type}`);
+          const filterStr = filterDesc.length > 0 ? ` (${filterDesc.join(', ')})` : '';
+
+          console.log(`\n📋 Found ${nodes.length} nodes${filterStr} (showing ${limitedNodes.length}):\n`);
+          limitedNodes.forEach(node => {
+            const name = node.properties.get('name') || node.properties.get('title') || node.id;
+            const nodeTags = node.properties.get('tags') || [];
+            const tagStr = nodeTags.length > 0 ? ` [${nodeTags.join(', ')}]` : '';
+            console.log(`  • ${node.id} (${node.type || 'untyped'}): ${name}${tagStr}`);
+          });
+        }
+      }
+    });
+
+    this.commands.set('snapshot', {
+      description: 'Create snapshot and save current state',
+      handler: async () => {
+        await this.store.createSnapshot();
+        this.success('Snapshot created successfully!', {
+          operation: 'snapshot',
+          timestamp: Date.now(),
+          eventCount: this.store.stats.eventCount
+        });
+      }
+    });
+
+    this.commands.set('program', {
+      description: 'Manage programs: program <create|get|update|publish|invoke|deprecate|list> [args...]',
+      handler: async (args: string[]) => {
+        if (args.length === 0) {
+          this.showProgramHelp();
+          return;
+        }
+
+        const subcommand = args[0];
+        const subArgs = args.slice(1);
+
+        switch (subcommand) {
+          case 'create':
+            await this.handleProgramCreate(subArgs);
+            break;
+          case 'get':
+            await this.handleProgramGet(subArgs);
+            break;
+          case 'update':
+            await this.handleProgramUpdate(subArgs);
+            break;
+          case 'publish':
+            await this.handleProgramPublish(subArgs);
+            break;
+          case 'invoke':
+            await this.handleProgramInvoke(subArgs);
+            break;
+          case 'deprecate':
+            await this.handleProgramDeprecate(subArgs);
+            break;
+          case 'list':
+            await this.handleProgramList(subArgs);
+            break;
+          default:
+            this.error(`Unknown program subcommand: ${subcommand}. Use 'program' for help.`);
+        }
+      }
+    });
+
+    // Provider command
+    this.commands.set('provider', {
+      description: 'Manage providers: provider <create|get|configure|publish|deprecate|list> [args...]',
+      handler: async (args: string[]) => {
+        if (args.length === 0) {
+          this.showProviderHelp();
+          return;
+        }
+
+        const subcommand = args[0];
+        const subArgs = args.slice(1);
+
+        switch (subcommand) {
+          case 'create':
+            await this.handleProviderCreate(subArgs);
+            break;
+          case 'get':
+            await this.handleProviderGet(subArgs);
+            break;
+          case 'configure':
+            await this.handleProviderConfigure(subArgs);
+            break;
+          case 'publish':
+            await this.handleProviderPublish(subArgs);
+            break;
+          case 'deprecate':
+            await this.handleProviderDeprecate(subArgs);
+            break;
+          case 'list':
+            await this.handleProviderList(subArgs);
+            break;
+          default:
+            this.error(`Unknown provider subcommand: ${subcommand}. Use 'provider' for help.`);
+        }
+      }
+    });
+
+    // Model command
+    this.commands.set('model', {
+      description: 'Manage models: model <create|get|configure|publish|invoke|deprecate|list> [args...]',
+      handler: async (args: string[]) => {
+        if (args.length === 0) {
+          this.showModelHelp();
+          return;
+        }
+
+        const subcommand = args[0];
+        const subArgs = args.slice(1);
+
+        switch (subcommand) {
+          case 'create':
+            await this.handleModelCreate(subArgs);
+            break;
+          case 'get':
+            await this.handleModelGet(subArgs);
+            break;
+          case 'configure':
+            await this.handleModelConfigure(subArgs);
+            break;
+          case 'publish':
+            await this.handleModelPublish(subArgs);
+            break;
+          case 'invoke':
+            await this.handleModelInvoke(subArgs);
+            break;
+          case 'deprecate':
+            await this.handleModelDeprecate(subArgs);
+            break;
+          case 'list':
+            await this.handleModelList(subArgs);
+            break;
+          default:
+            this.error(`Unknown model subcommand: ${subcommand}. Use 'model' for help.`);
+        }
+      }
+    });
+
+    // Information command
+    this.commands.set('info', {
+      description: 'Manage information: info <create|get|update|validate|activate|archive|list|query> [args...]',
+      handler: async (args: string[]) => {
+        if (args.length === 0) {
+          this.showInfoHelp();
+          return;
+        }
+
+        const subcommand = args[0];
+        const subArgs = args.slice(1);
+
+        switch (subcommand) {
+          case 'create':
+            await this.handleInfoCreate(subArgs);
+            break;
+          case 'get':
+            await this.handleInfoGet(subArgs);
+            break;
+          case 'update':
+            await this.handleInfoUpdate(subArgs);
+            break;
+          case 'validate':
+            await this.handleInfoValidate(subArgs);
+            break;
+          case 'activate':
+            await this.handleInfoActivate(subArgs);
+            break;
+          case 'archive':
+            await this.handleInfoArchive(subArgs);
+            break;
+          case 'list':
+            await this.handleInfoList(subArgs);
+            break;
+          case 'query':
+            await this.handleInfoQuery(subArgs);
+            break;
+          default:
+            this.error(`Unknown info subcommand: ${subcommand}. Use 'info' for help.`);
+        }
+      }
+    });
+
+    // Human command
+    this.commands.set('human', {
+      description: 'Manage humans: human <create|get|update|status|notify|approve|reject|list> [args...]',
+      handler: async (args: string[]) => {
+        if (args.length === 0) {
+          this.showHumanHelp();
+          return;
+        }
+
+        const subcommand = args[0];
+        const subArgs = args.slice(1);
+
+        switch (subcommand) {
+          case 'create':
+            await this.handleHumanCreate(subArgs);
+            break;
+          case 'get':
+            await this.handleHumanGet(subArgs);
+            break;
+          case 'update':
+            await this.handleHumanUpdate(subArgs);
+            break;
+          case 'status':
+            await this.handleHumanStatus(subArgs);
+            break;
+          case 'notify':
+            await this.handleHumanNotify(subArgs);
+            break;
+          case 'approve':
+            await this.handleHumanApprove(subArgs);
+            break;
+          case 'reject':
+            await this.handleHumanReject(subArgs);
+            break;
+          case 'list':
+            await this.handleHumanList(subArgs);
+            break;
+          default:
+            this.error(`Unknown human subcommand: ${subcommand}. Use 'human' for help.`);
+        }
+      }
+    });
+
+    // Task command
+    this.commands.set('task', {
+      description: 'Manage tasks: task <create|get|assign|start|complete|fail|list> [args...]',
+      handler: async (args: string[]) => {
+        if (args.length === 0) {
+          this.showTaskHelp();
+          return;
+        }
+
+        const subcommand = args[0];
+        const subArgs = args.slice(1);
+
+        switch (subcommand) {
+          case 'create':
+            await this.handleTaskCreate(subArgs);
+            break;
+          case 'get':
+            await this.handleTaskGet(subArgs);
+            break;
+          case 'assign':
+            await this.handleTaskAssign(subArgs);
+            break;
+          case 'start':
+            await this.handleTaskStart(subArgs);
+            break;
+          case 'complete':
+            await this.handleTaskComplete(subArgs);
+            break;
+          case 'fail':
+            await this.handleTaskFail(subArgs);
+            break;
+          case 'list':
+            await this.handleTaskList(subArgs);
+            break;
+          default:
+            this.error(`Unknown task subcommand: ${subcommand}. Use 'task' for help.`);
+        }
+      }
+    });
+
+    // Agent command
+    this.commands.set('agent', {
+      description: 'Manage agents: agent <create|get|configure|assign|step|run|status|pause|resume|stop|reset|list> [args...]',
+      handler: async (args: string[]) => {
+        if (args.length === 0) {
+          this.showAgentHelp();
+          return;
+        }
+
+        const subcommand = args[0];
+        const subArgs = args.slice(1);
+
+        switch (subcommand) {
+          case 'create':
+            await this.handleAgentCreate(subArgs);
+            break;
+          case 'get':
+            await this.handleAgentGet(subArgs);
+            break;
+          case 'configure':
+            await this.handleAgentConfigure(subArgs);
+            break;
+          case 'assign':
+            await this.handleAgentAssign(subArgs);
+            break;
+          case 'step':
+            await this.handleAgentStep(subArgs);
+            break;
+          case 'run':
+            await this.handleAgentRun(subArgs);
+            break;
+          case 'status':
+            await this.handleAgentStatus(subArgs);
+            break;
+          case 'pause':
+            await this.handleAgentPause(subArgs);
+            break;
+          case 'resume':
+            await this.handleAgentResume(subArgs);
+            break;
+          case 'stop':
+            await this.handleAgentStop(subArgs);
+            break;
+          case 'reset':
+            await this.handleAgentReset(subArgs);
+            break;
+          case 'list':
+            await this.handleAgentList(subArgs);
+            break;
+          default:
+            this.error(`Unknown agent subcommand: ${subcommand}. Use 'agent' for help.`);
+        }
+      }
+    });
+
+    // Session command
+    this.commands.set('session', {
+      description: 'Manage sessions: session <create|get|send|history|pause|resume|complete|list> [args...]',
+      handler: async (args: string[]) => {
+        if (args.length === 0) {
+          this.showSessionHelp();
+          return;
+        }
+
+        const subcommand = args[0];
+        const subArgs = args.slice(1);
+
+        switch (subcommand) {
+          case 'create':
+            await this.handleSessionCreate(subArgs);
+            break;
+          case 'get':
+            await this.handleSessionGet(subArgs);
+            break;
+          case 'send':
+            await this.handleSessionSend(subArgs);
+            break;
+          case 'history':
+            await this.handleSessionHistory(subArgs);
+            break;
+          case 'pause':
+            await this.handleSessionPause(subArgs);
+            break;
+          case 'resume':
+            await this.handleSessionResume(subArgs);
+            break;
+          case 'complete':
+            await this.handleSessionComplete(subArgs);
+            break;
+          case 'list':
+            await this.handleSessionList(subArgs);
+            break;
+          default:
+            this.error(`Unknown session subcommand: ${subcommand}. Use 'session' for help.`);
+        }
+      }
+    });
+
+    // Embedding command
+    this.commands.set('embed', {
+      description: 'Embed a node: embed <node-id> [--text "optional text"]',
+      handler: async (args: string[]) => {
+        await this.handleEmbed(args);
+      }
+    });
+
+    // Similar command
+    this.commands.set('similar', {
+      description: 'Find similar nodes: similar <node-id> | similar --text "query" [--type ...] [--limit N]',
+      handler: async (args: string[]) => {
+        await this.handleSimilar(args);
+      }
+    });
+
+    // Embedding stats command
+    this.commands.set('embed-stats', {
+      description: 'Show embedding statistics',
+      handler: async () => {
+        await this.handleEmbedStats();
+      }
+    });
+  }
+
+  // === TAG MANAGEMENT HELPERS ===
+
+  private showTagHelp(): void {
+    if (this.outputFormat.isAgent) {
+      this.output({
+        command: 'tag',
+        description: 'Manage node tags',
+        subcommands: {
+          add: 'Add tags to a node: tag add <node-id> <tag1> [tag2...]',
+          remove: 'Remove tags from a node: tag remove <node-id> <tag1> [tag2...]',
+          list: 'List tags for a node: tag list <node-id>'
+        },
+        notes: 'Tags are stored in node.properties.tags as an array. Use "nodes --tag <tag>" to filter nodes by tag.'
+      });
+    } else {
+      console.log('\n🏷️  Tag Management Commands\n');
+      console.log('Subcommands:');
+      console.log('  add <node-id> <tag1> [tag2...]     Add tags to a node');
+      console.log('  remove <node-id> <tag1> [tag2...]  Remove tags from a node');
+      console.log('  list <node-id>                     List tags for a node');
+      console.log('\nExamples:');
+      console.log('  ./ugs tag add alice important vip');
+      console.log('  ./ugs tag remove alice vip');
+      console.log('  ./ugs tag list alice');
+      console.log('  ./ugs nodes --tag important        # Find all nodes with tag');
+    }
+  }
+
+  private async handleTagAdd(args: string[]): Promise<void> {
+    if (args.length < 2) {
+      this.error('Usage: tag add <node-id> <tag1> [tag2...]');
+    }
+
+    const [nodeId, ...tags] = args;
+    const node = this.store.nodes.get(nodeId);
+
+    if (!node) {
+      this.error(`Node not found: ${nodeId}`);
+    }
+
+    const result = await this.store.addTags(nodeId, tags);
+
+    if (result) {
+      const currentTags = result.properties.get('tags') || [];
+      this.success(`Added tags to ${nodeId}: ${tags.join(', ')}`, {
+        operation: 'tag-add',
+        id: nodeId,
+        addedTags: tags,
+        allTags: currentTags
+      });
+    } else {
+      this.error(`Failed to add tags to ${nodeId}`);
+    }
+  }
+
+  private async handleTagRemove(args: string[]): Promise<void> {
+    if (args.length < 2) {
+      this.error('Usage: tag remove <node-id> <tag1> [tag2...]');
+    }
+
+    const [nodeId, ...tags] = args;
+    const node = this.store.nodes.get(nodeId);
+
+    if (!node) {
+      this.error(`Node not found: ${nodeId}`);
+    }
+
+    const result = await this.store.removeTags(nodeId, tags);
+
+    if (result) {
+      const currentTags = result.properties.get('tags') || [];
+      this.success(`Removed tags from ${nodeId}: ${tags.join(', ')}`, {
+        operation: 'tag-remove',
+        id: nodeId,
+        removedTags: tags,
+        remainingTags: currentTags
+      });
+    } else {
+      this.error(`Failed to remove tags from ${nodeId}`);
+    }
+  }
+
+  private async handleTagList(args: string[]): Promise<void> {
+    if (args.length < 1) {
+      this.error('Usage: tag list <node-id>');
+    }
+
+    const [nodeId] = args;
+    const node = this.store.nodes.get(nodeId);
+
+    if (!node) {
+      this.error(`Node not found: ${nodeId}`);
+    }
+
+    const tags = this.store.getNodeTags(nodeId);
+
+    if (this.outputFormat.isAgent) {
+      this.output({
+        operation: 'tag-list',
+        id: nodeId,
+        tags,
+        count: tags.length
+      });
+    } else {
+      if (tags.length === 0) {
+        console.log(`Node ${nodeId} has no tags`);
+      } else {
+        console.log(`\n🏷️  Tags for ${nodeId}:\n`);
+        tags.forEach(tag => console.log(`  • ${tag}`));
+        console.log(`\nTotal: ${tags.length} tags`);
+      }
+    }
+  }
+
+  private showProgramHelp(): void {
+    if (this.outputFormat.isAgent) {
+      this.output({
+        command: 'program',
+        description: 'Manage executable programs with state machine lifecycle',
+        subcommands: {
+          create: 'Create a new program: program create <id> --impl \'<code>\' [--name "..."]',
+          get: 'Get program details: program get <id>',
+          update: 'Update a draft program: program update <id> [--impl \'<code>\'] [--name "..."]',
+          publish: 'Publish a program: program publish <id>',
+          invoke: 'Invoke a published program: program invoke <id> [--input \'<json>\']',
+          deprecate: 'Deprecate a published program: program deprecate <id>',
+          list: 'List programs: program list [--state draft|published|deprecated]'
+        },
+        lifecycle: 'draft -> published -> deprecated'
+      });
+    } else {
+      console.log('📦 Program Management Commands\n');
+      console.log('Lifecycle: draft → published → deprecated\n');
+      console.log('Subcommands:');
+      console.log('  create <id> --impl \'<code>\' [--name "..."]  Create a new program (starts in draft)');
+      console.log('  get <id>                                    Get program details');
+      console.log('  update <id> [--impl \'<code>\']               Update a draft program');
+      console.log('  publish <id>                                Publish a draft program');
+      console.log('  invoke <id> [--input \'<json>\']              Invoke a published program');
+      console.log('  deprecate <id>                              Deprecate a published program');
+      console.log('  list [--state draft|published|deprecated]   List programs');
+      console.log('\nExamples:');
+      console.log('  ./ugs program create my-prog --impl \'return input * 2;\' --name "Doubler"');
+      console.log('  ./ugs program publish my-prog');
+      console.log('  ./ugs program invoke my-prog --input \'5\'');
+    }
+  }
+
+  private parseNamedArgs(args: string[]): { positional: string[]; named: Record<string, string> } {
+    const positional: string[] = [];
+    const named: Record<string, string> = {};
+
+    let i = 0;
+    while (i < args.length) {
+      if (args[i].startsWith('--')) {
+        const key = args[i].slice(2);
+        if (i + 1 < args.length && !args[i + 1].startsWith('--')) {
+          named[key] = args[i + 1];
+          i += 2;
+        } else {
+          named[key] = 'true';
+          i += 1;
+        }
+      } else {
+        positional.push(args[i]);
+        i += 1;
+      }
+    }
+
+    return { positional, named };
+  }
+
+  private async handleProgramCreate(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0 || !named.impl) {
+      this.error('Usage: program create <id> --impl \'<code>\' [--name "..."] [--description "..."]');
+    }
+
+    const id = positional[0];
+    const impl = named.impl;
+    const name = named.name;
+    const description = named.description;
+
+    try {
+      const program = await this.programManager.createProgram(id, impl, { name, description });
+      this.success(`Created program: ${program.id} (${program.state})`, {
+        operation: 'program-create',
+        id: program.id,
+        name: program.name,
+        state: program.state,
+        version: program.version
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleProgramGet(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: program get <id>');
+    }
+
+    const id = args[0];
+    const program = this.programManager.getProgram(id);
+
+    if (program) {
+      this.output({
+        id: program.id,
+        name: program.name,
+        impl: program.impl,
+        state: program.state,
+        version: program.version,
+        description: program.description,
+        inputSchema: program.inputSchema,
+        outputSchema: program.outputSchema,
+        created: program.created,
+        modified: program.modified
+      }, `Program: ${program.name} (${program.state})`);
+    } else {
+      if (this.outputFormat.isAgent) {
+        this.output({ found: false, id });
+      } else {
+        console.log(`Program not found: ${id}`);
+      }
+    }
+  }
+
+  private async handleProgramUpdate(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0) {
+      this.error('Usage: program update <id> [--impl \'<code>\'] [--name "..."] [--description "..."]');
+    }
+
+    const id = positional[0];
+    const updates: any = {};
+    if (named.impl) updates.impl = named.impl;
+    if (named.name) updates.name = named.name;
+    if (named.description) updates.description = named.description;
+
+    if (Object.keys(updates).length === 0) {
+      this.error('No updates specified. Use --impl, --name, or --description');
+    }
+
+    try {
+      const program = await this.programManager.updateProgram(id, updates);
+      this.success(`Updated program: ${program.id} (v${program.version})`, {
+        operation: 'program-update',
+        id: program.id,
+        version: program.version,
+        updates: Object.keys(updates)
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleProgramPublish(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: program publish <id>');
+    }
+
+    const id = args[0];
+
+    try {
+      const program = await this.programManager.publishProgram(id);
+      this.success(`Published program: ${program.id}`, {
+        operation: 'program-publish',
+        id: program.id,
+        state: program.state
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleProgramInvoke(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0) {
+      this.error('Usage: program invoke <id> [--input \'<json>\']');
+    }
+
+    const id = positional[0];
+    let input: any;
+
+    if (named.input) {
+      try {
+        input = JSON.parse(named.input);
+      } catch {
+        // Try parsing as a simple value
+        if (!isNaN(Number(named.input))) {
+          input = Number(named.input);
+        } else if (named.input === 'true') {
+          input = true;
+        } else if (named.input === 'false') {
+          input = false;
+        } else if (named.input === 'null') {
+          input = null;
+        } else {
+          input = named.input;
+        }
+      }
+    }
+
+    try {
+      const result = await this.programManager.invokeProgram(id, input);
+
+      if (this.outputFormat.isAgent) {
+        this.output({
+          operation: 'program-invoke',
+          id,
+          success: result.success,
+          output: result.output,
+          error: result.error,
+          duration: result.duration
+        });
+      } else {
+        if (result.success) {
+          console.log(`Invocation successful (${result.duration}ms):`);
+          console.log(JSON.stringify(result.output, null, 2));
+        } else {
+          console.log(`Invocation failed (${result.duration}ms): ${result.error}`);
+        }
+      }
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleProgramDeprecate(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: program deprecate <id>');
+    }
+
+    const id = args[0];
+
+    try {
+      const program = await this.programManager.deprecateProgram(id);
+      this.success(`Deprecated program: ${program.id}`, {
+        operation: 'program-deprecate',
+        id: program.id,
+        state: program.state
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleProgramList(args: string[]): Promise<void> {
+    const { named } = this.parseNamedArgs(args);
+    const state = named.state as 'draft' | 'published' | 'deprecated' | undefined;
+
+    if (state && !['draft', 'published', 'deprecated'].includes(state)) {
+      this.error('Invalid state. Use: draft, published, or deprecated');
+    }
+
+    const programs = this.programManager.listPrograms(state);
+
+    if (this.outputFormat.isAgent) {
+      this.output({
+        operation: 'program-list',
+        filter: state || 'all',
+        programs: programs.map(p => ({
+          id: p.id,
+          name: p.name,
+          state: p.state,
+          version: p.version
+        })),
+        count: programs.length
+      });
+    } else {
+      console.log(`Found ${programs.length} programs${state ? ` (${state})` : ''}:\n`);
+      for (const program of programs) {
+        console.log(`  ${program.id} (${program.state}, v${program.version}): ${program.name}`);
+      }
+    }
+  }
+
+  // === PROVIDER HANDLERS ===
+
+  private showProviderHelp(): void {
+    if (this.outputFormat.isAgent) {
+      this.output({
+        command: 'provider',
+        description: 'Manage LLM providers (Cloudflare AI Gateway)',
+        subcommands: {
+          create: 'Create a provider: provider create <id> --type cloudflare-ai-gateway [--account-id ...] [--gateway-id ...]',
+          get: 'Get provider details: provider get <id>',
+          configure: 'Configure a draft provider: provider configure <id> [--account-id ...] [--gateway-id ...]',
+          publish: 'Publish a provider: provider publish <id>',
+          deprecate: 'Deprecate a published provider: provider deprecate <id>',
+          list: 'List providers: provider list [--state draft|published|deprecated]'
+        },
+        lifecycle: 'draft -> published -> deprecated',
+        envVars: ['CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_GATEWAY_ID', 'CLOUDFLARE_API_TOKEN']
+      });
+    } else {
+      console.log('🌐 Provider Management Commands\n');
+      console.log('Lifecycle: draft -> published -> deprecated\n');
+      console.log('Subcommands:');
+      console.log('  create <id> --type cloudflare-ai-gateway  Create a provider');
+      console.log('  get <id>                                  Get provider details');
+      console.log('  configure <id> [--account-id ...]         Configure a draft provider');
+      console.log('  publish <id>                              Publish a draft provider');
+      console.log('  deprecate <id>                            Deprecate a published provider');
+      console.log('  list [--state ...]                        List providers');
+      console.log('\nEnvironment Variables:');
+      console.log('  CLOUDFLARE_ACCOUNT_ID   - Cloudflare account ID');
+      console.log('  CLOUDFLARE_GATEWAY_ID   - AI Gateway ID');
+      console.log('  CLOUDFLARE_API_TOKEN    - API token for authentication');
+      console.log('\nExamples:');
+      console.log('  ./ugs provider create cf-gateway --type cloudflare-ai-gateway');
+      console.log('  ./ugs provider publish cf-gateway');
+      console.log('  ./ugs provider list');
+    }
+  }
+
+  private async handleProviderCreate(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0) {
+      this.error('Usage: provider create <id> --type cloudflare-ai-gateway [--account-id ...] [--gateway-id ...]');
+    }
+
+    const id = positional[0];
+    const providerType = named.type || 'cloudflare-ai-gateway';
+
+    if (providerType !== 'cloudflare-ai-gateway') {
+      this.error('Only cloudflare-ai-gateway provider type is supported');
+    }
+
+    try {
+      const provider = await this.providerManager.createProvider(id, providerType as any, {
+        accountId: named['account-id'],
+        gatewayId: named['gateway-id']
+      });
+      this.success(`Created provider: ${provider.id} (${provider.state})`, {
+        operation: 'provider-create',
+        id: provider.id,
+        providerType: provider.data.providerType,
+        state: provider.state,
+        version: provider.version
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleProviderGet(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: provider get <id>');
+    }
+
+    const id = args[0];
+    const provider = this.providerManager.getProvider(id);
+
+    if (provider) {
+      this.output({
+        id: provider.id,
+        type: provider.type,
+        programType: provider.programType,
+        state: provider.state,
+        data: provider.data,
+        version: provider.version,
+        created: provider.created,
+        modified: provider.modified
+      }, `Provider: ${provider.id} (${provider.state})`);
+    } else {
+      if (this.outputFormat.isAgent) {
+        this.output({ found: false, id });
+      } else {
+        console.log(`Provider not found: ${id}`);
+      }
+    }
+  }
+
+  private async handleProviderConfigure(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0) {
+      this.error('Usage: provider configure <id> [--account-id ...] [--gateway-id ...]');
+    }
+
+    const id = positional[0];
+    const updates: any = {};
+    if (named['account-id']) updates.accountId = named['account-id'];
+    if (named['gateway-id']) updates.gatewayId = named['gateway-id'];
+
+    if (Object.keys(updates).length === 0) {
+      this.error('No updates specified. Use --account-id or --gateway-id');
+    }
+
+    try {
+      const provider = await this.providerManager.configureProvider(id, updates);
+      this.success(`Configured provider: ${provider.id} (v${provider.version})`, {
+        operation: 'provider-configure',
+        id: provider.id,
+        version: provider.version,
+        updates: Object.keys(updates)
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleProviderPublish(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: provider publish <id>');
+    }
+
+    const id = args[0];
+
+    try {
+      const provider = await this.providerManager.publishProvider(id);
+      this.success(`Published provider: ${provider.id}`, {
+        operation: 'provider-publish',
+        id: provider.id,
+        state: provider.state
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleProviderDeprecate(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: provider deprecate <id>');
+    }
+
+    const id = args[0];
+
+    try {
+      const provider = await this.providerManager.deprecateProvider(id);
+      this.success(`Deprecated provider: ${provider.id}`, {
+        operation: 'provider-deprecate',
+        id: provider.id,
+        state: provider.state
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleProviderList(args: string[]): Promise<void> {
+    const { named } = this.parseNamedArgs(args);
+    const state = named.state as 'draft' | 'published' | 'deprecated' | undefined;
+
+    if (state && !['draft', 'published', 'deprecated'].includes(state)) {
+      this.error('Invalid state. Use: draft, published, or deprecated');
+    }
+
+    const providers = this.providerManager.listProviders(state);
+
+    if (this.outputFormat.isAgent) {
+      this.output({
+        operation: 'provider-list',
+        filter: state || 'all',
+        providers: providers.map(p => ({
+          id: p.id,
+          providerType: p.data.providerType,
+          state: p.state,
+          version: p.version
+        })),
+        count: providers.length
+      });
+    } else {
+      console.log(`Found ${providers.length} providers${state ? ` (${state})` : ''}:\n`);
+      for (const provider of providers) {
+        console.log(`  ${provider.id} (${provider.state}, v${provider.version}): ${provider.data.providerType}`);
+      }
+    }
+  }
+
+  // === MODEL HANDLERS ===
+
+  private showModelHelp(): void {
+    if (this.outputFormat.isAgent) {
+      this.output({
+        command: 'model',
+        description: 'Manage LLM models (inference configurations)',
+        subcommands: {
+          create: 'Create a model: model create <id> --backend <model-name> --provider <provider-id> [--name ...] [--temperature ...]',
+          get: 'Get model details: model get <id>',
+          configure: 'Configure a draft model: model configure <id> [--temperature ...] [--max-tokens ...] [--situation ...]',
+          publish: 'Publish a model: model publish <id>',
+          invoke: 'Invoke a published model: model invoke <id> --message "..." [--system "..."] [--situation ...] [--stream]',
+          deprecate: 'Deprecate a published model: model deprecate <id>',
+          list: 'List models: model list [--state draft|published|deprecated]'
+        },
+        lifecycle: 'draft -> published -> deprecated',
+        backendModels: ['claude-sonnet-4-5', 'claude-opus-4', 'gpt-4o', 'gpt-4o-mini', 'gemini-pro']
+      });
+    } else {
+      console.log('🤖 Model Management Commands\n');
+      console.log('Lifecycle: draft -> published -> deprecated\n');
+      console.log('Subcommands:');
+      console.log('  create <id> --backend <model> --provider <provider-id>  Create a model');
+      console.log('  get <id>                                                Get model details');
+      console.log('  configure <id> [--temperature ...] [--situation ...]    Configure a draft model');
+      console.log('  publish <id>                                            Publish a draft model');
+      console.log('  invoke <id> --message "..." [--stream]                  Invoke for inference');
+      console.log('  deprecate <id>                                          Deprecate a published model');
+      console.log('  list [--state ...]                                      List models');
+      console.log('\nBackend Models:');
+      console.log('  Anthropic: claude-sonnet-4-5, claude-opus-4, claude-haiku-3-5');
+      console.log('  OpenAI: gpt-4o, gpt-4o-mini, gpt-4-turbo');
+      console.log('  Google: gemini-pro, gemini-flash');
+      console.log('\nExamples:');
+      console.log('  ./ugs model create claude-fast --backend claude-sonnet-4-5 --provider cf-gateway');
+      console.log('  ./ugs model configure claude-fast --temperature 0 --situation coding');
+      console.log('  ./ugs model publish claude-fast');
+      console.log('  ./ugs model invoke claude-fast --message "Hello!"');
+      console.log('  ./ugs model invoke claude-fast --message "Hello!" --stream');
+    }
+  }
+
+  private async handleModelCreate(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0 || !named.backend || !named.provider) {
+      this.error('Usage: model create <id> --backend <model-name> --provider <provider-id> [--name ...] [--temperature ...] [--max-tokens ...]');
+    }
+
+    const id = positional[0];
+
+    try {
+      const model = await this.modelManager.createModel(id, named.backend, named.provider, {
+        name: named.name,
+        temperature: named.temperature ? parseFloat(named.temperature) : undefined,
+        maxTokens: named['max-tokens'] ? parseInt(named['max-tokens']) : undefined,
+        topP: named['top-p'] ? parseFloat(named['top-p']) : undefined
+      });
+      this.success(`Created model: ${model.id} (${model.state})`, {
+        operation: 'model-create',
+        id: model.id,
+        name: model.data.name,
+        backendModel: model.data.backendModel,
+        provider: model.data.provider,
+        state: model.state,
+        version: model.version
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleModelGet(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: model get <id>');
+    }
+
+    const id = args[0];
+    const model = this.modelManager.getModel(id);
+
+    if (model) {
+      this.output({
+        id: model.id,
+        type: model.type,
+        programType: model.programType,
+        state: model.state,
+        data: model.data,
+        version: model.version,
+        created: model.created,
+        modified: model.modified
+      }, `Model: ${model.data.name} (${model.state})`);
+    } else {
+      if (this.outputFormat.isAgent) {
+        this.output({ found: false, id });
+      } else {
+        console.log(`Model not found: ${id}`);
+      }
+    }
+  }
+
+  private async handleModelConfigure(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0) {
+      this.error('Usage: model configure <id> [--name ...] [--temperature ...] [--max-tokens ...] [--situation <name>]');
+    }
+
+    const id = positional[0];
+    const updates: any = {};
+
+    if (named.name) updates.name = named.name;
+    if (named.temperature) updates.temperature = parseFloat(named.temperature);
+    if (named['max-tokens']) updates.maxTokens = parseInt(named['max-tokens']);
+    if (named['top-p']) updates.topP = parseFloat(named['top-p']);
+
+    // Handle situation configuration
+    if (named.situation) {
+      const situationParams: any = {};
+      if (named.temperature) situationParams.temperature = parseFloat(named.temperature);
+      if (named['max-tokens']) situationParams.maxTokens = parseInt(named['max-tokens']);
+      updates.situation = { name: named.situation, params: situationParams };
+      // Remove individual params if they were added for situation
+      delete updates.temperature;
+      delete updates.maxTokens;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      this.error('No updates specified. Use --name, --temperature, --max-tokens, or --situation');
+    }
+
+    try {
+      const model = await this.modelManager.configureModel(id, updates);
+      this.success(`Configured model: ${model.id} (v${model.version})`, {
+        operation: 'model-configure',
+        id: model.id,
+        version: model.version,
+        updates: Object.keys(updates)
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleModelPublish(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: model publish <id>');
+    }
+
+    const id = args[0];
+
+    try {
+      const model = await this.modelManager.publishModel(id);
+      this.success(`Published model: ${model.id}`, {
+        operation: 'model-publish',
+        id: model.id,
+        state: model.state
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleModelInvoke(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0 || !named.message) {
+      this.error('Usage: model invoke <id> --message "..." [--system "..."] [--situation ...] [--stream]');
+    }
+
+    const id = positional[0];
+    const useStream = named.stream === 'true' || named.stream === true || args.includes('--stream');
+
+    try {
+      const result = await this.modelManager.invokeModel(id, {
+        message: named.message,
+        system: named.system,
+        situation: named.situation,
+        stream: useStream,
+        onToken: useStream && !this.outputFormat.isAgent ? (token: string) => {
+          // Print token directly to stdout for human-friendly streaming
+          process.stdout.write(token);
+        } : undefined
+      });
+
+      if (this.outputFormat.isAgent) {
+        this.output({
+          operation: 'model-invoke',
+          id,
+          success: result.success,
+          text: result.text,
+          usage: result.usage,
+          error: result.error,
+          duration: result.duration,
+          model: result.model,
+          situation: result.situation,
+          streamed: useStream
+        });
+      } else {
+        if (result.success) {
+          if (useStream) {
+            // Streaming output was already printed, just add newline and stats
+            console.log(`\n\nInference completed (${result.duration}ms, streamed)`);
+          } else {
+            console.log(`Inference successful (${result.duration}ms):`);
+            console.log(result.text);
+          }
+          if (result.usage) {
+            console.log(`Tokens: ${result.usage.promptTokens} prompt + ${result.usage.completionTokens} completion = ${result.usage.totalTokens} total`);
+          }
+        } else {
+          console.log(`Inference failed (${result.duration}ms): ${result.error}`);
+        }
+      }
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleModelDeprecate(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: model deprecate <id>');
+    }
+
+    const id = args[0];
+
+    try {
+      const model = await this.modelManager.deprecateModel(id);
+      this.success(`Deprecated model: ${model.id}`, {
+        operation: 'model-deprecate',
+        id: model.id,
+        state: model.state
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleModelList(args: string[]): Promise<void> {
+    const { named } = this.parseNamedArgs(args);
+    const state = named.state as 'draft' | 'published' | 'deprecated' | undefined;
+
+    if (state && !['draft', 'published', 'deprecated'].includes(state)) {
+      this.error('Invalid state. Use: draft, published, or deprecated');
+    }
+
+    const models = this.modelManager.listModels(state);
+
+    if (this.outputFormat.isAgent) {
+      this.output({
+        operation: 'model-list',
+        filter: state || 'all',
+        models: models.map(m => ({
+          id: m.id,
+          name: m.data.name,
+          backendModel: m.data.backendModel,
+          provider: m.data.provider,
+          state: m.state,
+          version: m.version
+        })),
+        count: models.length
+      });
+    } else {
+      console.log(`Found ${models.length} models${state ? ` (${state})` : ''}:\n`);
+      for (const model of models) {
+        console.log(`  ${model.id} (${model.state}, v${model.version}): ${model.data.name} -> ${model.data.backendModel}`);
+      }
+    }
+  }
+
+  // === INFORMATION HANDLERS ===
+
+  private showInfoHelp(): void {
+    if (this.outputFormat.isAgent) {
+      this.output({
+        command: 'info',
+        description: 'Manage structured information (facts, schemas, workflows, patterns)',
+        subcommands: {
+          create: 'Create information: info create <id> --type fact|schema|workflow|pattern --content \'<json>\' [--tags "tag1,tag2"]',
+          get: 'Get information details: info get <id>',
+          update: 'Update draft information: info update <id> --content \'<json>\' [--tags "..."]',
+          validate: 'Validate information: info validate <id>',
+          activate: 'Activate information: info activate <id>',
+          archive: 'Archive information: info archive <id>',
+          list: 'List information: info list [--type fact|schema|workflow|pattern] [--state draft|validated|active|archived]',
+          query: 'Query information: info query --tag <tag>'
+        },
+        lifecycle: 'draft -> validated -> active -> archived (archived -> active reactivation allowed)',
+        infoTypes: ['fact', 'schema', 'workflow', 'pattern']
+      });
+    } else {
+      console.log('📝 Information Management Commands\n');
+      console.log('Lifecycle: draft -> validated -> active -> archived\n');
+      console.log('  (archived can be reactivated back to active)\n');
+      console.log('Subcommands:');
+      console.log('  create <id> --type <type> --content \'<json>\'   Create information (starts in draft)');
+      console.log('  get <id>                                       Get information details');
+      console.log('  update <id> --content \'<json>\'                 Update draft information');
+      console.log('  validate <id>                                  Validate information');
+      console.log('  activate <id>                                  Activate validated/archived info');
+      console.log('  archive <id>                                   Archive active information');
+      console.log('  list [--type ...] [--state ...]                List information');
+      console.log('  query --tag <tag>                              Query by tag');
+      console.log('\nInfo Types: fact, schema, workflow, pattern');
+      console.log('\nExamples:');
+      console.log('  ./ugs info create fact1 --type fact --content \'{"subject": "test"}\'');
+      console.log('  ./ugs info create schema1 --type schema --content \'{"fields": ["name"]}\' --tags "api,v1"');
+      console.log('  ./ugs info validate fact1');
+      console.log('  ./ugs info activate fact1');
+      console.log('  ./ugs info list --type fact --state active');
+      console.log('  ./ugs info query --tag api');
+    }
+  }
+
+  private async handleInfoCreate(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0 || !named.type || !named.content) {
+      this.error('Usage: info create <id> --type fact|schema|workflow|pattern --content \'<json>\' [--tags "tag1,tag2"] [--description "..."]');
+    }
+
+    const id = positional[0];
+    const infoType = named.type;
+
+    if (!['fact', 'schema', 'workflow', 'pattern'].includes(infoType)) {
+      this.error('Invalid info type. Use: fact, schema, workflow, or pattern');
+    }
+
+    let content: any;
+    try {
+      content = JSON.parse(named.content);
+    } catch {
+      // Allow non-JSON content as a string
+      content = named.content;
+    }
+
+    const tags = named.tags ? named.tags.split(',').map((t: string) => t.trim()) : undefined;
+
+    try {
+      const info = await this.informationManager.createInformation(id, infoType as any, content, {
+        tags,
+        description: named.description,
+        schema: named.schema,
+        sources: named.sources ? named.sources.split(',').map((s: string) => s.trim()) : undefined
+      });
+      this.success(`Created information: ${info.id} (${info.state})`, {
+        operation: 'info-create',
+        id: info.id,
+        infoType: info.data.infoType,
+        state: info.state,
+        version: info.version,
+        tags: info.data.tags
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleInfoGet(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: info get <id>');
+    }
+
+    const id = args[0];
+    const info = this.informationManager.getInformation(id);
+
+    if (info) {
+      this.output({
+        id: info.id,
+        type: info.type,
+        programType: info.programType,
+        state: info.state,
+        data: info.data,
+        version: info.version,
+        created: info.created,
+        modified: info.modified
+      }, `Information: ${info.id} (${info.data.infoType}, ${info.state})`);
+    } else {
+      if (this.outputFormat.isAgent) {
+        this.output({ found: false, id });
+      } else {
+        console.log(`Information not found: ${id}`);
+      }
+    }
+  }
+
+  private async handleInfoUpdate(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0) {
+      this.error('Usage: info update <id> --content \'<json>\' [--tags "..."] [--description "..."]');
+    }
+
+    const id = positional[0];
+    const updates: any = {};
+
+    if (named.content) {
+      try {
+        updates.content = JSON.parse(named.content);
+      } catch {
+        updates.content = named.content;
+      }
+    }
+    if (named.tags) {
+      updates.tags = named.tags.split(',').map((t: string) => t.trim());
+    }
+    if (named.description) {
+      updates.description = named.description;
+    }
+    if (named.schema) {
+      updates.schema = named.schema;
+    }
+    if (named.sources) {
+      updates.sources = named.sources.split(',').map((s: string) => s.trim());
+    }
+
+    if (Object.keys(updates).length === 0) {
+      this.error('No updates specified. Use --content, --tags, --description, --schema, or --sources');
+    }
+
+    try {
+      const info = await this.informationManager.updateInformation(id, updates);
+      this.success(`Updated information: ${info.id} (v${info.version})`, {
+        operation: 'info-update',
+        id: info.id,
+        version: info.version,
+        updates: Object.keys(updates)
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleInfoValidate(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: info validate <id>');
+    }
+
+    const id = args[0];
+
+    try {
+      const info = await this.informationManager.validateInformation(id);
+      this.success(`Validated information: ${info.id}`, {
+        operation: 'info-validate',
+        id: info.id,
+        state: info.state
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleInfoActivate(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: info activate <id>');
+    }
+
+    const id = args[0];
+
+    try {
+      const info = await this.informationManager.activateInformation(id);
+      this.success(`Activated information: ${info.id}`, {
+        operation: 'info-activate',
+        id: info.id,
+        state: info.state
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleInfoArchive(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: info archive <id>');
+    }
+
+    const id = args[0];
+
+    try {
+      const info = await this.informationManager.archiveInformation(id);
+      this.success(`Archived information: ${info.id}`, {
+        operation: 'info-archive',
+        id: info.id,
+        state: info.state
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleInfoList(args: string[]): Promise<void> {
+    const { named } = this.parseNamedArgs(args);
+    const state = named.state as 'draft' | 'validated' | 'active' | 'archived' | undefined;
+    const infoType = named.type as 'fact' | 'schema' | 'workflow' | 'pattern' | undefined;
+
+    if (state && !['draft', 'validated', 'active', 'archived'].includes(state)) {
+      this.error('Invalid state. Use: draft, validated, active, or archived');
+    }
+
+    if (infoType && !['fact', 'schema', 'workflow', 'pattern'].includes(infoType)) {
+      this.error('Invalid type. Use: fact, schema, workflow, or pattern');
+    }
+
+    let infos = this.informationManager.listInformation(state);
+
+    // Filter by type if specified
+    if (infoType) {
+      infos = infos.filter(i => i.data.infoType === infoType);
+    }
+
+    if (this.outputFormat.isAgent) {
+      this.output({
+        operation: 'info-list',
+        filterState: state || 'all',
+        filterType: infoType || 'all',
+        information: infos.map(i => ({
+          id: i.id,
+          infoType: i.data.infoType,
+          state: i.state,
+          version: i.version,
+          tags: i.data.tags,
+          description: i.data.description
+        })),
+        count: infos.length
+      });
+    } else {
+      const filters = [];
+      if (state) filters.push(`state: ${state}`);
+      if (infoType) filters.push(`type: ${infoType}`);
+      const filterStr = filters.length > 0 ? ` (${filters.join(', ')})` : '';
+
+      console.log(`Found ${infos.length} information entries${filterStr}:\n`);
+      for (const info of infos) {
+        const tagsStr = info.data.tags ? ` [${info.data.tags.join(', ')}]` : '';
+        console.log(`  ${info.id} (${info.data.infoType}, ${info.state}, v${info.version})${tagsStr}`);
+        if (info.data.description) {
+          console.log(`    ${info.data.description}`);
+        }
+      }
+    }
+  }
+
+  private async handleInfoQuery(args: string[]): Promise<void> {
+    const { named } = this.parseNamedArgs(args);
+
+    if (!named.tag) {
+      this.error('Usage: info query --tag <tag>');
+    }
+
+    const infos = this.informationManager.queryByTag(named.tag);
+
+    if (this.outputFormat.isAgent) {
+      this.output({
+        operation: 'info-query',
+        queryTag: named.tag,
+        results: infos.map(i => ({
+          id: i.id,
+          infoType: i.data.infoType,
+          state: i.state,
+          version: i.version,
+          tags: i.data.tags,
+          description: i.data.description
+        })),
+        count: infos.length
+      });
+    } else {
+      console.log(`Found ${infos.length} information entries with tag "${named.tag}":\n`);
+      for (const info of infos) {
+        const tagsStr = info.data.tags ? ` [${info.data.tags.join(', ')}]` : '';
+        console.log(`  ${info.id} (${info.data.infoType}, ${info.state})${tagsStr}`);
+        if (info.data.description) {
+          console.log(`    ${info.data.description}`);
+        }
+      }
+    }
+  }
+
+  // === HUMAN HANDLERS ===
+
+  private showHumanHelp(): void {
+    if (this.outputFormat.isAgent) {
+      this.output({
+        command: 'human',
+        description: 'Manage human actors in the system',
+        subcommands: {
+          create: 'Create a human: human create <id> --name "..." [--email "..."] [--permissions "approve,assign"]',
+          get: 'Get human details: human get <id>',
+          update: 'Update a human: human update <id> [--name "..."] [--email "..."] [--permissions "..."]',
+          status: 'Set human status: human status <id> --set available|busy|away|offline',
+          notify: 'Send notification: human notify <id> --message "..."',
+          approve: 'Approve a request: human approve <id> <approval-id>',
+          reject: 'Reject a request: human reject <id> <approval-id> [--reason "..."]',
+          list: 'List humans: human list [--state available|busy|away|offline]'
+        },
+        stateMachine: 'available <-> busy, available <-> away, any -> offline, offline -> available',
+        permissions: ['approve', 'assign', 'configure', 'admin']
+      });
+    } else {
+      console.log('👤 Human Management Commands\n');
+      console.log('State Machine: available <-> busy, available <-> away, any -> offline, offline -> available\n');
+      console.log('Subcommands:');
+      console.log('  create <id> --name "..."                     Create a human (starts in available)');
+      console.log('  get <id>                                     Get human details');
+      console.log('  update <id> [--name ...] [--permissions ...] Update a human');
+      console.log('  status <id> --set available|busy|away|offline Set human status');
+      console.log('  notify <id> --message "..."                  Send notification');
+      console.log('  approve <id> <approval-id>                   Approve a pending request');
+      console.log('  reject <id> <approval-id> [--reason "..."]   Reject a pending request');
+      console.log('  list [--state ...]                           List humans');
+      console.log('\nPermissions: approve, assign, configure, admin');
+      console.log('\nExamples:');
+      console.log('  ./ugs human create bln --name "Brian"');
+      console.log('  ./ugs human status bln --set busy');
+      console.log('  ./ugs human notify bln --message "Task complete"');
+      console.log('  ./ugs human update bln --permissions "approve,assign"');
+    }
+  }
+
+  private async handleHumanCreate(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0 || !named.name) {
+      this.error('Usage: human create <id> --name "..." [--email "..."] [--permissions "approve,assign"]');
+    }
+
+    const id = positional[0];
+    const permissions = named.permissions?.split(',').map((p: string) => p.trim()) as any;
+
+    try {
+      const human = await this.humanManager.createHuman(id, named.name, {
+        email: named.email,
+        permissions
+      });
+      this.success(`Created human: ${human.id} (${human.state})`, {
+        operation: 'human-create',
+        id: human.id,
+        name: human.data.name,
+        state: human.state,
+        version: human.version
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleHumanGet(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: human get <id>');
+    }
+
+    const id = args[0];
+    const human = this.humanManager.getHuman(id);
+
+    if (human) {
+      const pendingApprovals = this.humanManager.getPendingApprovals(id);
+      this.output({
+        id: human.id,
+        type: human.type,
+        programType: human.programType,
+        state: human.state,
+        data: human.data,
+        version: human.version,
+        pendingApprovals: pendingApprovals.length,
+        created: human.created,
+        modified: human.modified
+      }, `Human: ${human.data.name} (${human.state})`);
+    } else {
+      if (this.outputFormat.isAgent) {
+        this.output({ found: false, id });
+      } else {
+        console.log(`Human not found: ${id}`);
+      }
+    }
+  }
+
+  private async handleHumanUpdate(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0) {
+      this.error('Usage: human update <id> [--name "..."] [--email "..."] [--permissions "..."]');
+    }
+
+    const id = positional[0];
+    const updates: any = {};
+
+    if (named.name) updates.name = named.name;
+    if (named.email) updates.email = named.email;
+    if (named.permissions) {
+      updates.permissions = named.permissions.split(',').map((p: string) => p.trim());
+    }
+
+    if (Object.keys(updates).length === 0) {
+      this.error('No updates specified. Use --name, --email, or --permissions');
+    }
+
+    try {
+      const human = await this.humanManager.updateHuman(id, updates);
+      this.success(`Updated human: ${human.id} (v${human.version})`, {
+        operation: 'human-update',
+        id: human.id,
+        version: human.version,
+        updates: Object.keys(updates)
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleHumanStatus(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0 || !named.set) {
+      this.error('Usage: human status <id> --set available|busy|away|offline');
+    }
+
+    const id = positional[0];
+    const newState = named.set as HumanState;
+
+    if (!['available', 'busy', 'away', 'offline'].includes(newState)) {
+      this.error('Invalid state. Use: available, busy, away, or offline');
+    }
+
+    try {
+      const human = await this.humanManager.setStatus(id, newState);
+      this.success(`Updated status: ${human.id} -> ${human.state}`, {
+        operation: 'human-status',
+        id: human.id,
+        state: human.state
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleHumanNotify(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0 || !named.message) {
+      this.error('Usage: human notify <id> --message "..."');
+    }
+
+    const id = positional[0];
+
+    try {
+      const notification = await this.humanManager.notify(id, named.message, {
+        channel: named.channel as any
+      });
+      this.success(`Notification sent to ${id}`, {
+        operation: 'human-notify',
+        humanId: id,
+        notificationId: notification.id,
+        channel: notification.channel
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleHumanApprove(args: string[]): Promise<void> {
+    if (args.length < 2) {
+      this.error('Usage: human approve <human-id> <approval-id>');
+    }
+
+    const [humanId, approvalId] = args;
+
+    try {
+      const approval = await this.humanManager.approve(humanId, approvalId);
+      this.success(`Approved: ${approval.description}`, {
+        operation: 'human-approve',
+        humanId,
+        approvalId,
+        status: approval.status
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleHumanReject(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length < 2) {
+      this.error('Usage: human reject <human-id> <approval-id> [--reason "..."]');
+    }
+
+    const [humanId, approvalId] = positional;
+
+    try {
+      const approval = await this.humanManager.reject(humanId, approvalId, named.reason);
+      this.success(`Rejected: ${approval.description}`, {
+        operation: 'human-reject',
+        humanId,
+        approvalId,
+        status: approval.status,
+        reason: approval.reason
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleHumanList(args: string[]): Promise<void> {
+    const { named } = this.parseNamedArgs(args);
+    const state = named.state as HumanState | undefined;
+
+    if (state && !['available', 'busy', 'away', 'offline'].includes(state)) {
+      this.error('Invalid state. Use: available, busy, away, or offline');
+    }
+
+    const humans = this.humanManager.listHumans(state);
+
+    if (this.outputFormat.isAgent) {
+      this.output({
+        operation: 'human-list',
+        filter: state || 'all',
+        humans: humans.map(h => ({
+          id: h.id,
+          name: h.data.name,
+          state: h.state,
+          version: h.version,
+          pendingApprovals: this.humanManager.getPendingApprovals(h.id).length
+        })),
+        count: humans.length
+      });
+    } else {
+      console.log(`Found ${humans.length} humans${state ? ` (${state})` : ''}:\n`);
+      for (const human of humans) {
+        const pendingCount = this.humanManager.getPendingApprovals(human.id).length;
+        const pending = pendingCount > 0 ? ` [${pendingCount} pending]` : '';
+        console.log(`  ${human.id} (${human.state}, v${human.version}): ${human.data.name}${pending}`);
+      }
+    }
+  }
+
+  // === TASK HANDLERS ===
+
+  private showTaskHelp(): void {
+    if (this.outputFormat.isAgent) {
+      this.output({
+        command: 'task',
+        description: 'Manage work specifications with trackable state',
+        subcommands: {
+          create: 'Create a task: task create <id> --title "..." [--priority P0-P4] [--description "..."] [--assignee "@(id)"]',
+          get: 'Get task details: task get <id>',
+          assign: 'Assign a task: task assign <id> --to <assignee>',
+          start: 'Start working on a task: task start <id>',
+          complete: 'Complete a task: task complete <id>',
+          fail: 'Fail a task: task fail <id> --reason "..."',
+          list: 'List tasks: task list [--state pending|assigned|in_progress|completed|failed] [--assignee "@(id)"]'
+        },
+        lifecycle: 'pending -> assigned -> in_progress -> completed|failed',
+        priorities: ['P0 (critical)', 'P1 (high)', 'P2 (normal)', 'P3 (low)', 'P4 (lowest)']
+      });
+    } else {
+      console.log('Task Management Commands\n');
+      console.log('Lifecycle: pending -> assigned -> in_progress -> completed|failed\n');
+      console.log('Subcommands:');
+      console.log('  create <id> --title "..."             Create a new task');
+      console.log('  get <id>                              Get task details');
+      console.log('  assign <id> --to <assignee>           Assign task to an actor');
+      console.log('  start <id>                            Start working on a task');
+      console.log('  complete <id>                         Mark task as completed');
+      console.log('  fail <id> --reason "..."              Mark task as failed');
+      console.log('  list [--state ...] [--assignee ...]   List tasks');
+      console.log('\nPriorities: P0 (critical) -> P4 (lowest)');
+      console.log('\nExamples:');
+      console.log('  ./ugs task create research-1 --title "Research quantum computing" --priority P1');
+      console.log('  ./ugs task assign research-1 --to @(researcher)');
+      console.log('  ./ugs task start research-1');
+      console.log('  ./ugs task complete research-1');
+      console.log('  ./ugs task list --state in_progress');
+    }
+  }
+
+  private async handleTaskCreate(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0 || !named.title) {
+      this.error('Usage: task create <id> --title "..." [--priority P0-P4] [--description "..."] [--assignee "@(id)"]');
+    }
+
+    const id = positional[0];
+    const title = named.title;
+    const priority = named.priority as TaskPriority | undefined;
+    const description = named.description;
+    const assignee = named.assignee || named.to;
+
+    // Validate priority if provided
+    if (priority && !['P0', 'P1', 'P2', 'P3', 'P4'].includes(priority)) {
+      this.error('Invalid priority. Use: P0, P1, P2, P3, or P4');
+    }
+
+    try {
+      const task = await this.taskManager.createTask(id, title, {
+        priority,
+        description,
+        assignee
+      });
+      this.success(`Created task: ${task.id} (${task.state})`, {
+        operation: 'task-create',
+        id: task.id,
+        title: task.data.title,
+        state: task.state,
+        priority: task.data.priority,
+        assignee: task.data.assignee,
+        version: task.version
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleTaskGet(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: task get <id>');
+    }
+
+    const id = args[0];
+    const task = this.taskManager.getTask(id);
+
+    if (task) {
+      this.output({
+        id: task.id,
+        type: task.type,
+        programType: task.programType,
+        state: task.state,
+        data: task.data,
+        version: task.version,
+        created: task.created,
+        modified: task.modified
+      }, `Task: ${task.data.title} (${task.state})`);
+    } else {
+      if (this.outputFormat.isAgent) {
+        this.output({ found: false, id });
+      } else {
+        console.log(`Task not found: ${id}`);
+      }
+    }
+  }
+
+  private async handleTaskAssign(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0 || !named.to) {
+      this.error('Usage: task assign <id> --to <assignee>');
+    }
+
+    const id = positional[0];
+    const assignee = named.to;
+
+    try {
+      const task = await this.taskManager.assignTask(id, assignee);
+      this.success(`Assigned task: ${task.id} to ${assignee}`, {
+        operation: 'task-assign',
+        id: task.id,
+        assignee: task.data.assignee,
+        state: task.state
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleTaskStart(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: task start <id>');
+    }
+
+    const id = args[0];
+
+    try {
+      const task = await this.taskManager.startTask(id);
+      this.success(`Started task: ${task.id}`, {
+        operation: 'task-start',
+        id: task.id,
+        state: task.state
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleTaskComplete(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: task complete <id>');
+    }
+
+    const id = args[0];
+
+    try {
+      const task = await this.taskManager.completeTask(id);
+      this.success(`Completed task: ${task.id}`, {
+        operation: 'task-complete',
+        id: task.id,
+        state: task.state
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleTaskFail(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0 || !named.reason) {
+      this.error('Usage: task fail <id> --reason "..."');
+    }
+
+    const id = positional[0];
+    const reason = named.reason;
+
+    try {
+      const task = await this.taskManager.failTask(id, reason);
+      this.success(`Failed task: ${task.id}`, {
+        operation: 'task-fail',
+        id: task.id,
+        state: task.state,
+        reason: task.data.failureReason
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleTaskList(args: string[]): Promise<void> {
+    const { named } = this.parseNamedArgs(args);
+    const state = named.state as TaskState | undefined;
+    const assignee = named.assignee;
+    const priority = named.priority as TaskPriority | undefined;
+
+    if (state && !['pending', 'assigned', 'in_progress', 'completed', 'failed'].includes(state)) {
+      this.error('Invalid state. Use: pending, assigned, in_progress, completed, or failed');
+    }
+
+    if (priority && !['P0', 'P1', 'P2', 'P3', 'P4'].includes(priority)) {
+      this.error('Invalid priority. Use: P0, P1, P2, P3, or P4');
+    }
+
+    const filter: { state?: TaskState; assignee?: string; priority?: TaskPriority } = {};
+    if (state) filter.state = state;
+    if (assignee) filter.assignee = assignee;
+    if (priority) filter.priority = priority;
+
+    const tasks = this.taskManager.listTasks(Object.keys(filter).length > 0 ? filter : undefined);
+
+    if (this.outputFormat.isAgent) {
+      this.output({
+        operation: 'task-list',
+        filter: filter,
+        tasks: tasks.map(t => ({
+          id: t.id,
+          title: t.data.title,
+          state: t.state,
+          assignee: t.data.assignee,
+          priority: t.data.priority,
+          version: t.version
+        })),
+        count: tasks.length
+      });
+    } else {
+      const filterDesc = Object.entries(filter).map(([k, v]) => `${k}=${v}`).join(', ') || 'all';
+      console.log(`Found ${tasks.length} tasks (${filterDesc}):\n`);
+      for (const task of tasks) {
+        const priority = task.data.priority ? `[${task.data.priority}]` : '';
+        const assignee = task.data.assignee ? `-> ${task.data.assignee}` : '';
+        console.log(`  ${task.id} (${task.state}) ${priority}: ${task.data.title} ${assignee}`);
+      }
+    }
+  }
+
+  // === AGENT HANDLERS ===
+
+  private showAgentHelp(): void {
+    if (this.outputFormat.isAgent) {
+      this.output({
+        command: 'agent',
+        description: 'Manage autonomous agents with harness control',
+        subcommands: {
+          create: 'Create an agent: agent create <id> --name "..." --prompt "You are..." [--model @(model-id)]',
+          get: 'Get agent details: agent get <id>',
+          configure: 'Configure agent: agent configure <id> [--max-turns N] [--checkpoint-every N]',
+          assign: 'Assign task to agent: agent assign <id> --task <task-id>',
+          step: 'Execute one turn: agent step <id>',
+          run: 'Run until completion: agent run <id> [--max-turns N]',
+          status: 'Get agent status: agent status <id>',
+          pause: 'Pause execution: agent pause <id>',
+          resume: 'Resume execution: agent resume <id> [--input "..."]',
+          stop: 'Stop and reset: agent stop <id>',
+          reset: 'Reset to idle: agent reset <id>',
+          list: 'List agents: agent list [--state idle|thinking|executing|waiting|completed|error]'
+        },
+        lifecycle: 'idle -> thinking <-> executing/waiting -> completed | error',
+        harness: {
+          maxTurns: 'Limit iterations (default 50)',
+          reflectOnFailure: 'Auto-reflect on errors (default true)',
+          checkpointEvery: 'Save state every N turns (default 5)'
+        }
+      });
+    } else {
+      console.log('Agent Management Commands\n');
+      console.log('Lifecycle: idle -> thinking <-> executing/waiting -> completed | error\n');
+      console.log('Subcommands:');
+      console.log('  create <id> --name "..." --prompt "..."  Create a new agent');
+      console.log('  get <id>                                 Get agent details');
+      console.log('  configure <id> [--max-turns N]           Configure harness settings');
+      console.log('  assign <id> --task <task-id>             Assign a task to agent');
+      console.log('  step <id>                                Execute one turn');
+      console.log('  run <id> [--max-turns N]                 Run until completion');
+      console.log('  status <id>                              Get current status');
+      console.log('  pause <id>                               Pause execution');
+      console.log('  resume <id> [--input "..."]              Resume with optional input');
+      console.log('  stop <id>                                Stop and reset');
+      console.log('  reset <id>                               Reset to idle state');
+      console.log('  list [--state ...]                       List agents');
+      console.log('\nHarness settings: maxTurns, checkpointEvery, reflectOnFailure');
+      console.log('\nExamples:');
+      console.log('  ./ugs agent create researcher --name "Researcher" --prompt "You research topics"');
+      console.log('  ./ugs agent assign researcher --task research-task');
+      console.log('  ./ugs agent run researcher --max-turns 10');
+      console.log('  ./ugs agent status researcher');
+    }
+  }
+
+  private async handleAgentCreate(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0 || !named.name || !named.prompt) {
+      this.error('Usage: agent create <id> --name "..." --prompt "..." [--model @(model-id)] [--max-turns N]');
+    }
+
+    const id = positional[0];
+
+    try {
+      const agent = await this.agentManager.createAgent(id, named.name, named.prompt, {
+        defaultModel: named.model,
+        harness: {
+          maxTurns: named['max-turns'] ? parseInt(named['max-turns']) : undefined,
+          checkpointEvery: named['checkpoint-every'] ? parseInt(named['checkpoint-every']) : undefined
+        }
+      });
+      this.success(`Created agent: ${agent.id} (${agent.state})`, {
+        operation: 'agent-create',
+        id: agent.id,
+        name: agent.data.name,
+        state: agent.state,
+        defaultModel: agent.data.defaultModel,
+        harness: agent.data.harness,
+        version: agent.version
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleAgentGet(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: agent get <id>');
+    }
+
+    const id = args[0];
+    const agent = this.agentManager.getAgent(id);
+
+    if (agent) {
+      this.output({
+        id: agent.id,
+        type: agent.type,
+        programType: agent.programType,
+        state: agent.state,
+        data: agent.data,
+        version: agent.version,
+        created: agent.created,
+        modified: agent.modified
+      }, `Agent: ${agent.data.name} (${agent.state})`);
+    } else {
+      if (this.outputFormat.isAgent) {
+        this.output({ found: false, id });
+      } else {
+        console.log(`Agent not found: ${id}`);
+      }
+    }
+  }
+
+  private async handleAgentConfigure(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0) {
+      this.error('Usage: agent configure <id> [--max-turns N] [--checkpoint-every N] [--name "..."]');
+    }
+
+    const id = positional[0];
+    const updates: any = {};
+
+    if (named.name) updates.name = named.name;
+    if (named.prompt) updates.systemPrompt = named.prompt;
+    if (named.model) updates.defaultModel = named.model;
+
+    const harness: any = {};
+    if (named['max-turns']) harness.maxTurns = parseInt(named['max-turns']);
+    if (named['checkpoint-every']) harness.checkpointEvery = parseInt(named['checkpoint-every']);
+    if (Object.keys(harness).length > 0) updates.harness = harness;
+
+    if (Object.keys(updates).length === 0) {
+      this.error('No updates specified');
+    }
+
+    try {
+      const agent = await this.agentManager.configureAgent(id, updates);
+      this.success(`Configured agent: ${agent.id}`, {
+        operation: 'agent-configure',
+        id: agent.id,
+        updates: Object.keys(updates),
+        harness: agent.data.harness,
+        version: agent.version
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleAgentAssign(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0 || !named.task) {
+      this.error('Usage: agent assign <id> --task <task-id>');
+    }
+
+    const id = positional[0];
+    const taskId = named.task;
+
+    try {
+      const agent = await this.agentManager.assignTask(id, taskId);
+      this.success(`Assigned task ${taskId} to agent: ${agent.id}`, {
+        operation: 'agent-assign',
+        id: agent.id,
+        taskId,
+        state: agent.state
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleAgentStep(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: agent step <id>');
+    }
+
+    const id = args[0];
+
+    try {
+      const result = await this.agentManager.step(id);
+      this.output({
+        operation: 'agent-step',
+        id,
+        ...result
+      }, `Step complete: turn ${result.turn}, done=${result.done}`);
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleAgentRun(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0) {
+      this.error('Usage: agent run <id> [--max-turns N]');
+    }
+
+    const id = positional[0];
+    const maxTurns = named['max-turns'] ? parseInt(named['max-turns']) : undefined;
+
+    try {
+      const result = await this.agentManager.run(id, maxTurns);
+      this.output({
+        operation: 'agent-run',
+        id,
+        ...result
+      }, `Run complete: ${result.reason || 'finished'}, turns=${result.turn}`);
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleAgentStatus(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: agent status <id>');
+    }
+
+    const id = args[0];
+    const status = this.agentManager.getStatus(id);
+
+    if (status) {
+      this.output({
+        operation: 'agent-status',
+        id,
+        ...status
+      }, `Agent ${id}: ${status.state} (turn ${status.turnCount})`);
+    } else {
+      if (this.outputFormat.isAgent) {
+        this.output({ found: false, id });
+      } else {
+        console.log(`Agent not found: ${id}`);
+      }
+    }
+  }
+
+  private async handleAgentPause(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: agent pause <id>');
+    }
+
+    const id = args[0];
+
+    try {
+      const agent = await this.agentManager.pause(id);
+      this.success(`Paused agent: ${agent.id}`, {
+        operation: 'agent-pause',
+        id: agent.id,
+        state: agent.state
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleAgentResume(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0) {
+      this.error('Usage: agent resume <id> [--input "..."]');
+    }
+
+    const id = positional[0];
+    const input = named.input;
+
+    try {
+      const agent = await this.agentManager.resume(id, input);
+      this.success(`Resumed agent: ${agent.id}`, {
+        operation: 'agent-resume',
+        id: agent.id,
+        state: agent.state,
+        withInput: !!input
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleAgentStop(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: agent stop <id>');
+    }
+
+    const id = args[0];
+
+    try {
+      const agent = await this.agentManager.stop(id);
+      this.success(`Stopped agent: ${agent.id}`, {
+        operation: 'agent-stop',
+        id: agent.id,
+        state: agent.state
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleAgentReset(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: agent reset <id>');
+    }
+
+    const id = args[0];
+
+    try {
+      const agent = await this.agentManager.reset(id);
+      this.success(`Reset agent: ${agent.id}`, {
+        operation: 'agent-reset',
+        id: agent.id,
+        state: agent.state
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleAgentList(args: string[]): Promise<void> {
+    const { named } = this.parseNamedArgs(args);
+    const state = named.state as AgentState | undefined;
+
+    if (state && !['idle', 'thinking', 'executing', 'waiting', 'completed', 'error'].includes(state)) {
+      this.error('Invalid state. Use: idle, thinking, executing, waiting, completed, or error');
+    }
+
+    const agents = this.agentManager.listAgents(state);
+
+    if (this.outputFormat.isAgent) {
+      this.output({
+        operation: 'agent-list',
+        filter: { state },
+        agents: agents.map(a => ({
+          id: a.id,
+          name: a.data.name,
+          state: a.state,
+          currentTask: a.data.currentTask,
+          turnCount: a.data.turnCount,
+          version: a.version
+        })),
+        count: agents.length
+      });
+    } else {
+      const filterDesc = state ? `state=${state}` : 'all';
+      console.log(`Found ${agents.length} agents (${filterDesc}):\n`);
+      for (const agent of agents) {
+        const task = agent.data.currentTask ? `-> ${agent.data.currentTask}` : '';
+        const turns = agent.data.turnCount ? `[turn ${agent.data.turnCount}]` : '';
+        console.log(`  ${agent.id} (${agent.state}) ${turns}: ${agent.data.name} ${task}`);
+      }
+    }
+  }
+
+  // === SESSION HANDLERS ===
+
+  private showSessionHelp(): void {
+    if (this.outputFormat.isAgent) {
+      this.output({
+        command: 'session',
+        description: 'Manage conversation sessions with JSONL logging',
+        subcommands: {
+          create: 'Create a session: session create <id> --model <model-id> [--owner @(agent-id)]',
+          get: 'Get session details: session get <id>',
+          send: 'Send a message: session send <id> "message" [--model ...] [--situation ...]',
+          history: 'Get conversation history: session history <id> [--limit N]',
+          pause: 'Pause an active session: session pause <id>',
+          resume: 'Resume a paused session: session resume <id>',
+          complete: 'Complete a session: session complete <id>',
+          list: 'List sessions: session list [--state created|active|paused|completed]'
+        },
+        lifecycle: 'created -> active (first message) -> paused | completed; paused -> active (resumed)'
+      });
+    } else {
+      console.log('💬 Session Management Commands\n');
+      console.log('Lifecycle: created -> active (first message) -> paused | completed\n');
+      console.log('           paused -> active (resumed)\n');
+      console.log('Subcommands:');
+      console.log('  create <id> --model <model-id> [--owner ...]  Create a session');
+      console.log('  get <id>                                      Get session details');
+      console.log('  send <id> "message" [--model ...] [--situation ...]  Send a message');
+      console.log('  history <id> [--limit N]                      Get conversation history');
+      console.log('  pause <id>                                    Pause an active session');
+      console.log('  resume <id>                                   Resume a paused session');
+      console.log('  complete <id>                                 Complete a session');
+      console.log('  list [--state ...]                            List sessions');
+      console.log('\nExamples:');
+      console.log('  ./ugs session create my-chat --model claude-fast');
+      console.log('  ./ugs session send my-chat "Hello, how are you?"');
+      console.log('  ./ugs session history my-chat --limit 10');
+      console.log('  ./ugs session complete my-chat');
+    }
+  }
+
+  private async handleSessionCreate(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0 || !named.model) {
+      this.error('Usage: session create <id> --model <model-id> [--owner @(agent-id)]');
+    }
+
+    const id = positional[0];
+
+    try {
+      const session = await this.sessionManager.createSession(id, named.model, {
+        owner: named.owner
+      });
+      this.success(`Created session: ${session.id} (${session.state})`, {
+        operation: 'session-create',
+        id: session.id,
+        defaultModel: session.data.defaultModel,
+        owner: session.data.owner,
+        logFile: session.data.logFile,
+        state: session.state,
+        version: session.version
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleSessionGet(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: session get <id>');
+    }
+
+    const id = args[0];
+    const session = this.sessionManager.getSession(id);
+
+    if (session) {
+      this.output({
+        id: session.id,
+        type: session.type,
+        programType: session.programType,
+        state: session.state,
+        data: session.data,
+        version: session.version,
+        created: session.created,
+        modified: session.modified
+      }, `Session: ${session.id} (${session.state})`);
+    } else {
+      if (this.outputFormat.isAgent) {
+        this.output({ found: false, id });
+      } else {
+        console.log(`Session not found: ${id}`);
+      }
+    }
+  }
+
+  private async handleSessionSend(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length < 2) {
+      this.error('Usage: session send <id> "message" [--model ...] [--situation ...] [--system "..."]');
+    }
+
+    const id = positional[0];
+    const message = positional.slice(1).join(' ');
+
+    try {
+      const result = await this.sessionManager.sendMessage(id, message, {
+        model: named.model,
+        situation: named.situation,
+        system: named.system
+      });
+
+      if (this.outputFormat.isAgent) {
+        this.output({
+          operation: 'session-send',
+          sessionId: id,
+          success: result.success,
+          text: result.text,
+          usage: result.usage,
+          error: result.error,
+          duration: result.duration,
+          model: result.model,
+          situation: result.situation
+        });
+      } else {
+        if (result.success) {
+          console.log(`Response (${result.duration}ms, model: ${result.model}):`);
+          console.log(result.text);
+          if (result.usage) {
+            console.log(`\nTokens: ${result.usage.inputTokens} in + ${result.usage.outputTokens} out`);
+          }
+        } else {
+          console.log(`Message failed (${result.duration}ms): ${result.error}`);
+        }
+      }
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleSessionHistory(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0) {
+      this.error('Usage: session history <id> [--limit N]');
+    }
+
+    const id = positional[0];
+    const limit = named.limit ? parseInt(named.limit) : undefined;
+
+    try {
+      const history = await this.sessionManager.getHistory(id, limit);
+
+      if (this.outputFormat.isAgent) {
+        this.output({
+          operation: 'session-history',
+          sessionId: id,
+          limit: limit,
+          entries: history,
+          count: history.length
+        });
+      } else {
+        console.log(`Conversation history for ${id} (${history.length} messages):\n`);
+        for (const entry of history) {
+          const role = entry.message.role === 'user' ? '👤 User' : '🤖 Assistant';
+          const model = entry.message.model ? ` [${entry.message.model}]` : '';
+          console.log(`${role}${model}:`);
+          console.log(`  ${entry.message.content.substring(0, 200)}${entry.message.content.length > 200 ? '...' : ''}`);
+          console.log();
+        }
+      }
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleSessionPause(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: session pause <id>');
+    }
+
+    const id = args[0];
+
+    try {
+      const session = await this.sessionManager.pauseSession(id);
+      this.success(`Paused session: ${session.id}`, {
+        operation: 'session-pause',
+        id: session.id,
+        state: session.state
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleSessionResume(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: session resume <id>');
+    }
+
+    const id = args[0];
+
+    try {
+      const session = await this.sessionManager.resumeSession(id);
+      this.success(`Resumed session: ${session.id}`, {
+        operation: 'session-resume',
+        id: session.id,
+        state: session.state
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleSessionComplete(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: session complete <id>');
+    }
+
+    const id = args[0];
+
+    try {
+      const session = await this.sessionManager.completeSession(id);
+      this.success(`Completed session: ${session.id}`, {
+        operation: 'session-complete',
+        id: session.id,
+        state: session.state
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleSessionList(args: string[]): Promise<void> {
+    const { named } = this.parseNamedArgs(args);
+    const state = named.state as SessionState | undefined;
+
+    if (state && !['created', 'active', 'paused', 'completed'].includes(state)) {
+      this.error('Invalid state. Use: created, active, paused, or completed');
+    }
+
+    const sessions = this.sessionManager.listSessions(state);
+
+    if (this.outputFormat.isAgent) {
+      this.output({
+        operation: 'session-list',
+        filter: state || 'all',
+        sessions: sessions.map(s => ({
+          id: s.id,
+          defaultModel: s.data.defaultModel,
+          owner: s.data.owner,
+          state: s.state,
+          version: s.version
+        })),
+        count: sessions.length
+      });
+    } else {
+      console.log(`Found ${sessions.length} sessions${state ? ` (${state})` : ''}:\n`);
+      for (const session of sessions) {
+        const owner = session.data.owner ? ` owner: ${session.data.owner}` : '';
+        console.log(`  ${session.id} (${session.state}, v${session.version}): model ${session.data.defaultModel}${owner}`);
+      }
+    }
+  }
+
+  // === EMBEDDING HANDLERS ===
+
+  private async handleEmbed(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0) {
+      this.error('Usage: embed <node-id> [--text "optional text"]');
+    }
+
+    const nodeId = positional[0];
+
+    try {
+      const embedding = await this.embeddingManager.embedNode(nodeId, {
+        text: named.text
+      });
+
+      this.success(`Embedded node: ${nodeId}`, {
+        operation: 'embed',
+        nodeId,
+        dimensions: embedding.length,
+        model: '@cf/baai/bge-base-en-v1.5',
+        customText: !!named.text
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleSimilar(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    const limit = named.limit ? parseInt(named.limit) : 10;
+    const type = named.type;
+
+    try {
+      let results;
+
+      if (named.text) {
+        // Search by text query
+        results = await this.embeddingManager.findSimilarToText(named.text, { type, limit });
+
+        if (this.outputFormat.isAgent) {
+          this.output({
+            operation: 'similar-text',
+            query: named.text,
+            type: type || 'all',
+            limit,
+            results: results.map(r => ({
+              id: r.node.id,
+              type: r.node.type,
+              similarity: r.similarity,
+              properties: Object.fromEntries(r.node.properties)
+            })),
+            count: results.length
+          });
+        } else {
+          console.log(`Found ${results.length} nodes similar to "${named.text}":\n`);
+          for (const { node, similarity } of results) {
+            const name = node.properties.get('name') || node.properties.get('title') || node.id;
+            console.log(`  ${(similarity * 100).toFixed(1)}% - ${node.id} (${node.type || 'untyped'}): ${name}`);
+          }
+        }
+      } else if (positional.length > 0) {
+        // Search by node ID
+        const nodeId = positional[0];
+        results = await this.embeddingManager.findSimilarToNode(nodeId, { type, limit });
+
+        if (this.outputFormat.isAgent) {
+          this.output({
+            operation: 'similar-node',
+            nodeId,
+            type: type || 'all',
+            limit,
+            results: results.map(r => ({
+              id: r.node.id,
+              type: r.node.type,
+              similarity: r.similarity,
+              properties: Object.fromEntries(r.node.properties)
+            })),
+            count: results.length
+          });
+        } else {
+          console.log(`Found ${results.length} nodes similar to "${nodeId}":\n`);
+          for (const { node, similarity } of results) {
+            const name = node.properties.get('name') || node.properties.get('title') || node.id;
+            console.log(`  ${(similarity * 100).toFixed(1)}% - ${node.id} (${node.type || 'untyped'}): ${name}`);
+          }
+        }
+      } else {
+        this.error('Usage: similar <node-id> | similar --text "query" [--type ...] [--limit N]');
+      }
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleEmbedStats(): Promise<void> {
+    const stats = this.embeddingManager.getStats();
+
+    if (this.outputFormat.isAgent) {
+      this.output({
+        operation: 'embed-stats',
+        ...stats,
+        coverage: stats.totalNodes > 0 ? (stats.embeddedNodes / stats.totalNodes * 100).toFixed(1) + '%' : '0%'
+      });
+    } else {
+      console.log('Embedding Statistics:\n');
+      console.log(`  Total Nodes: ${stats.totalNodes}`);
+      console.log(`  Embedded Nodes: ${stats.embeddedNodes}`);
+      console.log(`  Coverage: ${stats.totalNodes > 0 ? (stats.embeddedNodes / stats.totalNodes * 100).toFixed(1) : 0}%`);
+      console.log(`  Model: ${stats.model}`);
+      console.log(`  Dimensions: ${stats.dimensions}`);
+    }
+  }
+
+  private showGeneralHelp(): void {
+    if (this.outputFormat.isAgent) {
+      // Structured help for agents with topic discovery
+      const help = {
+        ugs: {
+          version: '0.4.0',
+          actor: this.outputFormat.isAgent ? 'agent' : 'human',
+          dataDirectory: this.dataDir,
+          commands: Object.fromEntries(
+            Array.from(this.commands.entries())
+              .filter(([name]) => !name.startsWith('--'))
+              .map(([name, cmd]) => [name, { description: cmd.description }])
+          ),
+          helpTopics: Object.fromEntries(
+            Array.from(this.helpTopics.entries())
+              .map(([name, topic]) => [name, { 
+                name: topic.name,
+                description: topic.description,
+                seeAlso: topic.seeAlso || []
+              }])
+          ),
+          actorControl: {
+            environment: 'UGS_ACTOR=agent|human',
+            flags: '--agent | --human',
+            default: 'agent'
+          },
+          quickStart: [
+            './ugs help getting-started    # Step-by-step guide',
+            './ugs load-demo              # Load sample data', 
+            './ugs help workflow          # Common use patterns'
+          ]
+        }
+      };
+      this.output(help);
+    } else {
+      // Human-friendly help with progressive discovery
+      console.log('🚀 UGS - Universal Graph System\n');
+      console.log(`Actor Mode: ${this.outputFormat.isAgent ? 'Agent' : 'Human'}`);
+      console.log(`Data Directory: ${this.dataDir}\n`);
+      
+      // Quick start guidance
+      console.log('🎯 Quick Start:');
+      console.log('  ./ugs help getting-started    # Step-by-step guide');
+      console.log('  ./ugs load-demo              # Load sample data');
+      console.log('  ./ugs help workflow          # Common use patterns\n');
+      
+      console.log('📚 Learning Path:');
+      console.log('  ./ugs help concepts          # What is UGS?');
+      console.log('  ./ugs help getting-started   # First steps');
+      console.log('  ./ugs help workflow          # Use cases');
+      console.log('  ./ugs help patterns          # Design approaches');
+      console.log('  ./ugs help best-practices    # Expert tips\n');
+      
+      console.log('Available commands:\n');
+      
+      for (const [name, cmd] of this.commands) {
+        if (!name.startsWith('--')) {
+          console.log(`  ${name.padEnd(15)} - ${cmd.description}`);
+        }
+      }
+      
+      console.log('\n🤖 Actor Control:');
+      console.log('  UGS_ACTOR=agent      # Structured output (default)');
+      console.log('  UGS_ACTOR=human      # Verbose output');
+      console.log('  ./ugs --agent stats  # Force agent mode');
+      console.log('  ./ugs --human stats  # Force human mode');
+      
+      console.log('\n💡 Tips:');
+      console.log('  • Use --help or help <topic> for detailed guidance');
+      console.log('  • Start with load-demo to explore sample data');
+      console.log('  • Switch to agent mode for script automation');
+    }
+  }
+
+  private showTopicHelp(topicName: string): void {
+    const topic = this.helpTopics.get(topicName);
+    if (!topic) {
+      this.error(`Unknown help topic: ${topicName}`);
+    }
+
+    if (this.outputFormat.isAgent) {
+      this.output({
+        topic: topicName,
+        name: topic.name,
+        description: topic.description,
+        details: topic.details || null,
+        examples: topic.examples || null,
+        seeAlso: topic.seeAlso || null
+      });
+    } else {
+      console.log(`📖 Help: ${topic.name}\n`);
+      console.log(`${topic.description}\n`);
+      
+      if (topic.details) {
+        console.log('Details:');
+        topic.details.forEach(detail => console.log(`  • ${detail}`));
+        console.log();
+      }
+      
+      if (topic.examples) {
+        console.log('Examples:');
+        topic.examples.forEach(example => console.log(`  ${example}`));
+        console.log();
+      }
+      
+      if (topic.seeAlso) {
+        console.log(`See also: ${topic.seeAlso.join(', ')}`);
+      }
+    }
+  }
+
+  private parseProperties(propsStr?: string): Record<string, any> {
+    if (!propsStr) return {};
+    
+    const props: Record<string, any> = {};
+    propsStr.split(',').forEach(pair => {
+      const [key, value] = pair.split('=');
+      if (key && value) {
+        let parsedValue: any = value;
+        if (!isNaN(Number(value))) {
+          parsedValue = Number(value);
+        } else if (value.toLowerCase() === 'true') {
+          parsedValue = true;
+        } else if (value.toLowerCase() === 'false') {
+          parsedValue = false;
+        }
+        props[key.trim()] = parsedValue;
+      }
+    });
+    
+    return props;
+  }
+
+  private async enterScopeContext(scope: string): Promise<void> {
+    if (this.outputFormat.isAgent) {
+      this.output({
+        operation: 'enter-scope-context',
+        scope,
+        instructions: 'Interactive scope context not available in agent mode. Use: ugs ' + scope + ' <command> [args...]'
+      });
+      return;
+    }
+
+    console.log(`🚪 Entering ${scope} scope context`);
+    console.log(`💡 All commands now work within ${scope} scope`);
+    console.log(`Type 'exit' to return to global context\n`);
+
+    const readline = await import('readline');
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+      prompt: `ugs ${scope}> `
+    });
+
+    rl.prompt();
+    
+    rl.on('line', async (line) => {
+      const input = line.trim();
+      
+      if (input === 'exit' || input === 'quit') {
+        console.log(`✓ Exited ${scope} scope context`);
+        rl.close();
+        return;
+      }
+      
+      if (input) {
+        const parts = input.split(/\s+/);
+        await this.runInScope(scope, parts);
+      }
+      
+      rl.prompt();
+    });
+    
+    rl.on('close', () => {
+      process.exit(0);
+    });
+  }
+
+  private async runInScope(scope: string, commandParts: string[]): Promise<void> {
+    if (commandParts.length === 0) return;
+    
+    const commandName = commandParts[0];
+    const commandArgs = commandParts.slice(1);
+    
+    // Prefix all node IDs with scope if the command creates or references nodes
+    const scopedArgs = this.applyScopeToArgs(scope, commandName, commandArgs);
+    
+    const command = this.commands.get(commandName);
+    if (command && !['user', 'project', 'scratch'].includes(commandName)) {
+      try {
+        await command.handler(scopedArgs);
+      } catch (error: any) {
+        this.error(error.message, 0);
+      }
+    } else {
+      this.error(`Unknown command in ${scope} context: ${commandName}`, 0);
+    }
+  }
+
+  private applyScopeToArgs(scope: string, commandName: string, args: string[]): string[] {
+    // Commands that take node IDs as first argument and should be scoped
+    const nodeCommands = ['add-node', 'get', 'update-node', 'set-property', 'remove-property'];
+    const edgeCommands = ['add-edge']; // Special handling for edges (from/to nodes)
+    
+    if (nodeCommands.includes(commandName) && args.length > 0) {
+      // Scope the first argument (node ID) if it doesn't already have a scope
+      const nodeId = args[0];
+      if (!nodeId.includes(':')) {
+        args[0] = `${scope}:${nodeId}`;
+      }
+    } else if (edgeCommands.includes(commandName) && args.length >= 3) {
+      // Scope the from and to node IDs if they don't have scopes
+      const [edgeId, fromNode, toNode, ...rest] = args;
+      const scopedFrom = fromNode.includes(':') ? fromNode : `${scope}:${fromNode}`;
+      const scopedTo = toNode.includes(':') ? toNode : `${scope}:${toNode}`;
+      args[1] = scopedFrom;
+      args[2] = scopedTo;
+    }
+    
+    return args;
+  }
+
+  private async loadDemoData(): Promise<void> {
+    this.log('🚀 Loading UGS demo data...');
+    
+    // People
+    await this.store.addNode('alice', 'person', { name: 'Alice Johnson', role: 'developer', team: 'backend' });
+    await this.store.addNode('bob', 'person', { name: 'Bob Smith', role: 'manager', team: 'product' });
+    await this.store.addNode('charlie', 'person', { name: 'Charlie Brown', role: 'designer', team: 'frontend' });
+    
+    // Projects  
+    await this.store.addNode('auth_proj', 'project', { name: 'Authentication System', priority: 'high' });
+    await this.store.addNode('api_proj', 'project', { name: 'REST API Development', priority: 'medium' });
+    
+    // Tasks
+    await this.store.addNode('task_1', 'task', { title: 'Implement Login', status: 'active', estimate: 5 });
+    await this.store.addNode('task_2', 'task', { title: 'OAuth Integration', status: 'todo', estimate: 8 });
+    await this.store.addNode('task_3', 'task', { title: 'API Documentation', status: 'done', estimate: 3 });
+    
+    // Relationships
+    await this.store.addEdge('e1', 'alice', 'task_1', 'assigned_to');
+    await this.store.addEdge('e2', 'alice', 'task_2', 'assigned_to');
+    await this.store.addEdge('e3', 'charlie', 'task_3', 'assigned_to');
+    await this.store.addEdge('e4', 'task_1', 'auth_proj', 'belongs_to');
+    await this.store.addEdge('e5', 'task_2', 'auth_proj', 'belongs_to');
+    await this.store.addEdge('e6', 'task_3', 'api_proj', 'belongs_to');
+    await this.store.addEdge('e7', 'alice', 'bob', 'reports_to');
+    await this.store.addEdge('e8', 'task_1', 'task_2', 'blocks', {}, 2);
+    
+    this.success('Demo data loaded! Try: stats, search alice, path alice auth_proj', {
+      operation: 'load-demo',
+      nodesCreated: 8,
+      edgesCreated: 8
+    });
+  }
+
+  public async run(): Promise<void> {
+    const args = process.argv.slice(2);
+    
+    // Filter out actor and help flags  
+    let commandArgs = args.filter(arg => !['--agent', '--human', '--help', '-h'].includes(arg));
+    
+    // Handle data directory flag
+    const dataDirIndex = commandArgs.indexOf('--data-dir');
+    if (dataDirIndex !== -1 && dataDirIndex + 1 < commandArgs.length) {
+      this.dataDir = commandArgs[dataDirIndex + 1];
+      commandArgs = commandArgs.filter((_, i) => i !== dataDirIndex && i !== dataDirIndex + 1);
+      this.store = new GraphStore(this.dataDir);
+    }
+    
+    // Initialize persistence
+    await this.store.initialize();
+    
+    // Handle --help flag (check original args since it's filtered from commandArgs)
+    if (args.includes('--help') || args.includes('-h')) {
+      this.showGeneralHelp();
+      return;
+    }
+    
+    if (commandArgs.length === 0) {
+      await this.startInteractiveMode();
+      return;
+    }
+    
+    const commandName = commandArgs[0];
+    const commandArguments = commandArgs.slice(1);
+    
+    const command = this.commands.get(commandName);
+    if (command) {
+      try {
+        await command.handler(commandArguments);
+      } catch (error: any) {
+        this.error(error.message);
+      }
+    } else {
+      this.error(`Unknown command: ${commandName}`);
+    }
+  }
+
+  private async startInteractiveMode(): Promise<void> {
+    if (this.outputFormat.isAgent) {
+      // Minimal startup for agents
+      console.log('{"mode":"interactive","actor":"agent","ready":true}');
+    } else {
+      // Friendly startup for humans
+      console.log('🚀 UGS - Interactive Graph Database');
+      console.log(`📂 Data Directory: ${this.dataDir}`);
+      console.log(`🤖 Actor Mode: ${this.outputFormat.isAgent ? 'Agent' : 'Human'}`);
+      console.log('Type "help" for commands, "snapshot" to save state, "quit" to exit\n');
+    }
+    
+    const readline = await import('readline');
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+      prompt: this.outputFormat.isAgent ? '' : 'ugs> '
+    });
+
+    if (!this.outputFormat.isAgent) rl.prompt();
+    
+    rl.on('line', async (line) => {
+      const input = line.trim();
+      
+      if (input === 'exit' || input === 'quit') {
+        await this.store.shutdown();
+        if (this.outputFormat.isAgent) {
+          this.output({ operation: 'exit', snapshot: true });
+        } else {
+          console.log('✓ Final snapshot created, UGS session ended');
+        }
+        rl.close();
+        return;
+      }
+      
+      if (input) {
+        const parts = input.split(/\s+/);
+        const commandName = parts[0];
+        const commandArgs = parts.slice(1);
+        
+        const command = this.commands.get(commandName);
+        if (command) {
+          try {
+            await command.handler(commandArgs);
+          } catch (error: any) {
+            this.error(error.message, 0); // Don't exit in interactive mode
+          }
+        } else if (input !== '') {
+          this.error(`Unknown command: ${commandName}`, 0);
+        }
+      }
+      
+      if (!this.outputFormat.isAgent) rl.prompt();
+    });
+    
+    rl.on('close', async () => {
+      await this.store.shutdown();
+      process.exit(0);
+    });
+  }
+}
+
+// Run CLI if called directly
+if (import.meta.main) {
+  const dataDir = process.env.UGS_DATA_DIR || './data';
+
+  // Create execution context from environment (loads credentials)
+  const ctx = createContextFromEnv({ id: 'cli', type: 'human' });
+
+  // Run CLI within context
+  runWithContextAsync(ctx, () => new UGSCLI(dataDir).run()).catch((error) => {
+    const isAgent = !process.argv.includes('--human') &&
+                   process.env.UGS_ACTOR?.toLowerCase() !== 'human';
+    if (isAgent) {
+      console.error(JSON.stringify({ error: error.message, fatal: true }));
+    } else {
+      console.error('💥 Fatal error:', error.message);
+    }
+    process.exit(1);
+  });
+}
+
+export { UGSCLI };

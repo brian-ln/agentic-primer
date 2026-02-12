@@ -1,0 +1,64 @@
+{
+  "name": "ugs",
+  "version": "0.0.4",
+  "description": "Universal Graph System - Graph database with event sourcing built on agentic-primer",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "ugs": "./ugs"
+  },
+  "scripts": {
+    "demo": "bun run prototype.js",
+    "demo:subprocess": "bun run src/messaging/actors/demo-subprocess.ts",
+    "ugs": "./ugs",
+    "test": "source ~/.config/ai/config && export CF_ACCOUNT_ID CF_GATEWAY_NAME CF_AIG_TOKEN CLOUDFLARE_ACCOUNT_ID=$CF_ACCOUNT_ID CLOUDFLARE_GATEWAY_ID=$CF_GATEWAY_NAME CLOUDFLARE_API_TOKEN=$CF_AIG_TOKEN && bun test",
+    "test:integration": "source ~/.config/ai/config && export CF_ACCOUNT_ID CF_GATEWAY_NAME CF_AIG_TOKEN CLOUDFLARE_ACCOUNT_ID=$CF_ACCOUNT_ID CLOUDFLARE_GATEWAY_ID=$CF_GATEWAY_NAME CLOUDFLARE_API_TOKEN=$CF_AIG_TOKEN RUN_SLOW_TESTS=1 && bun test src/session-knowledge/__tests__/*.integration.test.ts",
+    "test:perf": "source ~/.config/ai/config && export CF_ACCOUNT_ID CF_GATEWAY_NAME CF_AIG_TOKEN CLOUDFLARE_ACCOUNT_ID=$CF_ACCOUNT_ID CLOUDFLARE_GATEWAY_ID=$CF_GATEWAY_NAME CLOUDFLARE_API_TOKEN=$CF_AIG_TOKEN RUN_SLOW_TESTS=1 && bun test src/session-knowledge/__tests__/*.perf.test.ts",
+    "test:e2e": "source ~/.config/ai/config && export CF_ACCOUNT_ID CF_GATEWAY_NAME CF_AIG_TOKEN CLOUDFLARE_ACCOUNT_ID=$CF_ACCOUNT_ID CLOUDFLARE_GATEWAY_ID=$CF_GATEWAY_NAME CLOUDFLARE_API_TOKEN=$CF_AIG_TOKEN && bun test src/entities/*.e2e.test.ts",
+    "bench": "bun run src/messaging/benchmarks/run-all.ts",
+    "bench:creation": "bun run src/messaging/benchmarks/message-creation.bench.ts",
+    "bench:routing": "bun run src/messaging/benchmarks/routing.bench.ts",
+    "bench:patterns": "bun run src/messaging/benchmarks/patterns.bench.ts",
+    "bench:tools": "bun run src/messaging/benchmarks/tool-actors.bench.ts",
+    "test:quick": "bun test",
+    "test:e2e:quick": "RUN_E2E=true bun test **/*.e2e.test.ts",
+    "test:all": "RUN_E2E=true bun test",
+    "test:subprocess": "bun test src/messaging/actors/subprocess-code-execution.test.ts",
+    "test:integration:quick": "bun test ./test-integration.ts",
+    "test:stress": "bun run test-stress.ts",
+    "migrate": "bun src/migration/cli.ts",
+    "migrate:analyze": "bun src/migration/cli.ts analyze",
+    "migrate:plan": "bun src/migration/cli.ts plan",
+    "migrate:execute": "bun src/migration/cli.ts execute",
+    "migrate:execute:dry": "bun src/migration/cli.ts execute --dry-run",
+    "migrate:report": "bun src/migration/cli.ts report",
+    "migrate:verify": "bun src/migration/cli.ts verify"
+  },
+  "keywords": [
+    "graph",
+    "database",
+    "persistence",
+    "event-sourcing",
+    "cli"
+  ],
+  "author": "UGS Project",
+  "license": "MIT",
+  "dependencies": {
+    "@agentic-primer/actors": "workspace:*",
+    "@agentic-primer/protocols": "workspace:*",
+    "@agentic-primer/knowledge": "workspace:*",
+    "@ai-sdk/anthropic": "^3.0.23",
+    "@ai-sdk/openai": "^3.0.18",
+    "@anthropic-ai/sdk": "^0.73.0",
+    "@cloudflare/ai-gateway": "^0.0.6",
+    "@libsql/client": "^0.17.0",
+    "ai": "^6.0.49",
+    "ai-gateway-provider": "^3.1.0",
+    "sqlite-vec": "^0.1.7-alpha.2"
+  },
+  "devDependencies": {
+    "bun-types": "^1.3.6",
+    "mitata": "^1.0.34",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,267 @@
+═══════════════════════════════════════════════════════
+  Migration Plan
+═══════════════════════════════════════════════════════
+
+Generated: 2026-02-06T17:25:25.744Z
+Total Steps: 239
+Estimated Effort: 31.7 hours
+
+PATH PROPOSALS
+───────────────────────────────────────────────────────
+  ✓ calculator → demo/calculator
+     Manual mapping from path-mappings.json
+     Dependencies: echo
+
+  ✓ echo → demo/echo
+     Manual mapping from path-mappings.json
+     Dependencies: program-executor
+
+  ✓ tool-bash → tools/bash
+     Manual mapping from path-mappings.json
+     Dependencies: tool-read, tool-write, demo, file-checker, demo-session
+
+  ✓ tool-read → tools/read
+     Manual mapping from path-mappings.json
+     Dependencies: tool-bash, tool-write, demo, demo-session
+
+  ✓ tool-write → tools/write
+     Manual mapping from path-mappings.json
+     Dependencies: tool-bash, tool-read, demo, demo-session
+
+  ✓ file-checker → demo/file-checker
+     Manual mapping from path-mappings.json
+
+  ✓ filesystem → test/filesystem
+     Manual mapping from path-mappings.json
+     Dependencies: test-session, code-execution, stress-session, mock-session, stress-test
+
+  ✓ streaming-test → test/streaming
+     Manual mapping from path-mappings.json
+
+  ✓ test-session → test/session
+     Manual mapping from path-mappings.json
+     Dependencies: filesystem, code-execution, test-session-mock
+
+  ✓ code-execution → test/code-execution
+     Manual mapping from path-mappings.json
+     Dependencies: test-session, filesystem, stress-session, mock-session, stress-test
+
+  ✓ test-session-mock → test/session-mock
+     Manual mapping from path-mappings.json
+
+  ✓ quick-mock → test/quick-mock
+     Manual mapping from path-mappings.json
+
+  ✓ program-executor → services/program-executor
+     Matches keyword "executor" for category "services"
+
+  ✓ tasks → domain/tasks
+     Manual mapping from path-mappings.json
+     Dependencies: relationships, orchestrator, system, users, knowledge
+
+  ✓ relationships → domain/relationships
+     Manual mapping from path-mappings.json
+     Dependencies: tasks, orchestrator, knowledge, demo
+
+  ✓ orchestrator → domain/orchestrator
+     Manual mapping from path-mappings.json
+     Dependencies: tasks, relationships, system
+
+  ✓ inference → services/inference
+     Manual mapping from path-mappings.json
+     Dependencies: test-session-mock, quick-mock, mock-session, stream-session, actor-123, unknown
+
+  ✓ knowledge → services/knowledge
+     Manual mapping from path-mappings.json
+     Dependencies: relationships, tasks, user
+
+  ✓ stress-session → demo/stress-session
+     Manual mapping from path-mappings.json
+     Dependencies: filesystem, code-execution
+
+  ✓ mock-session → test/mock-session
+     Manual mapping from path-mappings.json
+     Dependencies: filesystem, code-execution
+
+  ✓ test-actor → test/actor
+     Manual mapping from path-mappings.json
+     Dependencies: demo-session
+
+  ✓ non-streaming → test/non-streaming
+     Manual mapping from path-mappings.json
+
+  ✓ stream-session → demo/stream-session
+     Manual mapping from path-mappings.json
+
+  ✓ query-executor → services/query-executor
+     Matches keyword "executor" for category "services"
+     Dependencies: demo
+
+  ✓ bench-1k → bench/1k
+     Manual mapping from path-mappings.json
+
+  ✓ bench-10k → bench/10k
+     Manual mapping from path-mappings.json
+
+  ✓ bench-100k → bench/100k
+     Manual mapping from path-mappings.json
+
+  ✓ bench-bp → bench/backpressure
+     Manual mapping from path-mappings.json
+
+  ✓ flat-id → test/flat-id
+     Manual mapping from path-mappings.json
+     Dependencies: path
+
+  ✓ id → test/id
+     Manual mapping from path-mappings.json
+     Dependencies: tool-bash, tool-read, tool-write, filesystem, code-execution, app:initializer, debug:console, chat-message:${msgData.id}, orchestrator, system, tasks, demo, knowledge, relationships, demo-session, user, ${tagName}:${elementId}, flat-id, path
+
+  ✓ slack → channels/slack
+     Matches keyword "slack" for category "channels"
+
+  ✓ telegram → channels/telegram
+     Matches keyword "telegram" for category "channels"
+
+  ✓ executor → services/executor
+     Manual mapping from path-mappings.json
+     Dependencies: program-executor, query-executor, demo
+
+  ? demo → domain/demo
+     Default placement. Review and adjust based on actor purpose.
+     Dependencies: tool-bash, tool-write, tool-read, tasks, demo-session, user-1, inference, query-executor, demo-user
+
+  ? test → domain/test
+     Default placement. Review and adjust based on actor purpose.
+     Dependencies: demo, streaming-test, test-session, filesystem, code-execution, test-session-mock, demo-session, mock-session, stress-test, test-actor, non-streaming, test-client, bench-1k, bench-10k, bench-100k, bench-bp
+
+  ? app:initializer → domain/app:initializer
+     Default placement. Review and adjust based on actor purpose.
+
+  ? debug:console → domain/debug:console
+     Default placement. Review and adjust based on actor purpose.
+
+  ? chat-message:${msgData.id} → domain/chat-message:${msgData.id}
+     Default placement. Review and adjust based on actor purpose.
+
+  ? system → domain/system
+     Default placement. Review and adjust based on actor purpose.
+     Dependencies: echo, filesystem, test-session, code-execution, orchestrator, tasks, stress-session, mock-session, stress-test, demo
+
+  ? users → domain/users
+     Default placement. Review and adjust based on actor purpose.
+     Dependencies: tasks
+
+  ? demo-session → domain/demo-session
+     Default placement. Review and adjust based on actor purpose.
+     Dependencies: user-1, tool-bash, tool-write, tool-read
+
+  ? user-1 → domain/user-1
+     Default placement. Review and adjust based on actor purpose.
+     Dependencies: demo-session
+
+  ? stress-test → domain/stress-test
+     Default placement. Review and adjust based on actor purpose.
+     Dependencies: filesystem, code-execution
+
+  ? user → domain/user
+     Default placement. Review and adjust based on actor purpose.
+     Dependencies: app:initializer, debug:console, tasks, users, demo-session, user-1, knowledge, demo-user
+
+  ? ${action.target}-placeholder → domain/${action.target}-placeholder
+     Default placement. Review and adjust based on actor purpose.
+
+  ? actor-123 → domain/actor-123
+     Default placement. Review and adjust based on actor purpose.
+
+  ? unknown → domain/unknown
+     Default placement. Review and adjust based on actor purpose.
+
+  ? my-actor → domain/my-actor
+     Default placement. Review and adjust based on actor purpose.
+
+  ? test-client → domain/test-client
+     Default placement. Review and adjust based on actor purpose.
+
+  ? chat-room → domain/chat-room
+     Default placement. Review and adjust based on actor purpose.
+
+  ? ${tagName}:${elementId} → domain/${tagName}:${elementId}
+     Default placement. Review and adjust based on actor purpose.
+
+  ? actor → domain/actor
+     Default placement. Review and adjust based on actor purpose.
+     Dependencies: calculator, echo, tool-bash, tool-read, file-checker, streaming-test, test-session, filesystem, tasks, relationships, knowledge, demo-session, stress-session, demo, test-actor, stream-session, program-executor, ${action.target}-placeholder, actor-123, my-actor, chat-room, bench-1k, bench-10k, bench-100k, bench-bp, id
+
+  ? ${flatId} → domain/${flatId}
+     Default placement. Review and adjust based on actor purpose.
+
+  ? ${proposal.flatId} → domain/${proposal.flatId}
+     Default placement. Review and adjust based on actor purpose.
+     Dependencies: flat-id, path, ${proposal.proposedPath}
+
+  ? path → domain/path
+     Default placement. Review and adjust based on actor purpose.
+     Dependencies: demo, test-session, demo-session, flat-id, ${flatId}
+
+  ? ${proposal.proposedPath} → domain/${proposal.proposedPath}
+     Default placement. Review and adjust based on actor purpose.
+     Dependencies: ${proposal.flatId}
+
+  ? demo-user → domain/demo-user
+     Default placement. Review and adjust based on actor purpose.
+
+  ? domain → domain/domain
+     Default placement. Review and adjust based on actor purpose.
+     Dependencies: actor-123, inference, unknown, my-actor
+
+  ? channels → domain/channels
+     Default placement. Review and adjust based on actor purpose.
+
+MIGRATION PHASES
+───────────────────────────────────────────────────────
+  Phase 1: Create Aliases (parallelizable)
+  Duration: 4.9 hours
+  Register flat ID → path aliases for backward compatibility
+  Steps: 59
+
+  Phase 2: Update Registrations
+  Duration: 6.8 hours
+  Update actor registrations to use hierarchical paths
+  Steps: 41
+
+  Phase 3: Update Usages (parallelizable)
+  Duration: 18.0 hours
+  Replace flat ID address() calls with hierarchical paths
+  Steps: 80
+
+  Phase 4: Verification & Cleanup
+  Duration: 2.0 hours
+  Verify migration and remove aliases
+  Steps: 59
+
+RISKS
+───────────────────────────────────────────────────────
+  ⚠️  30 complex migrations requiring structural changes
+  ⚠️  26 path proposals have low confidence. Manual review recommended.
+  ⚠️  Large migration (251 usages). Consider incremental approach.
+  ⚠️  41 actor registrations to update. Plan supervision tree carefully.
+
+VALIDATION CHECKLIST
+───────────────────────────────────────────────────────
+  ✓ All tests pass after alias creation
+  ✓ All tests pass after registration updates
+  ✓ All tests pass after usage updates
+  ✓ No flat ID deprecation warnings in logs
+  ✓ Router stats show 100% path usage
+  ✓ All 59 aliases can be resolved
+  ✓ No routing errors in production logs
+  ✓ Performance metrics within acceptable range
+
+NEXT STEPS
+───────────────────────────────────────────────────────
+  1. Review path proposals and adjust if needed
+  2. Execute Phase 1: npm run migrate:execute --phase 1
+  3. Run tests and verify
+  4. Continue with remaining phases
+  5. Monitor and validate

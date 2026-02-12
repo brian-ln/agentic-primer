@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Widget Actor Chat Demo</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      height: 100vh;
+      overflow: hidden;
+      background: #f0f0f0;
+    }
+
+    .app-container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      max-width: 1400px;
+      margin: 0 auto;
+      background: white;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+    }
+
+    .app-header {
+      padding: 1rem 1.5rem;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .app-title {
+      font-size: 1.5rem;
+      font-weight: bold;
+    }
+
+    .actor-badge {
+      font-size: 0.85rem;
+      background: rgba(255, 255, 255, 0.2);
+      padding: 0.35rem 0.75rem;
+      border-radius: 12px;
+      font-family: monospace;
+    }
+
+    .main-content {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    #chat-room {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    #user-list {
+      width: 250px;
+      flex-shrink: 0;
+    }
+
+    #chat-input {
+      border-top: 2px solid #e0e0e0;
+    }
+
+    .footer {
+      padding: 0.75rem 1.5rem;
+      background: #f9f9f9;
+      border-top: 1px solid #e0e0e0;
+      font-size: 0.85rem;
+      color: #666;
+      text-align: center;
+    }
+
+    .footer a {
+      color: #007bff;
+      text-decoration: none;
+    }
+
+    .footer a:hover {
+      text-decoration: underline;
+    }
+
+    /* Debug panel */
+    .debug-panel {
+      position: fixed;
+      bottom: 1rem;
+      left: 1rem;
+      background: rgba(0, 0, 0, 0.9);
+      color: #0f0;
+      padding: 1rem;
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 0.75rem;
+      max-width: 400px;
+      display: none;
+      z-index: 1000;
+    }
+
+    .debug-panel.visible {
+      display: block;
+    }
+
+    .debug-toggle {
+      position: fixed;
+      bottom: 1rem;
+      left: 1rem;
+      background: #333;
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      z-index: 999;
+    }
+
+    .debug-toggle:hover {
+      background: #555;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      #user-list {
+        width: 200px;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .main-content {
+        flex-direction: column;
+      }
+
+      #user-list {
+        width: 100%;
+        height: 150px;
+        border-left: none;
+        border-bottom: 2px solid #e0e0e0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="app-title">Widget Actor Chat Demo</div>
+      <div class="actor-badge">Actor-Based UI</div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="main-content">
+      <!-- Chat Room (left side) -->
+      <chat-room id="chat-room"></chat-room>
+
+      <!-- User List (right sidebar) -->
+      <user-list id="user-list"></user-list>
+    </div>
+
+    <!-- Chat Input (bottom) -->
+    <chat-input id="chat-input"></chat-input>
+
+    <!-- Footer -->
+    <footer class="footer">
+      Widget Actors: Web Components + Actor Protocol |
+      <a href="https://github.com/anthropics/agentic-primer" target="_blank">View Source</a>
+    </footer>
+  </div>
+
+  <!-- Debug Toggle -->
+  <button class="debug-toggle" onclick="toggleDebug()">Debug Console</button>
+
+  <!-- Debug Panel -->
+  <div class="debug-panel" id="debug-panel">
+    <div style="font-weight: bold; margin-bottom: 0.5rem;">Debug Console</div>
+    <div id="debug-output"></div>
+    <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #333;">
+      <div>Available commands (in browser console):</div>
+      <div style="margin-left: 1rem; margin-top: 0.5rem;">
+        <div>chatDebug.sendTestMessage("text")</div>
+        <div>chatDebug.addUser("username")</div>
+        <div>chatDebug.removeUser("username")</div>
+        <div>chatDebug.clearMessages()</div>
+        <div>chatDebug.registry.list()</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Load app as ES module -->
+  <script type="module" src="./app.ts"></script>
+
+  <script>
+    function toggleDebug() {
+      const panel = document.getElementById('debug-panel');
+      panel.classList.toggle('visible');
+
+      if (panel.classList.contains('visible')) {
+        updateDebugPanel();
+      }
+    }
+
+    function updateDebugPanel() {
+      const output = document.getElementById('debug-output');
+      if (!output) return;
+
+      const debug = window.chatDebug;
+      if (!debug) {
+        output.innerHTML = '<div style="color: #f00;">Debug utilities not loaded yet</div>';
+        return;
+      }
+
+      const actors = debug.registry.list();
+      output.innerHTML = `
+        <div>Registered Actors: ${actors.length}</div>
+        <div style="margin-left: 1rem; margin-top: 0.25rem;">
+          ${actors.map(addr => `<div>• ${addr}</div>`).join('')}
+        </div>
+      `;
+    }
+
+    // Update debug panel every 2 seconds when visible
+    setInterval(() => {
+      const panel = document.getElementById('debug-panel');
+      if (panel && panel.classList.contains('visible')) {
+        updateDebugPanel();
+      }
+    }, 2000);
+  </script>
+</body>
+</html>
