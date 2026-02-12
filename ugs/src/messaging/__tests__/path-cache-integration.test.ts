@@ -9,7 +9,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { MessageRouter } from '../router';
 import { SupervisorBase, LeafActor } from '@agentic-primer/actors';
-import { address, createMessage, generateCorrelationId } from '../message';
+import { address, createMessage, generateCorrelationId } from '@agentic-primer/actors';
 import GraphStore from '../../graph';
 import { ProgramManager } from '../../entities/program';
 

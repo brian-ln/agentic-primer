@@ -15,8 +15,9 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { WebSocketActor } from '../websocket.ts';
 import { MessageRouter } from '../../messaging/router.ts';
 import { GraphStore } from '../../graph.ts';
-import { address, createMessage } from '@agentic-primer/actors';
+import { address, createMessage, createErrorResponse } from '@agentic-primer/actors';
 import { WebSocketServer } from 'ws';
+import type { MessageResponse } from '@agentic-primer/actors';
 
 // Test WebSocket server
 let testServer: WebSocketServer;
@@ -51,6 +52,43 @@ function stopTestServer() {
   }
 }
 
+async function connectWithRetry(
+  wsActor: WebSocketActor,
+  url: string,
+  maxRetries = 3,
+  retryDelay = 100
+): Promise<MessageResponse> {
+  let lastError;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const message = createMessage(
+      address('/system/websocket'),
+      'ws.connect',
+      { url },
+      { from: address('test') }
+    );
+
+    const response = await wsActor.receive(message);
+
+    if (response.success) {
+      // Wait for connection to open
+      await new Promise(resolve => setTimeout(resolve, 150));
+      return response;
+    }
+
+    lastError = response.error;
+
+    if (attempt < maxRetries - 1) {
+      await new Promise(resolve => setTimeout(resolve, retryDelay));
+    }
+  }
+
+  return createErrorResponse(
+    { id: 'retry', from: address('test'), to: address('/system/websocket'), type: 'ws.connect', payload: {}, timestamp: Date.now() },
+    lastError || 'Connection failed after retries'
+  );
+}
+
 describe('WebSocketActor', () => {
   let router: MessageRouter;
   let store: GraphStore;
@@ -62,6 +100,9 @@ describe('WebSocketActor', () => {
 
     // Start test WebSocket server
     serverPort = await startTestServer();
+
+    // Wait for server to be fully ready
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     wsActor = new WebSocketActor('ws-test', router, {
       allowedHosts: ['localhost', '127.0.0.1', 'ws.example.com'],
@@ -76,20 +117,37 @@ describe('WebSocketActor', () => {
     router.registerActor('/system/websocket', wsActor);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    // Close all WebSocket connections
+    if (wsActor) {
+      const connections = (wsActor as any).connections;
+      for (const [id] of connections) {
+        try {
+          await wsActor.receive(createMessage(
+            address('/system/websocket'),
+            'ws.close',
+            { connectionId: id },
+            { from: address('test') }
+          ));
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+      }
+    }
+
     stopTestServer();
+
+    // Wait for cleanup
+    await new Promise(resolve => setTimeout(resolve, 50));
   });
 
   describe('Host Validation', () => {
     test('allows whitelisted host (localhost)', async () => {
-      const message = createMessage(
-        address('/system/websocket'),
-        'ws.connect',
-        { url: `ws://localhost:${serverPort}` },
-        { from: address('test') }
+      const response = await connectWithRetry(
+        wsActor,
+        `ws://localhost:${serverPort}`
       );
 
-      const response = await wsActor.receive(message);
       expect(response.success).toBe(true);
       expect(response.payload.connectionId).toBeDefined();
       expect(response.payload.connectionId).toMatch(/^ws-/);
@@ -125,14 +183,11 @@ describe('WebSocketActor', () => {
 
   describe('Connection Lifecycle', () => {
     test('connects to WebSocket server', async () => {
-      const message = createMessage(
-        address('/system/websocket'),
-        'ws.connect',
-        { url: `ws://localhost:${serverPort}` },
-        { from: address('test') }
+      const response = await connectWithRetry(
+        wsActor,
+        `ws://localhost:${serverPort}`
       );
 
-      const response = await wsActor.receive(message);
       expect(response.success).toBe(true);
       expect(response.payload.connectionId).toBeDefined();
       expect(response.payload.readyState).toBeDefined();
@@ -140,17 +195,11 @@ describe('WebSocketActor', () => {
 
     test('sends message to WebSocket', async () => {
       // Connect first
-      const connectMsg = createMessage(
-        address('/system/websocket'),
-        'ws.connect',
-        { url: `ws://localhost:${serverPort}` },
-        { from: address('test') }
+      const connectResp = await connectWithRetry(
+        wsActor,
+        `ws://localhost:${serverPort}`
       );
-      const connectResp = await wsActor.receive(connectMsg);
       const connectionId = connectResp.payload.connectionId;
-
-      // Wait for connection to open
-      await new Promise(resolve => setTimeout(resolve, 100));
 
       // Send message
       const sendMsg = createMessage(

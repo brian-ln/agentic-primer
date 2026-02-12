@@ -110,6 +110,14 @@ export interface BridgeRoute {
   serde: ISerde;
 }
 
+/**
+ * Router statistics for monitoring
+ */
+export interface RouterStats {
+  /** Number of pending request-response pairs awaiting completion */
+  pendingRequests: number;
+}
+
 export class MessageRouter {
   private store: GraphStore;
   private programManager: ProgramManager;
@@ -899,7 +907,7 @@ export class MessageRouter {
   /**
    * Invoke a program node with actor context
    */
-  private async invokeProgram(id: string, message: Message): Promise<MessageResponse> {
+  async invokeProgram(id: string, message: Message): Promise<MessageResponse> {
     try {
       // Get the program implementation
       const node = this.store.get(id);
@@ -982,7 +990,7 @@ export class MessageRouter {
   /**
    * Query a document node (returns node data)
    */
-  private async queryDocument(id: string, message: Message): Promise<MessageResponse> {
+  async queryDocument(id: string, message: Message): Promise<MessageResponse> {
     try {
       const node = this.store.get(id);
       if (!node) {
@@ -1030,8 +1038,10 @@ export class MessageRouter {
 
   /**
    * Get router statistics
+   *
+   * @returns Basic router metrics for monitoring
    */
-  getStats() {
+  getStats(): RouterStats {
     return {
       pendingRequests: this.pendingRequests.size,
     };

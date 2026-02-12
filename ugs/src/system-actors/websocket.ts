@@ -13,8 +13,9 @@
  * - Connection limits
  */
 
-import { Actor, createResponse, createErrorResponse } from '@agentic-primer/actors';
-import type { Message, MessageResponse, PortChannel, MessageRouter } from '@agentic-primer/actors';
+import { Actor, createResponse, createErrorResponse, createPortChannel } from '@agentic-primer/actors';
+import type { Message, MessageResponse, MessageRouter } from '@agentic-primer/actors';
+import type { PortChannel } from '@agentic-primer/actors';
 
 /**
  * Reconnection configuration
@@ -167,7 +168,7 @@ export class WebSocketActor extends Actor {
     const ws = new WebSocket(payload.url, payload.protocols);
 
     // 4. Create event port for this connection
-    const port = this.createPort<WSEvent>(`ws-events-${connectionId}`);
+    const port = createPortChannel<WSEvent>();
     this.eventPorts.set(connectionId, port);
 
     // 5. Setup event handlers

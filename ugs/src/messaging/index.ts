@@ -18,8 +18,8 @@
 export * from '@agentic-primer/actors';
 
 // UGS-specific extensions (GraphStore integration)
-export { MessageRouter } from './router.ts';
-export { Actor, ActorSystem as UGSActorSystem } from './actor.ts';
+export { MessageRouter, type RouterStats } from './router.ts';
+export { Actor, ActorSystem, ActorSystem as UGSActorSystem, type ActorSystemStats } from './actor.ts';
 
 // Re-export protocol adapter for convenience
 // Enables: import { toProtocolAddress } from './messaging'

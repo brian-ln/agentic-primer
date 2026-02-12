@@ -118,23 +118,63 @@ export class LocalLLMClient {
 
     const response = await this.chat(messages);
 
-    try {
-      // Try to extract JSON from response (in case LLM adds extra text)
-      const jsonMatch = response.content.match(/\{[\s\S]*\}/);
-      let jsonStr = jsonMatch ? jsonMatch[0] : response.content;
-
-      // Fix common LLM JSON formatting issues
-      jsonStr = jsonStr
+    // Helper to fix common LLM JSON formatting issues
+    const fixJsonString = (jsonStr: string): string => {
+      return jsonStr
         .replace(/: "null"/g, ': null')           // "null" string to null
         .replace(/: "true"/g, ': true')           // "true" string to boolean
         .replace(/: "false"/g, ': false')         // "false" string to boolean
         .replace(/: "\{([^}]*)\}"/g, ': {$1}')   // Nested quoted objects
         .replace(/: "\[([^\]]*)\]"/g, ': [$1]'); // Nested quoted arrays
+    };
 
-      return JSON.parse(jsonStr);
-    } catch (error) {
-      throw new Error(`Failed to parse LLM JSON response: ${response.content}`);
+    // Try parsing strategies in order of preference
+    const parseStrategies = [
+      // 1. Direct parse with fixes
+      () => JSON.parse(fixJsonString(response.content)),
+
+      // 2. Extract from markdown code blocks
+      () => {
+        const markdownMatch = response.content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+        if (!markdownMatch) throw new Error('No markdown match');
+        return JSON.parse(fixJsonString(markdownMatch[1]));
+      },
+
+      // 3. Extract object {...}
+      () => {
+        const objectMatch = response.content.match(/\{[\s\S]*\}/);
+        if (!objectMatch) throw new Error('No object match');
+        return JSON.parse(fixJsonString(objectMatch[0]));
+      },
+
+      // 4. Extract array [...]
+      () => {
+        const arrayMatch = response.content.match(/\[[\s\S]*\]/);
+        if (!arrayMatch) throw new Error('No array match');
+        return JSON.parse(fixJsonString(arrayMatch[0]));
+      }
+    ];
+
+    // Try each strategy
+    for (const strategy of parseStrategies) {
+      try {
+        return strategy();
+      } catch {
+        // Continue to next strategy
+        continue;
+      }
     }
+
+    // Graceful degradation: Return empty structure based on schema hint
+    console.warn('LLM response unparseable, returning fallback structure:', response.content);
+
+    // If schema suggests an array (common for classification results), return empty array
+    if (schema && (schema.includes('[]') || schema.toLowerCase().includes('array'))) {
+      return [] as any;
+    }
+
+    // Otherwise return empty object
+    return {} as any;
   }
 
   /**

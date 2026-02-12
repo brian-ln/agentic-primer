@@ -7,8 +7,8 @@ import {
   type InboundChannelMessage,
   type OutboundChannelMessage,
 } from '../channels/ChannelActor';
-import type { Message, Address } from '../message';
-import { address, createMessage } from '../message';
+import type { Message, Address } from '@agentic-primer/actors';
+import { address, createMessage } from '@agentic-primer/actors';
 import { MessageRouter } from '../router';
 import GraphStore from '../../graph';
 import { ProgramManager } from '../../entities/program';

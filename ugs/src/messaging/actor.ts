@@ -8,7 +8,7 @@
 
 import type GraphStore from '../graph.ts';
 import type { ProgramManager } from '../entities/program.ts';
-import { MessageRouter } from './router.ts';
+import { MessageRouter, type RouterStats } from './router.ts';
 import {
   ActorWithIntrospection,
   type Message,
@@ -32,6 +32,16 @@ import {
   createPortChannel,
 } from '@agentic-primer/actors';
 import type { Channel, ChannelOptions } from './channel.ts';
+
+/**
+ * Actor system statistics for monitoring
+ */
+export interface ActorSystemStats {
+  /** Number of active actors in the system */
+  actors: number;
+  /** Router statistics */
+  router: RouterStats;
+}
 
 /**
  * Actor - Uniform interface for all graph nodes
@@ -910,9 +920,8 @@ export class ProgramActor extends Actor {
    * Receive message - delegates to program invocation
    */
   async receive(message: Message): Promise<MessageResponse> {
-    // Router handles program invocation automatically
-    // Just validate and pass through
-    return await this.router.ask(message);
+    // Directly invoke the program to avoid infinite recursion
+    return await this.router.invokeProgram(this.programId, message);
   }
 }
 
@@ -931,8 +940,8 @@ export class DocumentActor extends Actor {
    * Receive message - returns document data
    */
   async receive(message: Message): Promise<MessageResponse> {
-    // Router handles document queries automatically
-    return await this.router.ask(message);
+    // Directly query the document to avoid infinite recursion
+    return await this.router.queryDocument(this.documentId, message);
   }
 }
 
@@ -1001,8 +1010,10 @@ export class ActorSystem {
 
   /**
    * Get system statistics
+   *
+   * @returns System metrics for monitoring
    */
-  getStats() {
+  getStats(): ActorSystemStats {
     return {
       actors: this.actors.size,
       router: this.router.getStats(),

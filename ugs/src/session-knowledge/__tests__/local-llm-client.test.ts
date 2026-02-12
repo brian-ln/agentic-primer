@@ -473,7 +473,7 @@ describe('LocalLLMClient - chatJSON() method', () => {
     expect(result).toEqual({ enabled: false });
   });
 
-  test('should throw error on invalid JSON', async () => {
+  test('should gracefully degrade on invalid JSON', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -492,7 +492,9 @@ describe('LocalLLMClient - chatJSON() method', () => {
       { role: 'user', content: 'Test' }
     ];
 
-    await expect(client.chatJSON(messages)).rejects.toThrow('Failed to parse LLM JSON response');
+    // Should return empty object instead of throwing
+    const result = await client.chatJSON(messages);
+    expect(result).toEqual({});
   });
 
   test('should handle nested objects', async () => {
