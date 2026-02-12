@@ -276,6 +276,20 @@ export class MessageRouter {
    * - registerActor(id, actor) - explicit ID
    * - registerActor(actor) - uses actor.address as ID
    */
+  /**
+   * Normalize actor ID for consistent lookups
+   * Removes leading slash to ensure 'test' and '/test' resolve to same actor
+   * Optimized to avoid double parsing
+   */
+  private normalizeActorId(id: string): string {
+    // Fast path: if id starts with @, parse it
+    if (id.startsWith('@')) {
+      id = parseAddress(id as Address);
+    }
+    // Remove leading slash if present
+    return id.startsWith('/') ? id.slice(1) : id;
+  }
+
   registerActor(idOrActor: string | any, actor?: any): void {
     let id: string;
     let actorInstance: any;
@@ -293,18 +307,23 @@ export class MessageRouter {
       }
     }
 
-    this.actorRegistry.set(id, actorInstance);
+    // Normalize the ID (remove leading slash) for consistent lookups
+    const normalizedId = this.normalizeActorId(id);
+
+    // Register under normalized ID
+    this.actorRegistry.set(normalizedId, actorInstance);
     // Cache the actor for faster lookups
-    this.pathCache.set(id, actorInstance);
+    this.pathCache.set(normalizedId, actorInstance);
   }
 
   /**
    * Unregister an actor
    */
   unregisterActor(id: string): void {
-    this.actorRegistry.delete(id);
+    const normalizedId = this.normalizeActorId(id);
+    this.actorRegistry.delete(normalizedId);
     // Invalidate cache entry
-    this.pathCache.invalidate(id);
+    this.pathCache.invalidate(normalizedId);
   }
 
   /**
@@ -629,11 +648,13 @@ export class MessageRouter {
    */
   private async route(message: Message): Promise<MessageResponse> {
     const targetId = parseAddress(message.to);
+    // Normalize for consistent lookups (handles '/test' vs 'test')
+    const normalizedTargetId = this.normalizeActorId(targetId);
 
     // First check if there's a registered actor (e.g., tool actors, supervisors)
     // This is the fast path for both flat IDs and paths
-    if (this.actorRegistry.has(targetId)) {
-      const actor = this.actorRegistry.get(targetId)!;
+    if (this.actorRegistry.has(normalizedTargetId)) {
+      const actor = this.actorRegistry.get(normalizedTargetId)!;
       return await actor.receive(message);
     }
 
