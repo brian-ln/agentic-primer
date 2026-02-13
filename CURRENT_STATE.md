@@ -176,10 +176,12 @@ Agentic Primer is a **protocol-first convergence platform** for multi-agent acto
 
 ### Active Work Streams
 
-1. **Knowledge Extraction** (P0 - In Progress)
-   - Extracting 20 high-value documents to ~/knowledge
+1. **Knowledge Extraction** (P0 - Complete)
+   - Extracted 13 new UGS-specific documents to ~/knowledge
+   - Total knowledge base: 33 documents (20 from Feb 6 + 13 new)
    - Categories: ai, architecture, patterns, decisions, analysis, security, reviews
-   - Preserving research findings and architectural decisions
+   - Committed to ~/knowledge repo: commit 3857247
+   - Updated INDEX.md with Phase 6 extraction details
 
 2. **UGS/SEAG Consolidation** (Complete)
    - Monorepo integration at /ugs complete
@@ -323,10 +325,10 @@ Agentic Primer is a **protocol-first convergence platform** for multi-agent acto
 - ✅ 100% test coverage achieved (2355/2355 tests passing)
 - ✅ Actor address normalization bug fixed
 - ✅ Network actors (HTTP, WebSocket) operational
+- ✅ Knowledge extraction to ~/knowledge complete (Feb 12) - 13 UGS docs, 33 total
 
 ### In Progress
 
-- 🔄 Knowledge extraction to ~/knowledge (P0)
 - 🔄 Architecture documentation updates
 - 🔄 Cross-system integration planning
 
