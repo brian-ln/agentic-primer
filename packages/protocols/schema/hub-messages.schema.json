@@ -1,0 +1,680 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://convergence.dev/schemas/hub-messages/v0.1.0",
+  "title": "Signal Hub Message Types",
+  "description": "JSON Schema for all Signal Hub message types (hub:*) extending SharedMessage wire format",
+  "definitions": {
+    "hub-error-code": {
+      "type": "string",
+      "enum": [
+        "version_mismatch",
+        "unauthorized",
+        "rate_limited",
+        "unknown_actor",
+        "message_too_large",
+        "message_expired",
+        "timeout",
+        "internal_error"
+      ]
+    },
+    "canonical-address": {
+      "type": "string",
+      "description": "Actor canonical address in format @(runtime/actor-id)"
+    },
+    "actor-registration": {
+      "type": "object",
+      "properties": {
+        "actorAddress": { "$ref": "#/definitions/canonical-address" },
+        "capabilities": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "connectionId": { "type": "string" },
+        "registeredAt": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Epoch milliseconds"
+        },
+        "expiresAt": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Epoch milliseconds"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "For conflict resolution"
+        }
+      },
+      "required": ["actorAddress", "capabilities", "metadata", "connectionId", "registeredAt", "expiresAt", "version"],
+      "additionalProperties": false
+    },
+    "hub-connect-metadata": {
+      "type": "object",
+      "properties": {
+        "protocolVersion": {
+          "type": "string",
+          "description": "Semantic version (e.g., '0.1.0')"
+        },
+        "authToken": {
+          "type": "string",
+          "description": "JWT bearer token (REQUIRED in production)"
+        },
+        "capabilities": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "clientMetadata": {
+          "type": "object",
+          "properties": {
+            "userAgent": { "type": "string" },
+            "platform": { "type": "string" },
+            "origin": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": ["protocolVersion", "capabilities"],
+      "additionalProperties": false
+    },
+    "hub-connected-payload": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "Unique session identifier"
+        },
+        "serverVersion": {
+          "type": "string",
+          "description": "Server protocol version"
+        },
+        "maxMessageSize": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Max payload size in bytes"
+        },
+        "heartbeatInterval": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Recommended heartbeat interval (ms)"
+        },
+        "capabilities": {
+          "type": "object",
+          "properties": {
+            "maxActorsPerInstance": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "supportsBackpressure": { "type": "boolean" },
+            "supportedContentTypes": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          },
+          "required": ["maxActorsPerInstance", "supportsBackpressure", "supportedContentTypes"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["sessionId", "serverVersion", "maxMessageSize", "heartbeatInterval", "capabilities"],
+      "additionalProperties": false
+    },
+    "hub-connected-metadata": {
+      "type": "object",
+      "properties": {
+        "actorIdentity": {
+          "$ref": "#/definitions/canonical-address",
+          "description": "Server-verified identity (from JWT)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "hub-heartbeat-payload": {
+      "type": "object",
+      "properties": {
+        "timestamp": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Client timestamp (epoch ms)"
+        }
+      },
+      "required": ["timestamp"],
+      "additionalProperties": false
+    },
+    "hub-heartbeat-ack-payload": {
+      "type": "object",
+      "properties": {
+        "timestamp": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Client timestamp (echoed)"
+        },
+        "serverTime": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Server timestamp (for clock skew detection)"
+        }
+      },
+      "required": ["timestamp", "serverTime"],
+      "additionalProperties": false
+    },
+    "hub-disconnect-payload": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "description": "Optional disconnect reason"
+        }
+      },
+      "additionalProperties": false
+    },
+    "hub-register-payload": {
+      "type": "object",
+      "properties": {
+        "actorAddress": { "$ref": "#/definitions/canonical-address" },
+        "capabilities": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "ttlSeconds": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 3600,
+          "description": "Registration TTL (default: 300, max: 3600)"
+        }
+      },
+      "required": ["actorAddress", "capabilities", "metadata"],
+      "additionalProperties": false
+    },
+    "hub-register-metadata": {
+      "type": "object",
+      "properties": {
+        "renewOnHeartbeat": {
+          "type": "boolean",
+          "description": "Auto-renew registration on heartbeat"
+        }
+      },
+      "additionalProperties": false
+    },
+    "hub-registered-payload": {
+      "type": "object",
+      "properties": {
+        "actorAddress": { "$ref": "#/definitions/canonical-address" },
+        "expiresAt": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Epoch ms when registration expires"
+        },
+        "renewalToken": {
+          "type": "string",
+          "description": "Token for renewing registration"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Registration version (for conflict resolution)"
+        }
+      },
+      "required": ["actorAddress", "expiresAt", "renewalToken", "version"],
+      "additionalProperties": false
+    },
+    "hub-unregister-payload": {
+      "type": "object",
+      "properties": {
+        "actorAddress": { "$ref": "#/definitions/canonical-address" }
+      },
+      "required": ["actorAddress"],
+      "additionalProperties": false
+    },
+    "hub-discover-payload": {
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "description": "Glob pattern (e.g., '@(browser/widget-*)')"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Max results (default: 100, max: 100)"
+        }
+      },
+      "required": ["pattern"],
+      "additionalProperties": false
+    },
+    "hub-discovered-payload": {
+      "type": "object",
+      "properties": {
+        "actors": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/actor-registration" }
+        },
+        "hasMore": {
+          "type": "boolean",
+          "description": "More results available (pagination)"
+        }
+      },
+      "required": ["actors", "hasMore"],
+      "additionalProperties": false
+    },
+    "hub-list-actors-payload": {
+      "type": "object",
+      "properties": {
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Pagination offset (default: 0)"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Results per page (default: 100, max: 100)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "hub-actor-list-payload": {
+      "type": "object",
+      "properties": {
+        "actors": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/actor-registration" }
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total registered actors"
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Current offset"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Results per page"
+        },
+        "hasMore": {
+          "type": "boolean",
+          "description": "More results available"
+        }
+      },
+      "required": ["actors", "total", "offset", "limit", "hasMore"],
+      "additionalProperties": false
+    },
+    "hub-renew-payload": {
+      "type": "object",
+      "properties": {
+        "renewalToken": {
+          "type": "string",
+          "description": "Token from hub:registered"
+        }
+      },
+      "required": ["renewalToken"],
+      "additionalProperties": false
+    },
+    "hub-renewed-payload": {
+      "type": "object",
+      "properties": {
+        "expiresAt": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "New expiration time"
+        },
+        "renewalToken": {
+          "type": "string",
+          "description": "New renewal token"
+        }
+      },
+      "required": ["expiresAt", "renewalToken"],
+      "additionalProperties": false
+    },
+    "hub-send-payload": {
+      "type": "object",
+      "properties": {
+        "targetAddress": {
+          "$ref": "#/definitions/canonical-address",
+          "description": "Recipient actor"
+        },
+        "message": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "Application-level message type"
+            },
+            "payload": {
+              "description": "Application-level payload"
+            }
+          },
+          "required": ["type", "payload"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["targetAddress", "message"],
+      "additionalProperties": false
+    },
+    "hub-send-metadata": {
+      "type": "object",
+      "properties": {
+        "requireAck": {
+          "type": "boolean",
+          "description": "Require delivery ack (forces pattern='ask')"
+        },
+        "traceId": {
+          "type": "string",
+          "description": "Distributed tracing"
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Message priority (0=high, 2=low)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "hub-delivery-ack-payload": {
+      "type": "object",
+      "properties": {
+        "messageId": {
+          "type": "string",
+          "description": "Original message ID"
+        },
+        "deliveredAt": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Epoch ms when delivered"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["delivered", "queued"],
+          "description": "Delivery status"
+        }
+      },
+      "required": ["messageId", "deliveredAt", "status"],
+      "additionalProperties": false
+    },
+    "hub-broadcast-payload": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string" },
+            "payload": {}
+          },
+          "required": ["type", "payload"],
+          "additionalProperties": false
+        },
+        "excludeSelf": {
+          "type": "boolean",
+          "description": "Exclude sender from broadcast"
+        }
+      },
+      "required": ["message"],
+      "additionalProperties": false
+    },
+    "hub-broadcast-metadata": {
+      "type": "object",
+      "properties": {
+        "targetCapability": {
+          "type": "string",
+          "description": "Only actors with this capability"
+        }
+      },
+      "additionalProperties": false
+    },
+    "hub-broadcast-ack-payload": {
+      "type": "object",
+      "properties": {
+        "messageId": {
+          "type": "string",
+          "description": "Original broadcast ID"
+        },
+        "deliveredCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Actors reached immediately"
+        },
+        "queuedCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Actors queued for async delivery"
+        },
+        "failedCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Failed deliveries"
+        }
+      },
+      "required": ["messageId", "deliveredCount"],
+      "additionalProperties": false
+    },
+    "hub-subscribe-payload": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "Topic name (e.g., 'events', 'logs')"
+        },
+        "durable": {
+          "type": "boolean",
+          "description": "Persist subscription across reconnects"
+        }
+      },
+      "required": ["topic"],
+      "additionalProperties": false
+    },
+    "hub-subscribed-payload": {
+      "type": "object",
+      "properties": {
+        "topic": { "type": "string" },
+        "subscriptionId": {
+          "type": "string",
+          "description": "Unique subscription ID"
+        }
+      },
+      "required": ["topic", "subscriptionId"],
+      "additionalProperties": false
+    },
+    "hub-publish-payload": {
+      "type": "object",
+      "properties": {
+        "topic": { "type": "string" },
+        "message": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string" },
+            "payload": {}
+          },
+          "required": ["type", "payload"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["topic", "message"],
+      "additionalProperties": false
+    },
+    "hub-published-payload": {
+      "type": "object",
+      "properties": {
+        "topic": { "type": "string" },
+        "subscriberCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How many subscribers received message"
+        }
+      },
+      "required": ["topic", "subscriberCount"],
+      "additionalProperties": false
+    },
+    "hub-unsubscribe-payload": {
+      "type": "object",
+      "properties": {
+        "subscriptionId": {
+          "type": "string",
+          "description": "From hub:subscribed"
+        }
+      },
+      "required": ["subscriptionId"],
+      "additionalProperties": false
+    },
+    "hub-pause-payload": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "description": "Why paused (e.g., 'outbound_queue_full')"
+        }
+      },
+      "required": ["reason"],
+      "additionalProperties": false
+    },
+    "hub-resume-payload": {
+      "type": "object",
+      "additionalProperties": false
+    },
+    "hub-queue-stats-payload": {
+      "type": "object",
+      "additionalProperties": false
+    },
+    "hub-queue-stats-response-payload": {
+      "type": "object",
+      "properties": {
+        "queueDepth": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Messages in queue"
+        },
+        "processingRate": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Messages/sec throughput"
+        },
+        "pauseThreshold": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Pause when queue > this"
+        },
+        "resumeThreshold": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Resume when queue < this"
+        }
+      },
+      "required": ["queueDepth", "processingRate", "pauseThreshold", "resumeThreshold"],
+      "additionalProperties": false
+    },
+    "hub-error-payload": {
+      "type": "object",
+      "properties": {
+        "code": { "$ref": "#/definitions/hub-error-code" },
+        "message": {
+          "type": "string",
+          "description": "Human-readable error"
+        },
+        "details": {
+          "description": "Additional error context"
+        },
+        "retryable": {
+          "type": "boolean",
+          "description": "Can client retry?"
+        }
+      },
+      "required": ["code", "message", "retryable"],
+      "additionalProperties": false
+    },
+    "hub-unknown-actor-payload": {
+      "type": "object",
+      "properties": {
+        "actorAddress": { "$ref": "#/definitions/canonical-address" },
+        "message": {
+          "type": "string",
+          "description": "e.g., 'Actor not registered with Signal Hub'"
+        }
+      },
+      "required": ["actorAddress", "message"],
+      "additionalProperties": false
+    },
+    "hub-unauthorized-payload": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "description": "e.g., 'register', 'send', 'broadcast'"
+        },
+        "reason": {
+          "type": "string",
+          "description": "e.g., 'Invalid JWT', 'Expired token'"
+        }
+      },
+      "required": ["action", "reason"],
+      "additionalProperties": false
+    },
+    "hub-rate-limited-payload": {
+      "type": "object",
+      "properties": {
+        "retryAfter": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Milliseconds to wait before retry"
+        }
+      },
+      "required": ["retryAfter"],
+      "additionalProperties": false
+    },
+    "hub-version-mismatch-payload": {
+      "type": "object",
+      "properties": {
+        "clientVersion": {
+          "type": "string",
+          "description": "Client's protocol version"
+        },
+        "serverVersion": {
+          "type": "string",
+          "description": "Server's protocol version"
+        },
+        "supportedVersions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Server's supported versions"
+        },
+        "message": {
+          "type": "string",
+          "description": "Upgrade instructions"
+        }
+      },
+      "required": ["clientVersion", "serverVersion", "supportedVersions", "message"],
+      "additionalProperties": false
+    },
+    "hub-message-too-large-payload": {
+      "type": "object",
+      "properties": {
+        "messageSize": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Actual size in bytes"
+        },
+        "maxSize": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Max allowed size (1048576 = 1MB)"
+        }
+      },
+      "required": ["messageSize", "maxSize"],
+      "additionalProperties": false
+    }
+  }
+}

@@ -1095,15 +1095,106 @@ interface HubMessageTooLargeMessage extends HubMessage {
 
 ---
 
+## 6. Authentication and Token Management
+
+### 6.1 hub:refresh_token
+
+**Direction:** Client → Server
+**Pattern:** `ask` (expects hub:token_refreshed)
+**Purpose:** Refresh JWT token without reconnecting
+
+```typescript
+interface HubRefreshTokenMessage extends HubMessage {
+  type: 'hub:refresh_token';
+  pattern: 'ask';
+  payload: null;
+  metadata: {
+    authToken: string;  // New JWT bearer token
+    nonce?: string;     // Optional nonce for replay prevention
+  };
+  ttl: 5000;  // 5s timeout
+}
+```
+
+**Response:** `hub:token_refreshed` or `hub:unauthorized`
+
+**Validation:**
+- `authToken` MUST be valid JWT with same `actorId` as current session
+- Token refresh rate limited to 1 per minute per session
+- Nonce (if provided) MUST be unique to prevent replay attacks
+
+**Example:**
+
+```typescript
+const refreshMsg: SharedMessage = {
+  id: crypto.randomUUID(),
+  from: '@(browser/client-ui)',
+  to: '@(cloudflare/signal-hub)',
+  type: 'hub:refresh_token',
+  pattern: 'ask',
+  correlationId: null,
+  timestamp: Date.now(),
+  payload: null,
+  metadata: {
+    authToken: 'bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+    nonce: crypto.randomUUID()
+  },
+  ttl: 5000,
+  signature: null
+};
+```
+
+---
+
+### 6.2 hub:token_refreshed
+
+**Direction:** Server → Client
+**Pattern:** `tell` (response to hub:refresh_token)
+**Purpose:** Confirm token refreshed successfully
+
+```typescript
+interface HubTokenRefreshedMessage extends HubMessage {
+  type: 'hub:token_refreshed';
+  pattern: 'tell';
+  correlationId: string;  // Links to hub:refresh_token request
+  payload: {
+    tokenExpiresAt: number;  // Epoch ms when new token expires
+  };
+}
+```
+
+**Example:**
+
+```typescript
+const refreshedMsg: SharedMessage = {
+  id: crypto.randomUUID(),
+  from: '@(cloudflare/signal-hub)',
+  to: '@(browser/client-ui)',
+  type: 'hub:token_refreshed',
+  pattern: 'tell',
+  correlationId: refreshMsg.id,
+  timestamp: Date.now(),
+  payload: {
+    tokenExpiresAt: Date.now() + (4 * 60 * 60 * 1000)  // 4 hours
+  },
+  metadata: {},
+  ttl: null,
+  signature: null
+};
+```
+
+---
+
 ## Summary
 
-**Total message types:** 24
+**Total message types:** 26
 
 | Category | Count | Types |
 |----------|-------|-------|
 | Connection | 5 | connect, connected, heartbeat, heartbeat_ack, disconnect |
+| Authentication | 2 | refresh_token, token_refreshed |
 | Discovery | 9 | register, registered, unregister, discover, discovered, list_actors, actor_list, renew, renewed |
-| Delivery | 8 | send, delivery_ack, broadcast, broadcast_ack, subscribe, subscribed, publish, published, unsubscribe |
+| Delivery | 9 | send, delivery_ack, broadcast, broadcast_ack, subscribe, subscribed, publish, published, unsubscribe |
 | Flow Control | 4 | pause, resume, queue_stats, queue_stats_response |
 | Errors | 6 | error, unknown_actor, unauthorized, rate_limited, version_mismatch, message_too_large |
 

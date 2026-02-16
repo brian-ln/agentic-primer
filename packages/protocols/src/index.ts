@@ -7,6 +7,9 @@
  * Generated types: domain.types.ts (TypeScript)
  * Runtime validation: domain.validators.ts (Zod)
  * WASM interface: wit/domain.wit (WebAssembly Component Model)
+ *
+ * Hub Messages: schema/hub-messages.schema.json (JSON Schema Draft 07)
+ * Hub validators: hub-messages.validators.ts (Zod)
  */
 
 // Re-export all generated types EXCEPT those refined in shared-message
@@ -157,3 +160,7 @@ export {
 
 // Re-export shared message types (cross-runtime wire format, refined types + converters)
 export * from './shared-message.js';
+
+// Re-export hub message validators (Signal Hub protocol messages)
+// Note: Use named import to avoid conflicts with domain validators
+export { HubMessageValidators, validateHubMessage } from './hub-messages.validators.js';

@@ -27,6 +27,8 @@ Signal Hub security is built on defense-in-depth principles with multiple layers
 
 Signal Hub uses JWT (JSON Web Tokens) for authentication in the `hub:connect` metadata.
 
+**Implementation Note:** Signal Hub uses the [`jose`](https://github.com/panva/jose) library for JWT operations, which is built on Web Crypto API and compatible with Cloudflare Workers runtime. The `jose` library provides secure, standards-compliant JWT signing and verification without Node.js-specific dependencies.
+
 ```typescript
 // Client initiates connection
 const connectMsg: SharedMessage = {
@@ -53,21 +55,26 @@ const connectMsg: SharedMessage = {
 **Step-by-step validation:**
 
 ```typescript
-import { decode, verify } from 'jsonwebtoken';
+import * as jose from 'jose';
 
 async function validateJWT(authToken: string, jwtSecret: string): Promise<ActorIdentity> {
   // 1. Remove "bearer " prefix
   const token = authToken.replace(/^bearer\s+/i, '');
 
-  // 2. Verify signature and decode
+  // 2. Prepare secret key for jose (supports Web Crypto API)
+  const secret = new TextEncoder().encode(jwtSecret);
+
+  // 3. Verify signature and decode
   try {
-    const decoded = verify(token, jwtSecret, {
+    const { payload } = await jose.jwtVerify(token, secret, {
       algorithms: ['HS256', 'RS256'],
       issuer: 'signal-hub',
-      maxAge: '24h'
-    }) as JWTPayload;
+      maxTokenAge: '24h'
+    });
 
-    // 3. Extract actor identity
+    const decoded = payload as JWTPayload;
+
+    // 4. Extract actor identity
     return {
       actorId: decoded.actorId,
       userId: decoded.sub,
@@ -75,10 +82,10 @@ async function validateJWT(authToken: string, jwtSecret: string): Promise<ActorI
       expiresAt: decoded.exp * 1000
     };
   } catch (err) {
-    if (err.name === 'TokenExpiredError') {
+    if (err.code === 'ERR_JWT_EXPIRED') {
       throw new AuthError('TOKEN_EXPIRED', 'JWT token has expired');
     }
-    if (err.name === 'JsonWebTokenError') {
+    if (err.code === 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED') {
       throw new AuthError('INVALID_TOKEN', 'JWT signature invalid');
     }
     throw err;
@@ -184,40 +191,26 @@ const maliciousMsg: SharedMessage = {
 // from: '@(browser/client-ui)'  (NOT the spoofed address)
 ```
 
-### 1.5 Token Refresh and Renewal
+### 1.5 Token Refresh and Renewal (MVP)
 
 **Token lifecycle:**
 
 - **Issue:** JWT issued during user authentication (outside Signal Hub)
-- **Expiry:** 24 hours (configurable via `maxAge`)
-- **Refresh:** Client must obtain new JWT before expiry
+- **Expiry:** 1-4 hours in production (configurable via `maxAge`)
+- **Refresh:** Client refreshes token without reconnecting using `hub:refresh_token`
 
-**Refresh strategy:**
+**Why token refresh is critical:**
 
-```typescript
-// Client monitors token expiry
-class SignalHubClient {
-  private tokenExpiresAt: number;
+Without token refresh, connections are forced to disconnect/reconnect every 1-4 hours:
+- Bad UX (interruption during active work)
+- Reconnection overhead (handshake, re-registration)
+- Potential message loss during reconnection
+- Unnecessary load on Signal Hub (connection churn)
 
-  private startTokenRefreshTimer() {
-    const timeUntilExpiry = this.tokenExpiresAt - Date.now();
-    const refreshAt = timeUntilExpiry - (5 * 60 * 1000);  // 5 min before expiry
-
-    setTimeout(async () => {
-      const newToken = await this.authService.refreshToken();
-
-      // Reconnect with new token
-      await this.disconnect();
-      await this.connect(newToken);
-    }, refreshAt);
-  }
-}
-```
-
-**Alternative: Refresh without reconnect (Phase 2 - Future)**
+**Message types:**
 
 ```typescript
-// New message type: hub:refresh_token
+// Client sends refresh request
 const refreshMsg: SharedMessage = {
   id: crypto.randomUUID(),
   from: '@(browser/client-ui)',
@@ -228,7 +221,8 @@ const refreshMsg: SharedMessage = {
   timestamp: Date.now(),
   payload: null,
   metadata: {
-    authToken: 'bearer <new-jwt>'
+    authToken: 'bearer <new-jwt>',
+    nonce: crypto.randomUUID()  // Replay prevention
   },
   ttl: 5000,
   signature: null
@@ -244,13 +238,23 @@ const refreshedMsg: SharedMessage = {
   correlationId: refreshMsg.id,
   timestamp: Date.now(),
   payload: {
-    tokenExpiresAt: Date.now() + (24 * 60 * 60 * 1000)
+    tokenExpiresAt: Date.now() + (4 * 60 * 60 * 1000)  // 4 hours
   },
   metadata: {},
   ttl: null,
   signature: null
 };
 ```
+
+**Key security features:**
+
+1. **Actor identity validation** - New token must have same `actorId` as current session
+2. **Rate limiting** - 1 refresh per minute per session
+3. **Grace period** - 5-minute overlap where both old and new tokens valid
+4. **Nonce replay prevention** - Optional nonce with deduplication
+5. **Fallback strategy** - Graceful reconnect if refresh fails
+
+**See also:** `docs/signal-hub/TOKEN_REFRESH.md` for complete specification
 
 ### 1.6 Unauthorized Error Response
 
@@ -1267,8 +1271,28 @@ vars = { ENVIRONMENT = "production" }
 JWT_SECRET = "<base64-encoded-secret>"  # wrangler secret put JWT_SECRET
 JWT_ISSUER = "signal-hub"
 JWT_MAX_AGE = "24h"
-JWT_ALGORITHM = "HS256"  # or "RS256" for asymmetric
+JWT_ALGORITHM = "HS256"  # or "RS256", "ES256" for asymmetric
 ```
+
+**Algorithm Selection:**
+
+The `jose` library supports multiple algorithms compatible with Web Crypto API:
+
+- **HS256** (HMAC-SHA256): Symmetric, simple, recommended for single-server deployments
+- **RS256** (RSA-SHA256): Asymmetric, allows public key verification, better for distributed systems
+- **ES256** (ECDSA-SHA256): Asymmetric, smaller signatures than RSA, excellent performance
+
+**Key Format:**
+
+- For **HS256**: Use `TextEncoder` to convert string secrets to Uint8Array
+  ```typescript
+  const secret = new TextEncoder().encode(process.env.JWT_SECRET);
+  ```
+- For **RS256/ES256**: Use `jose.importPKCS8()` or `jose.importSPKI()` for PEM keys
+  ```typescript
+  const privateKey = await jose.importPKCS8(pemPrivateKey, 'RS256');
+  const publicKey = await jose.importSPKI(pemPublicKey, 'RS256');
+  ```
 
 **Generate JWT secret:**
 
@@ -1278,6 +1302,10 @@ openssl rand -base64 32
 
 # Or use Node.js
 node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+
+# Generate RSA key pair for RS256 (if using asymmetric)
+openssl genrsa -out private.pem 2048
+openssl rsa -in private.pem -pubout -out public.pem
 ```
 
 **JWT payload structure:**
@@ -1298,23 +1326,29 @@ interface JWTPayload {
 **Issue JWT (external auth service):**
 
 ```typescript
-import jwt from 'jsonwebtoken';
+import * as jose from 'jose';
 
-function issueSignalHubToken(userId: string, actorId: string, capabilities: string[]): string {
-  const payload: JWTPayload = {
-    sub: userId,
+async function issueSignalHubToken(userId: string, actorId: string, capabilities: string[]): Promise<string> {
+  // Prepare secret key (Web Crypto API compatible)
+  const secret = new TextEncoder().encode(process.env.JWT_SECRET);
+
+  // Create and sign JWT
+  const jwt = await new jose.SignJWT({
     actorId,
-    capabilities,
-    iss: 'signal-hub',
-    exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60),  // 24 hours
-    iat: Math.floor(Date.now() / 1000)
-  };
+    capabilities
+  })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setSubject(userId)
+    .setIssuer('signal-hub')
+    .setIssuedAt()
+    .setExpirationTime('24h')  // 24 hours from now
+    .sign(secret);
 
-  return jwt.sign(payload, process.env.JWT_SECRET, { algorithm: 'HS256' });
+  return jwt;
 }
 
 // Example usage
-const token = issueSignalHubToken(
+const token = await issueSignalHubToken(
   'user-123',
   'browser/client-ui',
   ['send', 'broadcast', 'subscribe', 'register']
@@ -1637,7 +1671,7 @@ async function connectToSignalHub() {
 
 ```typescript
 // signal-hub-do.ts - Durable Object
-import { verify } from 'jsonwebtoken';
+import * as jose from 'jose';
 import type { SharedMessage, CanonicalAddress } from '@agentic-primer/protocols';
 
 export class SignalHubDO {
@@ -1713,12 +1747,17 @@ export class SignalHubDO {
   private async validateJWT(authToken: string): Promise<ActorIdentity> {
     const token = authToken.replace(/^bearer\s+/i, '');
 
+    // Prepare secret key for jose (Web Crypto API compatible)
+    const secret = new TextEncoder().encode(this.env.JWT_SECRET);
+
     try {
-      const decoded = verify(token, this.env.JWT_SECRET, {
+      const { payload } = await jose.jwtVerify(token, secret, {
         algorithms: ['HS256'],
         issuer: 'signal-hub',
-        maxAge: '24h'
-      }) as JWTPayload;
+        maxTokenAge: '24h'
+      });
+
+      const decoded = payload as JWTPayload;
 
       return {
         actorId: decoded.actorId,
@@ -1727,10 +1766,10 @@ export class SignalHubDO {
         expiresAt: decoded.exp * 1000
       };
     } catch (err) {
-      if (err.name === 'TokenExpiredError') {
+      if (err.code === 'ERR_JWT_EXPIRED') {
         throw new Error('JWT token has expired');
       }
-      if (err.name === 'JsonWebTokenError') {
+      if (err.code === 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED') {
         throw new Error('JWT signature invalid');
       }
       throw err;

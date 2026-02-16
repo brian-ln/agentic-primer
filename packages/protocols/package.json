@@ -18,11 +18,16 @@
       "types": "./dist/domain.validators.d.ts",
       "import": "./dist/domain.validators.js"
     },
+    "./hub-validators": {
+      "types": "./dist/hub-messages.validators.d.ts",
+      "import": "./dist/hub-messages.validators.js"
+    },
     "./shared-message": {
       "types": "./dist/shared-message.d.ts",
       "import": "./dist/shared-message.js"
     },
     "./schema": "./schema/domain.schema.json",
+    "./hub-schema": "./schema/hub-messages.schema.json",
     "./wit": "./wit/domain.wit"
   },
   "files": [

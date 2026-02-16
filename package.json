@@ -12,6 +12,7 @@
     "build": "npm run build --workspaces",
     "test": "npm run test --workspaces",
     "generate:types": "tsx scripts/generate-domain-types.ts",
+    "generate:hub-types": "tsx scripts/generate-hub-types.ts",
     "validate:domain": "tsx core/wit/domain/validation-test.ts",
     "typecheck": "tsc --noEmit"
   },

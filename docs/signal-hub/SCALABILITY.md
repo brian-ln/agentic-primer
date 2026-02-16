@@ -658,6 +658,112 @@ async function handleCrossShardDiscover(
 }
 ```
 
+### Cross-Shard Message Forwarding
+
+**See:** `docs/signal-hub/PROTOCOL.md` Section 8.6 for complete specification
+
+**Summary:** Messages sent to actors on different shards are automatically forwarded using consistent hash calculation for actor location discovery. No new message types needed - forwarding metadata is added to existing `hub:send` messages.
+
+**Key design decisions:**
+
+1. **Actor location:** Consistent hash calculation (NO global registry)
+2. **Message format:** Metadata field for forwarding context (NO new `hub:forward` type)
+3. **Failure handling:** Retry with exponential backoff (2 retries: 100ms, 200ms)
+4. **TTL handling:** Decrement per hop, enforce minimum 1s remaining
+5. **Loop prevention:** Max 3 hops limit (simple counter, not visited-list)
+
+**Performance characteristics:**
+
+| Scenario | Hops | Latency | CPU Time |
+|----------|------|---------|----------|
+| Local actor (same shard) | 0 | <10ms | Minimal |
+| Cross-shard (normal) | 1 | 20-50ms | +10ms (routing) |
+| Misconfigured routing | 2 | 40-100ms | +20ms (2x routing) |
+| Routing loop (max hops) | 3 | 60-150ms | +30ms (error) |
+
+**Implementation example:**
+
+```typescript
+class SignalHubDurableObject {
+  async handleSend(msg: HubSendMessage): Promise<void> {
+    const { targetAddress } = msg.payload;
+
+    // 1. Check local registry first
+    const localActor = this.volatile.get(targetAddress);
+    if (localActor) {
+      return await this.deliverLocal(msg, localActor);
+    }
+
+    // 2. Check if already forwarded (prevent loops)
+    const forwarding = msg.metadata.forwarding;
+    if (forwarding) {
+      // Already forwarded, actor not found
+      return await this.sendError(msg.from, {
+        type: 'hub:unknown_actor',
+        payload: { actorAddress: targetAddress }
+      });
+    }
+
+    // 3. Calculate target shard
+    const targetShard = getShardForActor(targetAddress, this.shardConfig);
+    const currentShard = this.ctx.id.toString();
+
+    if (targetShard === currentShard) {
+      // Should be in this shard but not found
+      return await this.sendError(msg.from, {
+        type: 'hub:unknown_actor',
+        payload: { actorAddress: targetAddress }
+      });
+    }
+
+    // 4. Forward to target shard
+    await this.forwardToShard(msg, targetShard);
+  }
+
+  private async forwardToShard(
+    msg: HubSendMessage,
+    targetShardId: string
+  ): Promise<void> {
+    // Add forwarding metadata
+    const forwardedMsg = {
+      ...msg,
+      metadata: {
+        ...msg.metadata,
+        forwarding: {
+          originShard: this.ctx.id.toString(),
+          hopCount: 1,
+          maxHops: 3,
+          forwardedAt: Date.now(),
+          originalMessageId: msg.id
+        }
+      }
+    };
+
+    // Forward to target shard
+    const targetHub = this.env.SIGNAL_HUB.get(
+      this.env.SIGNAL_HUB.idFromName(targetShardId)
+    );
+
+    await targetHub.fetch(new Request('https://hub/internal/forward', {
+      method: 'POST',
+      body: JSON.stringify(forwardedMsg)
+    }));
+  }
+}
+```
+
+**Forwarding metadata schema:**
+
+```typescript
+interface ForwardingMetadata {
+  originShard: string;          // Shard that initiated forwarding
+  hopCount: number;             // Number of forwards (increments per hop)
+  maxHops: number;              // TTL for circular forwarding prevention
+  forwardedAt: number;          // Epoch ms when forwarding started
+  originalMessageId: string;    // Original message ID for deduplication
+}
+```
+
 ### Shard Rebalancing
 
 **When to rebalance:**
