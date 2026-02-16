@@ -606,21 +606,22 @@ interface HubRenewedMessage extends HubMessage {
 **Pattern:** `tell` (fire-and-forget) OR `ask` (with ack)
 **Purpose:** Send point-to-point message to specific actor
 
+**Design:** Flat structure eliminates dual addressing - `to` field points to final destination, hub routes based on `type: 'hub:send'` discriminator.
+
 ```typescript
 interface HubSendMessage extends HubMessage {
   type: 'hub:send';
-  pattern: 'tell' | 'ask';  // 'ask' requires hub:delivery_ack
+  to: CanonicalAddress;           // Final recipient actor (NOT hub address)
+  pattern: 'tell' | 'ask';        // 'ask' requires hub:delivery_ack
   payload: {
-    targetAddress: CanonicalAddress;  // Recipient actor
-    message: {
-      type: string;           // Application-level message type
-      payload: unknown;       // Application-level payload
-    };
+    type: string;                 // Application message type
+    data: unknown;                // Application payload
   };
   metadata: {
-    requireAck?: boolean;     // Require delivery ack (forces pattern='ask')
-    traceId?: string;         // Distributed tracing
-    priority?: number;        // Message priority (0=high, 2=low)
+    via: '@(cloudflare/signal-hub)';  // Routing: forward through hub
+    requireAck?: boolean;         // Require delivery ack (forces pattern='ask')
+    traceId?: string;             // Distributed tracing
+    priority?: number;            // Message priority (0=high, 2=low)
   };
   ttl: 30000;  // 30s delivery timeout
 }
@@ -630,30 +631,52 @@ interface HubSendMessage extends HubMessage {
 
 **Constraints:**
 - Max message size: 1MB (Cloudflare WebSocket frame limit)
-- `targetAddress` MUST be registered actor
+- `to` address MUST be registered actor
 - If actor offline, queued for delivery (up to TTL)
+
+**Routing Logic:**
+- Hub intercepts messages with `type: 'hub:send'` OR `metadata.via: '@(cloudflare/signal-hub)'`
+- Hub reads `to` field to determine final destination
+- Hub forwards by creating new message: `type` from `payload.type`, `payload` from `payload.data`
 
 **Example:**
 
 ```typescript
+// Client sends to hub for forwarding
 const sendMsg: SharedMessage = {
   id: crypto.randomUUID(),
   from: '@(local/coordinator-main)',
-  to: '@(cloudflare/signal-hub)',
+  to: '@(browser/widget-123)',    // Final destination (NOT hub address)
   type: 'hub:send',
   pattern: 'ask',  // Require ack
   correlationId: null,
   timestamp: Date.now(),
   payload: {
-    targetAddress: '@(browser/widget-123)',
-    message: {
-      type: 'task:assign',
-      payload: { taskId: 'task-456', priority: 1 }
-    }
+    type: 'task:assign',          // Application message type
+    data: { taskId: 'task-456', priority: 1 }  // Application payload
   },
   metadata: {
+    via: '@(cloudflare/signal-hub)',  // Route through hub
     requireAck: true,
     traceId: 'trace-xyz'
+  },
+  ttl: 30000,
+  signature: null
+};
+
+// Hub forwards as application message
+const forwarded: SharedMessage = {
+  id: crypto.randomUUID(),
+  from: '@(cloudflare/signal-hub)',
+  to: '@(browser/widget-123)',
+  type: 'task:assign',            // From payload.type
+  pattern: 'tell',
+  correlationId: sendMsg.id,      // Link to original
+  timestamp: Date.now(),
+  payload: { taskId: 'task-456', priority: 1 },  // From payload.data
+  metadata: {
+    forwarded: true,
+    originalFrom: '@(local/coordinator-main)'
   },
   ttl: 30000,
   signature: null
@@ -689,19 +712,19 @@ interface HubDeliveryAckMessage extends HubMessage {
 **Pattern:** `tell` (fire-and-forget)
 **Purpose:** Broadcast message to all registered actors
 
+**Design:** Flat structure - application message in payload directly, no nesting.
+
 ```typescript
 interface HubBroadcastMessage extends HubMessage {
   type: 'hub:broadcast';
   pattern: 'tell';
   payload: {
-    message: {
-      type: string;
-      payload: unknown;
-    };
-    excludeSelf?: boolean;  // Exclude sender from broadcast
+    type: string;                 // Application message type
+    data: unknown;                // Application payload
+    excludeSelf?: boolean;        // Exclude sender from broadcast
   };
   metadata: {
-    targetCapability?: string;  // Only actors with this capability
+    targetCapability?: string;    // Only actors with this capability
   };
 }
 ```
@@ -810,16 +833,16 @@ interface HubSubscribedMessage extends HubMessage {
 **Pattern:** `tell` (fire-and-forget)
 **Purpose:** Publish message to topic subscribers
 
+**Design:** Flat structure - application message in payload directly, no nesting.
+
 ```typescript
 interface HubPublishMessage extends HubMessage {
   type: 'hub:publish';
   pattern: 'tell';
   payload: {
     topic: string;
-    message: {
-      type: string;
-      payload: unknown;
-    };
+    type: string;                 // Application message type
+    data: unknown;                // Application payload
   };
 }
 ```

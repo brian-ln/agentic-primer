@@ -344,31 +344,25 @@
     "hub-send-payload": {
       "type": "object",
       "properties": {
-        "targetAddress": {
-          "$ref": "#/definitions/canonical-address",
-          "description": "Recipient actor"
+        "type": {
+          "type": "string",
+          "description": "Application message type"
         },
-        "message": {
-          "type": "object",
-          "properties": {
-            "type": {
-              "type": "string",
-              "description": "Application-level message type"
-            },
-            "payload": {
-              "description": "Application-level payload"
-            }
-          },
-          "required": ["type", "payload"],
-          "additionalProperties": false
+        "data": {
+          "description": "Application payload"
         }
       },
-      "required": ["targetAddress", "message"],
+      "required": ["type", "data"],
       "additionalProperties": false
     },
     "hub-send-metadata": {
       "type": "object",
       "properties": {
+        "via": {
+          "type": "string",
+          "const": "@(cloudflare/signal-hub)",
+          "description": "Routing: forward through hub"
+        },
         "requireAck": {
           "type": "boolean",
           "description": "Require delivery ack (forces pattern='ask')"
@@ -384,6 +378,7 @@
           "description": "Message priority (0=high, 2=low)"
         }
       },
+      "required": ["via"],
       "additionalProperties": false
     },
     "hub-delivery-ack-payload": {
@@ -410,21 +405,19 @@
     "hub-broadcast-payload": {
       "type": "object",
       "properties": {
-        "message": {
-          "type": "object",
-          "properties": {
-            "type": { "type": "string" },
-            "payload": {}
-          },
-          "required": ["type", "payload"],
-          "additionalProperties": false
+        "type": {
+          "type": "string",
+          "description": "Application message type"
+        },
+        "data": {
+          "description": "Application payload"
         },
         "excludeSelf": {
           "type": "boolean",
           "description": "Exclude sender from broadcast"
         }
       },
-      "required": ["message"],
+      "required": ["type", "data"],
       "additionalProperties": false
     },
     "hub-broadcast-metadata": {
@@ -494,17 +487,15 @@
       "type": "object",
       "properties": {
         "topic": { "type": "string" },
-        "message": {
-          "type": "object",
-          "properties": {
-            "type": { "type": "string" },
-            "payload": {}
-          },
-          "required": ["type", "payload"],
-          "additionalProperties": false
+        "type": {
+          "type": "string",
+          "description": "Application message type"
+        },
+        "data": {
+          "description": "Application payload"
         }
       },
-      "required": ["topic", "message"],
+      "required": ["topic", "type", "data"],
       "additionalProperties": false
     },
     "hub-published-payload": {

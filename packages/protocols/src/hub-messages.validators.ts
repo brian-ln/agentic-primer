@@ -87,8 +87,15 @@ export const hubRenewedPayloadSchema = z.object({
   renewalToken: z.string()
 }).strict();
 
+// hub-send-payload
+export const hubSendPayloadSchema = z.object({
+  type: z.string(),
+  data: z.unknown()
+}).strict();
+
 // hub-send-metadata
 export const hubSendMetadataSchema = z.object({
+  via: z.literal('@(cloudflare/signal-hub)'),
   requireAck: z.boolean().optional(),
   traceId: z.string().optional(),
   priority: z.number().int().min(0).max(2).optional()
@@ -103,10 +110,8 @@ export const hubDeliveryAckPayloadSchema = z.object({
 
 // hub-broadcast-payload
 export const hubBroadcastPayloadSchema = z.object({
-  message: z.object({
   type: z.string(),
-  payload: z.unknown()
-}).strict(),
+  data: z.unknown(),
   excludeSelf: z.boolean().optional()
 }).strict();
 
@@ -138,10 +143,8 @@ export const hubSubscribedPayloadSchema = z.object({
 // hub-publish-payload
 export const hubPublishPayloadSchema = z.object({
   topic: z.string(),
-  message: z.object({
   type: z.string(),
-  payload: z.unknown()
-}).strict()
+  data: z.unknown()
 }).strict();
 
 // hub-published-payload
@@ -244,15 +247,6 @@ export const hubUnregisterPayloadSchema = z.object({
   actorAddress: canonicalAddressSchema
 }).strict();
 
-// hub-send-payload
-export const hubSendPayloadSchema = z.object({
-  targetAddress: canonicalAddressSchema,
-  message: z.object({
-  type: z.string(),
-  payload: z.unknown()
-}).strict()
-}).strict();
-
 // hub-unknown-actor-payload
 export const hubUnknownActorPayloadSchema = z.object({
   actorAddress: canonicalAddressSchema,
@@ -288,6 +282,7 @@ export const HubMessageValidators = {
   hubListActorsPayload: hubListActorsPayloadSchema,
   hubRenewPayload: hubRenewPayloadSchema,
   hubRenewedPayload: hubRenewedPayloadSchema,
+  hubSendPayload: hubSendPayloadSchema,
   hubSendMetadata: hubSendMetadataSchema,
   hubDeliveryAckPayload: hubDeliveryAckPayloadSchema,
   hubBroadcastPayload: hubBroadcastPayloadSchema,
@@ -312,7 +307,6 @@ export const HubMessageValidators = {
   hubRegisterPayload: hubRegisterPayloadSchema,
   hubRegisteredPayload: hubRegisteredPayloadSchema,
   hubUnregisterPayload: hubUnregisterPayloadSchema,
-  hubSendPayload: hubSendPayloadSchema,
   hubUnknownActorPayload: hubUnknownActorPayloadSchema,
   hubDiscoveredPayload: hubDiscoveredPayloadSchema,
   hubActorListPayload: hubActorListPayloadSchema,
