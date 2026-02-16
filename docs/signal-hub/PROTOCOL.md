@@ -572,16 +572,15 @@ const cloudflareAddr = fromCanonical('@(widget-123)', 'cloudflare');
 
 ```typescript
 {
+  to: '@(browser/widget-123)',  // Final destination
   type: 'hub:send',
   pattern: 'ask',  // 'ask' requires hub:delivery_ack
   payload: {
-    targetAddress: '@(browser/widget-123)',
-    message: {
-      type: 'task:assign',
-      payload: { taskId: 'task-456', priority: 1 }
-    }
+    type: 'task:assign',  // Application message type
+    data: { taskId: 'task-456', priority: 1 }  // Application data
   },
   metadata: {
+    via: '@(cloudflare/signal-hub)',  // Route through hub
     requireAck: true,
     traceId: 'trace-xyz',
     priority: 1  // 0=high, 2=low
@@ -589,6 +588,11 @@ const cloudflareAddr = fromCanonical('@(widget-123)', 'cloudflare');
   ttl: 30000  // 30s delivery timeout
 }
 ```
+
+**Routing:**
+- The `to` field specifies the final destination actor
+- The `metadata.via` field causes the hub to intercept and route the message
+- Hub extracts `payload.type` and `payload.data` when forwarding to the destination
 
 **Constraints:**
 - Max message size: 1MB
@@ -623,10 +627,8 @@ const cloudflareAddr = fromCanonical('@(widget-123)', 'cloudflare');
   type: 'hub:broadcast',
   pattern: 'tell',
   payload: {
-    message: {
-      type: 'system:shutdown',
-      payload: { reason: 'maintenance', shutdownAt: Date.now() + 60000 }
-    },
+    type: 'system:shutdown',  // Application message type
+    data: { reason: 'maintenance', shutdownAt: Date.now() + 60000 },  // Application data
     excludeSelf: true  // Don't send to sender
   },
   metadata: {
@@ -703,10 +705,8 @@ const cloudflareAddr = fromCanonical('@(widget-123)', 'cloudflare');
   pattern: 'tell',
   payload: {
     topic: 'events',
-    message: {
-      type: 'user:login',
-      payload: { userId: 'user-123' }
-    }
+    type: 'user:login',  // Application message type
+    data: { userId: 'user-123' }  // Application data
   }
 }
 ```
@@ -1142,7 +1142,7 @@ class SignalHubSession {
 const maliciousMsg: SharedMessage = {
   from: '@(admin/privileged-actor)',  // Fake
   type: 'hub:broadcast',
-  payload: { message: { type: 'system:shutdown' } }
+  payload: { type: 'system:shutdown', data: {} }
 };
 
 // ✅ Server replaces with verified identity
@@ -1271,11 +1271,15 @@ interface TopicACL {
 
 ```typescript
 const msg: SharedMessage = {
+  to: '@(browser/widget-123)',  // Final destination
   type: 'hub:send',
   pattern: 'tell',  // ← At-most-once
   payload: {
-    targetAddress: '@(browser/widget-123)',
-    message: { type: 'status:update', payload: { status: 'idle' } }
+    type: 'status:update',  // Application message type
+    data: { status: 'idle' }  // Application data
+  },
+  metadata: {
+    via: '@(cloudflare/signal-hub)'  // Route through hub
   },
   ttl: 5000
 };
@@ -1696,6 +1700,12 @@ class TokenBucketRateLimiter {
 
 ## 8.6 Cross-Shard Message Forwarding
 
+**Message Interception:** The hub intercepts messages based on:
+- **Type discriminator:** Messages with `type: 'hub:send'` (or other hub message types)
+- **Routing metadata:** Messages with `metadata.via: '@(cloudflare/signal-hub)'`
+
+When a hub receives a `hub:send` message, it extracts the final destination from the `to` field (not a nested `targetAddress`) and routes accordingly.
+
 ### The Cross-Shard Problem
 
 **Scenario:** Actor A on Shard 1 wants to send a message to Actor B, but Actor B is registered on Shard 2.
@@ -1765,12 +1775,13 @@ const hubStub = env.SIGNAL_HUB.get(env.SIGNAL_HUB.idFromName(targetShard));
 {
   type: 'hub:send',
   from: '@(seag/actor-a)',
-  to: '@(cloudflare/signal-hub)',  // Router address
+  to: '@(browser/widget-b)',  // Final destination
   payload: {
-    targetAddress: '@(browser/widget-b)',
-    message: { type: 'task:assign', payload: {...} }
+    type: 'task:assign',  // Application message type
+    data: { ... }  // Application data
   },
   metadata: {
+    via: '@(cloudflare/signal-hub)',  // Route through hub
     requireAck: true,
     traceId: 'trace-xyz'
   }
@@ -1780,12 +1791,13 @@ const hubStub = env.SIGNAL_HUB.get(env.SIGNAL_HUB.idFromName(targetShard));
 {
   type: 'hub:send',
   from: '@(seag/actor-a)',          // Original sender (preserved)
-  to: '@(cloudflare/signal-hub)',   // Still hub address
+  to: '@(browser/widget-b)',        // Final destination (preserved)
   payload: {
-    targetAddress: '@(browser/widget-b)',
-    message: { type: 'task:assign', payload: {...} }
+    type: 'task:assign',  // Application message type (preserved)
+    data: { ... }  // Application data (preserved)
   },
   metadata: {
+    via: '@(cloudflare/signal-hub)',  // Route through hub
     requireAck: true,
     traceId: 'trace-xyz',
     // ↓ Forwarding metadata added by Shard 1
@@ -1817,7 +1829,7 @@ interface ForwardingMetadata {
 ```typescript
 class SignalHubDurableObject {
   async handleSend(msg: HubSendMessage): Promise<void> {
-    const { targetAddress } = msg.payload;
+    const targetAddress = msg.to;  // Final destination from `to` field
 
     // 1. Check local registry first
     const localActor = this.volatile.get(targetAddress);
@@ -1928,12 +1940,12 @@ class SignalHubDurableObject {
     }
 
     // Lookup actor in local registry
-    const actor = this.volatile.get(forwardedMsg.payload.targetAddress);
+    const actor = this.volatile.get(forwardedMsg.to);
     if (!actor) {
       return new Response(JSON.stringify({
         type: 'hub:unknown_actor',
         payload: {
-          actorAddress: forwardedMsg.payload.targetAddress,
+          actorAddress: forwardedMsg.to,
           message: 'Actor not registered on target shard'
         }
       }), { status: 404 });
@@ -2195,7 +2207,7 @@ console.log({
   event: 'message_forwarded',
   messageId: msg.id,
   from: msg.from,
-  targetAddress: msg.payload.targetAddress,
+  targetAddress: msg.to,  // Final destination
   originShard: this.ctx.id.toString(),
   targetShard: targetShardId,
   hopCount: 1,
@@ -2248,8 +2260,16 @@ console.log({
 // Original request
 const sendMsg: SharedMessage = {
   id: 'msg-abc-123',  // ← Request ID
+  to: '@(browser/widget-456)',
   type: 'hub:send',
-  pattern: 'ask'
+  pattern: 'ask',
+  payload: {
+    type: 'task:assign',
+    data: { taskId: 'task-789' }
+  },
+  metadata: {
+    via: '@(cloudflare/signal-hub)'
+  }
 };
 
 // Error response
@@ -2272,12 +2292,18 @@ const sendMsg: SharedMessage = {
 // Request with trace context
 const sendMsg: SharedMessage = {
   id: 'msg-123',
+  to: '@(browser/widget-456)',
   type: 'hub:send',
+  payload: {
+    type: 'task:assign',
+    data: { taskId: 'task-789' }
+  },
   metadata: {
+    via: '@(cloudflare/signal-hub)',
     traceId: 'trace-xyz-789',
     spanId: 'span-001'
   }
-};
+}
 
 // Error response preserves trace context
 {
@@ -2419,15 +2445,15 @@ async function registerActor(hub: SignalHubClient) {
 ```typescript
 async function sendFireAndForget(hub: SignalHubClient) {
   await hub.send({
-    to: '@(browser/widget-456)',
+    to: '@(browser/widget-456)',  // Final destination
     type: 'hub:send',
     pattern: 'tell',  // No acknowledgment
     payload: {
-      targetAddress: '@(browser/widget-456)',
-      message: {
-        type: 'status:update',
-        payload: { status: 'idle' }
-      }
+      type: 'status:update',  // Application message type
+      data: { status: 'idle' }  // Application data
+    },
+    metadata: {
+      via: '@(cloudflare/signal-hub)'  // Route through hub
     },
     ttl: 5000
   });
@@ -2442,17 +2468,15 @@ async function sendFireAndForget(hub: SignalHubClient) {
 async function sendWithAck(hub: SignalHubClient) {
   try {
     const ack = await hub.sendAndWait({
-      to: '@(browser/widget-456)',
+      to: '@(browser/widget-456)',  // Final destination
       type: 'hub:send',
       pattern: 'ask',  // Require acknowledgment
       payload: {
-        targetAddress: '@(browser/widget-456)',
-        message: {
-          type: 'task:assign',
-          payload: { taskId: 'task-789', priority: 1 }
-        }
+        type: 'task:assign',  // Application message type
+        data: { taskId: 'task-789', priority: 1 }  // Application data
       },
       metadata: {
+        via: '@(cloudflare/signal-hub)',  // Route through hub
         requireAck: true,
         traceId: 'trace-xyz'
       },
@@ -2480,12 +2504,10 @@ async function broadcastShutdown(hub: SignalHubClient) {
     type: 'hub:broadcast',
     pattern: 'tell',
     payload: {
-      message: {
-        type: 'system:shutdown',
-        payload: {
-          reason: 'maintenance',
-          shutdownAt: Date.now() + 60000  // 1 minute warning
-        }
+      type: 'system:shutdown',  // Application message type
+      data: {  // Application data
+        reason: 'maintenance',
+        shutdownAt: Date.now() + 60000  // 1 minute warning
       },
       excludeSelf: true  // Don't send to sender
     },
@@ -2518,7 +2540,10 @@ async function subscribeToEvents(hub: SignalHubClient) {
   // Handle published messages
   hub.on('message', (msg: SharedMessage) => {
     if (msg.type === 'hub:publish' && msg.payload.topic === 'events') {
-      console.log('Event received:', msg.payload.message);
+      console.log('Event received:', {
+        type: msg.payload.type,
+        data: msg.payload.data
+      });
     }
   });
 }
@@ -2530,10 +2555,8 @@ async function subscribeToEvents(hub: SignalHubClient) {
 async function publishEvent(hub: SignalHubClient) {
   const result = await hub.publish({
     topic: 'events',
-    message: {
-      type: 'user:login',
-      payload: { userId: 'user-123', timestamp: Date.now() }
-    }
+    type: 'user:login',  // Application message type
+    data: { userId: 'user-123', timestamp: Date.now() }  // Application data
   });
 
   console.log(`Published to ${result.subscriberCount} subscribers`);
@@ -2672,17 +2695,17 @@ class SEAGProcessor extends LocalActor {
 
   async sendToBrowser(widgetAddress: string, renderData: unknown) {
     await this.hub.send({
-      to: widgetAddress,
+      to: widgetAddress,  // Final destination
       type: 'hub:send',
       pattern: 'ask',
       payload: {
-        targetAddress: widgetAddress,
-        message: {
-          type: 'render',
-          payload: renderData
-        }
+        type: 'render',  // Application message type
+        data: renderData  // Application data
       },
-      metadata: { requireAck: true },
+      metadata: {
+        via: '@(cloudflare/signal-hub)',  // Route through hub
+        requireAck: true
+      },
       ttl: 30000
     });
   }
