@@ -16,7 +16,7 @@ import { createSeagActor, type SeagActorWrapper } from './helpers/seag-actor.js'
 import { createBrowserActor, type BrowserActorWrapper } from './helpers/browser-actor.js';
 import { generateExpiredJWT, generateTestJWT } from './helpers/jwt.js';
 import type { CanonicalAddress } from '@agentic-primer/protocols';
-import { SignalHubClient as SeagClient } from '../../../../ugs/src/messaging/signal-hub/index';
+import { SignalHubClient as SeagClient } from '../../../../ugs/src/messaging/signal-hub/client';
 import { SignalHubClient as BrowserClient } from '../../../../packages/signal-hub-client/src/SignalHubClient';
 
 describe('Signal Hub - Error Scenarios', () => {
