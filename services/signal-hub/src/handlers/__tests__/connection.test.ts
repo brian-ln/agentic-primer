@@ -33,6 +33,8 @@ describe('Connection Handlers', () => {
       lastHeartbeat: Date.now(),
       authenticated: false,
       paused: false,
+      connectionState: 'connected' as const,
+      rateLimitBucket: { tokens: 100, capacity: 100, refillRate: 100 / 60, lastRefill: Date.now() },
     };
   });
 
