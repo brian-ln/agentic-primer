@@ -83,6 +83,8 @@ export function handlePublish(
     data: unknown;
   };
 
+  console.log('[handlePublish] Received from', msg.from, 'payload:', JSON.stringify(payload).substring(0, 200));
+
   if (!payload.topic || typeof payload.topic !== 'string') {
     throw new HubError('internal_error', 'topic is required');
   }
@@ -95,8 +97,10 @@ export function handlePublish(
 
   // Get subscribers
   const subscribers = subscriptions.get(topic);
+  console.log('[handlePublish] Topic', topic, 'has', subscribers?.size ?? 0, 'subscribers');
+
   if (!subscribers || subscribers.size === 0) {
-    console.log(`No subscribers for topic: ${topic}`);
+    console.log('[handlePublish] No subscribers for topic:', topic);
 
     return createReply(
       'hub:published',
@@ -112,9 +116,10 @@ export function handlePublish(
   let deliveredCount = 0;
 
   // Create publication message with flat structure
+  // CRITICAL: Use original sender as 'from', not SIGNAL_HUB_ADDRESS
   const publicationMessage: SharedMessage = {
     id: crypto.randomUUID(),
-    from: SIGNAL_HUB_ADDRESS,
+    from: msg.from, // Use original sender, NOT the hub
     to: toCanonicalAddress(`topic/${topic}`), // Placeholder
     type: payload.type, // Application type from payload.type
     payload: payload.data, // Application data from payload.data
@@ -124,16 +129,19 @@ export function handlePublish(
     metadata: {
       topic,
       publication: true,
-      originalFrom: msg.from,
+      via: SIGNAL_HUB_ADDRESS,
     },
     ttl: msg.ttl ?? null,
     signature: null,
   };
 
   // Send to all subscribers
+  console.log('[handlePublish] Sending to', subscribers.size, 'subscribers');
+
   for (const subscriberAddress of subscribers) {
     const actor = registry.get(subscriberAddress);
     if (!actor) {
+      console.log('[handlePublish] Actor not found in registry:', subscriberAddress);
       // Cleanup stale subscription
       subscribers.delete(subscriberAddress);
       continue;
@@ -141,6 +149,7 @@ export function handlePublish(
 
     // Skip expired actors
     if (isExpired(actor.expiresAt)) {
+      console.log('[handlePublish] Actor expired:', subscriberAddress);
       registry.delete(subscriberAddress);
       subscribers.delete(subscriberAddress);
       continue;
@@ -148,6 +157,7 @@ export function handlePublish(
 
     const ws = connections.get(actor.connectionId);
     if (!ws) {
+      console.log('[handlePublish] No WebSocket for', subscriberAddress);
       console.warn(`WebSocket not found for subscriber: ${subscriberAddress}`);
       continue;
     }

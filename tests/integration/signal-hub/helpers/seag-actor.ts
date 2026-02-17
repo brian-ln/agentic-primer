@@ -120,10 +120,12 @@ export class SeagActorWrapper {
   }
 
   /**
-   * Discover actors by pattern or capability
+   * Discover actors by capability (simplified test interface)
+   * For full control, use getClient().discover(from, pattern, capability, limit)
    */
-  async discover(pattern?: string, capability?: string, limit?: number): Promise<Array<{ address: CanonicalAddress; capabilities: string[] }>> {
-    return this.client.discover(this.actorAddress, pattern, capability, limit);
+  async discover(capability?: string, limit?: number): Promise<Array<{ address: CanonicalAddress; capabilities: string[] }>> {
+    // Pass '*' as pattern to match all, and capability as filter
+    return this.client.discover(this.actorAddress, '*', capability, limit);
   }
 
   /**

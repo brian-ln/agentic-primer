@@ -324,6 +324,7 @@ export class SignalHubClient {
       signature: null,
     };
 
+    console.log('[SignalHubClient-SEAG] Sending message:', params.type, 'from', params.from, 'to', params.to);
     this.sendMessage(hubSendMsg);
   }
 
@@ -589,19 +590,23 @@ export class SignalHubClient {
       const ws = new WebSocket(this.config.url);
 
       ws.onopen = () => {
+        console.log('[SignalHubClient-SEAG] WebSocket connected');
         this.ws = ws;
         this.sendHubConnect().then(resolve).catch(reject);
       };
 
       ws.onerror = (event) => {
+        console.error('[SignalHubClient-SEAG] WebSocket error:', event);
         reject(new Error(`WebSocket error: ${event}`));
       };
 
       ws.onclose = (event) => {
+        console.log('[SignalHubClient-SEAG] WebSocket closed:', event.code, event.reason);
         this.handleClose(event.code, event.reason);
       };
 
       ws.onmessage = (event) => {
+        console.log('[SignalHubClient-SEAG] Received WebSocket message:', event.data);
         this.handleMessage(event.data);
       };
     });
@@ -663,9 +668,11 @@ export class SignalHubClient {
   private handleMessage(data: string): void {
     try {
       const msg = JSON.parse(data) as SharedMessage;
+      console.log('[SignalHubClient-SEAG] Parsed message:', msg.type, 'from', msg.from);
 
       // Handle responses to pending asks
       if (msg.correlationId && this.pendingAsks.has(msg.correlationId)) {
+        console.log('[SignalHubClient-SEAG] Resolving pending ask:', msg.correlationId);
         const pending = this.pendingAsks.get(msg.correlationId)!;
         clearTimeout(pending.timeout);
         this.pendingAsks.delete(msg.correlationId);
@@ -675,12 +682,16 @@ export class SignalHubClient {
 
       // Handle incoming messages
       if (msg.type.startsWith('hub:')) {
+        console.log('[SignalHubClient-SEAG] Handling hub message:', msg.type);
         this.handleHubMessage(msg);
       } else {
         // Application message routed through Signal Hub
+        console.log('[SignalHubClient-SEAG] Emitting application message:', msg.type);
+        console.log('[SignalHubClient-SEAG] Message handlers count:', this.listeners.get('message')?.size ?? 0);
         this.emit('message', msg);
       }
     } catch (error) {
+      console.error('[SignalHubClient-SEAG] Failed to parse message:', error);
       this.emit('error', new Error(`Failed to parse message: ${error}`));
     }
   }
@@ -732,6 +743,7 @@ export class SignalHubClient {
 
   private sendMessage(msg: SharedMessage): void {
     if (this.state !== 'connected' || !this.ws) {
+      console.log('[SignalHubClient-SEAG] Queueing message (not connected):', msg.type);
       // Queue message if queuing enabled
       if (this.config.messageQueue?.enabled) {
         this.queueMessage(msg);
@@ -742,8 +754,10 @@ export class SignalHubClient {
     }
 
     try {
+      console.log('[SignalHubClient-SEAG] Sending to WebSocket:', msg.type);
       this.ws.send(JSON.stringify(msg));
     } catch (error) {
+      console.error('[SignalHubClient-SEAG] Failed to send message:', error);
       this.emit('error', new Error(`Failed to send message: ${error}`));
     }
   }

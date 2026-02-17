@@ -84,7 +84,7 @@ export function handleRegister(
   registry.set(payload.actorAddress, registration);
 
   console.log(
-    `Actor registered: ${payload.actorAddress} (version=${version}, expires in ${ttl}ms)`
+    `[handleRegister] Actor registered: ${payload.actorAddress} (version=${version}, capabilities=${JSON.stringify(payload.capabilities)}, registry size=${registry.size})`
   );
 
   // Send hub:registered response
@@ -126,6 +126,7 @@ export function handleDiscover(
 ): SharedMessage {
   const payload = msg.payload as {
     pattern: string;
+    capability?: string;
     limit?: number;
   };
 
@@ -135,7 +136,9 @@ export function handleDiscover(
 
   const limit = Math.min(payload.limit ?? 100, 100);
 
-  // Filter actors matching pattern
+  console.log(`[handleDiscover] pattern=${payload.pattern}, capability=${payload.capability}, registry size=${registry.size}`);
+
+  // Filter actors matching pattern and capability
   const matches: ActorRegistration[] = [];
   for (const [address, registration] of registry.entries()) {
     // Skip expired registrations
@@ -145,17 +148,32 @@ export function handleDiscover(
     }
 
     // Test pattern match
-    if (matchPattern(payload.pattern, registration.actorAddress)) {
-      matches.push(registration);
+    if (!matchPattern(payload.pattern, registration.actorAddress)) {
+      continue;
+    }
 
-      if (matches.length >= limit) {
-        break;
-      }
+    // Test capability match (if capability filter provided)
+    if (payload.capability && !registration.capabilities.includes(payload.capability)) {
+      continue;
+    }
+
+    matches.push(registration);
+
+    if (matches.length >= limit) {
+      break;
     }
   }
 
+  console.log(`[handleDiscover] Found ${matches.length} matches`);
+
+  // Map to client-expected format: { address, capabilities }
+  const actors = matches.map(registration => ({
+    address: registration.actorAddress,
+    capabilities: registration.capabilities,
+  }));
+
   const responsePayload = {
-    actors: matches,
+    actors,
     hasMore: matches.length === limit,
   };
 

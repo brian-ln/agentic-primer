@@ -137,7 +137,7 @@ export class SignalHub implements DurableObject {
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
     const session = this.sessions.get(ws);
     if (!session) {
-      console.error('WebSocket message from unknown session');
+      console.error('[SignalHub] WebSocket message from unknown session');
       ws.close(1011, 'Unknown session');
       return;
     }
@@ -154,6 +154,7 @@ export class SignalHub implements DurableObject {
       }
 
       const msg = parsedMessage as SharedMessage;
+      console.log('[SignalHub] Received message:', msg.type, 'from', msg.from, 'session', session.sessionId);
 
       // Update heartbeat timestamp
       session.lastHeartbeat = Date.now();
@@ -163,13 +164,14 @@ export class SignalHub implements DurableObject {
 
       // Send response if returned
       if (response) {
+        console.log('[SignalHub] Sending response:', response.type, 'to session', session.sessionId);
         ws.send(JSON.stringify(response));
       }
 
       // Update stats
       this.queueStats.processed++;
     } catch (err) {
-      console.error('Error processing WebSocket message:', err);
+      console.error('[SignalHub] Error processing WebSocket message:', err);
 
       // Send error response
       try {
@@ -225,8 +227,10 @@ export class SignalHub implements DurableObject {
 
     // Disconnect
     if (messageType === 'hub:disconnect') {
+      console.log(`[routeMessage] Processing hub:disconnect for session ${session.sessionId}`);
       const response = handleDisconnect(msg, session);
       this.cleanupConnection(ws, session);
+      console.log(`[routeMessage] Closing WebSocket after disconnect`);
       ws.close(1000, 'Client requested disconnect');
       return response;
     }
@@ -300,13 +304,15 @@ export class SignalHub implements DurableObject {
     reason: string,
     wasClean: boolean
   ): Promise<void> {
+    console.log(`[webSocketClose] WebSocket closed (code=${code}, reason=${reason}, clean=${wasClean})`);
     const session = this.sessions.get(ws);
     if (!session) {
+      console.log('[webSocketClose] No session found for WebSocket - already cleaned up?');
       return;
     }
 
     console.log(
-      `WebSocket closed: ${session.sessionId} (code=${code}, reason=${reason}, clean=${wasClean})`
+      `[webSocketClose] Found session: ${session.sessionId} for closed WebSocket`
     );
 
     this.cleanupConnection(ws, session);
@@ -331,6 +337,11 @@ export class SignalHub implements DurableObject {
    * Cleanup connection resources
    */
   private cleanupConnection(ws: WebSocket, session: Session): void {
+    console.log(`[cleanupConnection] Starting cleanup for session ${session.sessionId}`);
+    console.log(`[cleanupConnection] Registry size before: ${this.registry.size}`);
+    console.log(`[cleanupConnection] Sessions size before: ${this.sessions.size}`);
+    console.log(`[cleanupConnection] Connections size before: ${this.connections.size}`);
+
     // Remove from sessions
     this.sessions.delete(ws);
 
@@ -338,10 +349,13 @@ export class SignalHub implements DurableObject {
     this.connections.delete(session.sessionId);
 
     // Cleanup registrations for this connection
+    let removedCount = 0;
     for (const [address, registration] of this.registry.entries()) {
+      console.log(`[cleanupConnection] Checking registration: address=${address}, connectionId=${registration.connectionId}, session.sessionId=${session.sessionId}, match=${registration.connectionId === session.sessionId}`);
       if (registration.connectionId === session.sessionId) {
         this.registry.delete(address);
-        console.log(`Unregistered actor on disconnect: ${address}`);
+        removedCount++;
+        console.log(`[cleanupConnection] Unregistered actor on disconnect: ${address}`);
       }
     }
 
@@ -350,7 +364,11 @@ export class SignalHub implements DurableObject {
       cleanupSubscriptions(this.subscriptions, session.actorIdentity);
     }
 
-    console.log(`Cleaned up session: ${session.sessionId}`);
+    console.log(`[cleanupConnection] Removed ${removedCount} registrations`);
+    console.log(`[cleanupConnection] Registry size after: ${this.registry.size}`);
+    console.log(`[cleanupConnection] Sessions size after: ${this.sessions.size}`);
+    console.log(`[cleanupConnection] Connections size after: ${this.connections.size}`);
+    console.log(`[cleanupConnection] Cleaned up session: ${session.sessionId}`);
   }
 
   /**

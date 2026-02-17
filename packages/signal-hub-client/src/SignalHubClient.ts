@@ -359,6 +359,7 @@ export class SignalHubClient {
       signature: null,
     };
 
+    console.log('[SignalHubClient] Sending message:', type, 'from', from, 'to', to);
     await this.sendMessage(hubSendMsg);
   }
 
@@ -704,6 +705,8 @@ export class SignalHubClient {
   // -------------------------------------------------------------------------
 
   private onWebSocketOpen(): void {
+    console.log('[SignalHubClient] WebSocket connected');
+
     // Send hub:connect
     const connectMsg: SharedMessage = {
       id: crypto.randomUUID(),
@@ -727,20 +730,26 @@ export class SignalHubClient {
       signature: null,
     };
 
+    console.log('[SignalHubClient] Sending hub:connect');
     this.sendMessage(connectMsg).catch((error) => {
+      console.error('[SignalHubClient] Failed to send hub:connect:', error);
       this.emitError({ message: 'Failed to send hub:connect', error });
     });
   }
 
   private onWebSocketMessage(event: MessageEvent<any>): void {
     try {
+      console.log('[SignalHubClient] Received WebSocket message:', event.data);
       const message = JSON.parse(event.data as string) as SharedMessage;
 
       // Handle hub protocol messages
       if (message.type.startsWith('hub:')) {
+        console.log('[SignalHubClient] Handling hub message:', message.type);
         this.handleHubMessage(message);
       } else {
         // Application message - emit to handlers
+        console.log('[SignalHubClient] Received application message:', message.type, 'from', message.from);
+        console.log('[SignalHubClient] Emitting to', this.messageHandlers.length, 'message handlers');
         this.emitMessage({
           message,
           originalFrom: message.metadata?.originalFrom as CanonicalAddress,
@@ -748,6 +757,7 @@ export class SignalHubClient {
         });
       }
     } catch (error) {
+      console.error('[SignalHubClient] Failed to parse WebSocket message:', error);
       this.emitError({
         message: 'Failed to parse WebSocket message',
         error: error instanceof Error ? error : new Error(String(error)),
@@ -756,6 +766,7 @@ export class SignalHubClient {
   }
 
   private onWebSocketError(event: Event): void {
+    console.error('[SignalHubClient] WebSocket error:', event);
     this.emitError({
       message: 'WebSocket error',
       error: new Error('WebSocket error'),
@@ -763,6 +774,7 @@ export class SignalHubClient {
   }
 
   private onWebSocketClose(event: CloseEvent): void {
+    console.log('[SignalHubClient] WebSocket closed:', event.code, event.reason);
     this.stopHeartbeat();
     this.setState('disconnected');
 
@@ -948,8 +960,10 @@ export class SignalHubClient {
 
   private async sendMessage(message: SharedMessage): Promise<void> {
     if (this.ws?.readyState === WebSocket.OPEN) {
+      console.log('[SignalHubClient] Sending to WebSocket:', message.type);
       this.ws.send(JSON.stringify(message));
     } else {
+      console.log('[SignalHubClient] Queueing message (not connected):', message.type);
       // Queue for later
       this.messageQueue.push(message);
     }

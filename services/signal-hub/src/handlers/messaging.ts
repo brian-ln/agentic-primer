@@ -44,9 +44,12 @@ export function handleSend(
   env: Env
 ): SharedMessage | null {
   const payload = msg.payload as {
+    to?: string;
     type: string;
     data: unknown;
   };
+
+  console.log('[handleSend] Received hub:send from', msg.from, 'payload:', JSON.stringify(payload).substring(0, 200));
 
   // Validate payload structure
   if (!payload || typeof payload !== 'object') {
@@ -67,9 +70,13 @@ export function handleSend(
     );
   }
 
-  // Find target actor in registry
-  const targetAddress = msg.to;
+  // CRITICAL: Target address is in payload.to, NOT msg.to!
+  const targetAddress = (payload.to as CanonicalAddress) || msg.to;
+  console.log('[handleSend] Looking up target actor:', targetAddress);
+  console.log('[handleSend] Registry has', registry.size, 'actors:', Array.from(registry.keys()));
+
   const targetActor = registry.get(targetAddress);
+  console.log('[handleSend] Target actor found:', !!targetActor);
 
   if (!targetActor) {
     // Actor not registered
@@ -109,9 +116,12 @@ export function handleSend(
   }
 
   // Get WebSocket connection
+  console.log('[handleSend] Looking up WebSocket for connection:', targetActor.connectionId);
+  console.log('[handleSend] Connections map has', connections.size, 'connections:', Array.from(connections.keys()));
+
   const ws = connections.get(targetActor.connectionId);
   if (!ws) {
-    console.error(`WebSocket not found for connection: ${targetActor.connectionId}`);
+    console.error('[handleSend] WebSocket not found for connection:', targetActor.connectionId);
 
     if (msg.pattern === 'ask') {
       return createReply(
@@ -128,17 +138,20 @@ export function handleSend(
     return null;
   }
 
+  console.log('[handleSend] WebSocket found, creating forwarded message');
+
   // Create forwarded message with flat structure
   // Extract type and data from payload, NOT nested!
+  // CRITICAL: Use original sender as 'from', not SIGNAL_HUB_ADDRESS
   const forwardedMessage: SharedMessage = createMessage(
     payload.type, // Application type from payload.type
     payload.data, // Application data from payload.data
-    SIGNAL_HUB_ADDRESS,
+    msg.from, // Use original sender, NOT the hub
     targetAddress,
     'tell',
     {
       forwarded: true,
-      originalFrom: msg.from,
+      via: SIGNAL_HUB_ADDRESS,
       originalMessageId: msg.id,
     }
   );
@@ -148,10 +161,12 @@ export function handleSend(
     forwardedMessage.ttl = msg.ttl;
   }
 
+  console.log('[handleSend] Forwarded message:', forwardedMessage.type, 'to', targetAddress);
+
   // Send to target
   try {
     ws.send(JSON.stringify(forwardedMessage));
-    console.log(`Forwarded ${payload.type} to ${targetAddress}`);
+    console.log('[handleSend] Successfully sent', payload.type, 'to', targetAddress);
 
     // Send delivery acknowledgment if requested
     if (msg.pattern === 'ask') {
@@ -169,7 +184,7 @@ export function handleSend(
 
     return null;
   } catch (err) {
-    console.error(`Failed to send message to ${targetAddress}:`, err);
+    console.error('[handleSend] Failed to send message to', targetAddress, ':', err);
 
     if (msg.pattern === 'ask') {
       return createReply(
@@ -212,6 +227,8 @@ export function handleBroadcast(
     data: unknown;
     excludeSelf?: boolean;
   };
+
+  console.log('[handleBroadcast] Received from', msg.from, 'type:', payload?.type);
 
   // Validate payload
   if (!payload || typeof payload !== 'object') {
@@ -265,9 +282,10 @@ export function handleBroadcast(
   let failedCount = 0;
 
   // Create broadcast message with flat structure
+  // CRITICAL: Use original sender as 'from', not SIGNAL_HUB_ADDRESS
   const broadcastMessage: SharedMessage = {
     id: crypto.randomUUID(),
-    from: SIGNAL_HUB_ADDRESS,
+    from: msg.from, // Use original sender, NOT the hub
     to: toCanonicalAddress('broadcast/all'), // Placeholder
     type: payload.type, // Application type from payload.type
     payload: payload.data, // Application data from payload.data
@@ -276,16 +294,19 @@ export function handleBroadcast(
     timestamp: Date.now(),
     metadata: {
       broadcast: true,
-      originalFrom: msg.from,
+      via: SIGNAL_HUB_ADDRESS,
     },
     ttl: msg.ttl ?? null,
     signature: null,
   };
 
   // Send to all targets
+  console.log('[handleBroadcast] Broadcasting to', targets.length, 'actors');
+
   for (const target of targets) {
     const ws = connections.get(target.connectionId);
     if (!ws) {
+      console.log('[handleBroadcast] No WebSocket for', target.actorAddress);
       failedCount++;
       continue;
     }
@@ -299,15 +320,16 @@ export function handleBroadcast(
       };
 
       ws.send(JSON.stringify(recipientMessage));
+      console.log('[handleBroadcast] Sent to', target.actorAddress);
       deliveredCount++;
     } catch (err) {
-      console.error(`Failed to broadcast to ${target.actorAddress}:`, err);
+      console.error('[handleBroadcast] Failed to broadcast to', target.actorAddress, ':', err);
       failedCount++;
     }
   }
 
   console.log(
-    `Broadcast ${payload.type}: delivered=${deliveredCount}, failed=${failedCount}`
+    `[handleBroadcast] Broadcast ${payload.type}: delivered=${deliveredCount}, failed=${failedCount}`
   );
 
   // Send broadcast acknowledgment
