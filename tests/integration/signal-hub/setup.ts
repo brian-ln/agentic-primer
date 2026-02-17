@@ -43,8 +43,10 @@ export async function setupTestEnvironment(): Promise<TestEnvironment> {
 /**
  * Teardown test environment
  */
-export async function teardownTestEnvironment(env: TestEnvironment): Promise<void> {
-  await env.hub.stop();
+export async function teardownTestEnvironment(env: TestEnvironment | undefined): Promise<void> {
+  if (env?.hub) {
+    await env.hub.stop();
+  }
 }
 
 /**

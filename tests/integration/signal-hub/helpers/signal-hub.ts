@@ -26,6 +26,8 @@ export interface SignalHubInstance {
 export async function startSignalHub(): Promise<SignalHubInstance> {
   const signalHubDir = join(__dirname, '../../../../services/signal-hub');
 
+  console.log('[startSignalHub] Starting wrangler dev...', { port: TEST_PORT, cwd: signalHubDir });
+
   // Spawn wrangler dev on test port with AUTH_ENABLED=false
   const wranglerProcess = spawn('npx', [
     'wrangler',
@@ -35,29 +37,83 @@ export async function startSignalHub(): Promise<SignalHubInstance> {
   ], {
     cwd: signalHubDir,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: process.env,
+    env: { ...process.env, FORCE_COLOR: '0', NODE_ENV: 'test' }, // Disable color codes and set test env
+    shell: false,
+    detached: true, // Create new process group so we can kill the whole tree
   });
+
+  console.log('[startSignalHub] Process spawned, PID:', wranglerProcess.pid);
+
+  // Set encoding on streams for proper text handling
+  wranglerProcess.stdout?.setEncoding('utf8');
+  wranglerProcess.stderr?.setEncoding('utf8');
 
   // Wait for server to be ready
   await new Promise<void>((resolve, reject) => {
+    let outputReceived = false;
+    const outputChunks: string[] = [];
+    let resolved = false;
+
     const timeout = setTimeout(() => {
+      if (resolved) return;
+      console.error('[startSignalHub] TIMEOUT - Process did not emit "Ready on" within 10 seconds');
+      console.error('[startSignalHub] Output received:', outputReceived);
+      console.error('[startSignalHub] Total chunks:', outputChunks.length);
+      console.error('[startSignalHub] Combined output:', outputChunks.join('').substring(0, 500));
       reject(new Error('Signal Hub failed to start within 10 seconds'));
     }, 10000);
 
-    const checkReady = (data: Buffer) => {
-      const output = data.toString();
-      if (output.includes('Ready on') || output.includes(`localhost:${TEST_PORT}`)) {
+    const checkReady = (source: string) => (data: Buffer | string) => {
+      outputReceived = true;
+      const output = typeof data === 'string' ? data : data.toString();
+      outputChunks.push(output);
+
+      // Check for port conflict error
+      if (output.includes('Address already in use')) {
         clearTimeout(timeout);
+        resolved = true;
+        reject(new Error(`Port ${TEST_PORT} is already in use. Please stop any existing wrangler instances.`));
+        return;
+      }
+
+      // Check for any other error messages (only log actual errors)
+      if (output.includes('ERROR') && !resolved) {
+        console.error(`[startSignalHub] [${source}] Error detected:`, output.substring(0, 200));
+      }
+
+      if (output.includes('Ready on') || output.includes(`localhost:${TEST_PORT}`)) {
+        console.log(`[startSignalHub] ✓ Server ready on port ${TEST_PORT}`);
+        clearTimeout(timeout);
+        resolved = true;
         resolve();
       }
     };
 
-    wranglerProcess.stdout.on('data', checkReady);
-    wranglerProcess.stderr.on('data', checkReady);
+    wranglerProcess.stdout.on('data', checkReady('stdout'));
+    wranglerProcess.stderr.on('data', checkReady('stderr'));
 
     wranglerProcess.on('error', (error) => {
+      if (resolved) return;
+      console.error('[startSignalHub] Process error:', error);
       clearTimeout(timeout);
+      resolved = true;
       reject(error);
+    });
+
+    wranglerProcess.on('exit', (code, signal) => {
+      if (resolved) return;
+      if (code !== null && code !== 0) {
+        const combinedOutput = outputChunks.join('');
+        const errorMsg = combinedOutput.includes('Address already in use')
+          ? `Port ${TEST_PORT} is already in use`
+          : `Wrangler process exited with code ${code}`;
+
+        console.error('[startSignalHub] Process exited prematurely:', { code, signal });
+        console.error('[startSignalHub] Output:', combinedOutput.substring(0, 500));
+        clearTimeout(timeout);
+        resolved = true;
+        reject(new Error(errorMsg));
+      }
     });
   });
 
@@ -69,15 +125,51 @@ export async function startSignalHub(): Promise<SignalHubInstance> {
     port: TEST_PORT,
     process: wranglerProcess,
     stop: async () => {
+      console.log('[stopSignalHub] Stopping wrangler, PID:', wranglerProcess.pid);
+
+      // Kill the process group to ensure all child processes are terminated
+      if (wranglerProcess.pid) {
+        try {
+          // Kill the entire process group (negative PID)
+          process.kill(-wranglerProcess.pid, 'SIGTERM');
+        } catch (err) {
+          // Process might have already exited
+          console.log('[stopSignalHub] SIGTERM failed:', err);
+        }
+      }
+
       wranglerProcess.kill('SIGTERM');
+
       // Wait for process to exit
       await new Promise<void>((resolve) => {
-        wranglerProcess.on('exit', () => resolve());
+        let exitHandlerSet = false;
+        wranglerProcess.on('exit', () => {
+          if (!exitHandlerSet) {
+            exitHandlerSet = true;
+            resolve();
+          }
+        });
+
         setTimeout(() => {
+          if (wranglerProcess.pid) {
+            try {
+              // Force kill the entire process group
+              process.kill(-wranglerProcess.pid, 'SIGKILL');
+            } catch {
+              // Ignore errors
+            }
+          }
           wranglerProcess.kill('SIGKILL');
-          resolve();
+          if (!exitHandlerSet) {
+            exitHandlerSet = true;
+            resolve();
+          }
         }, 2000);
       });
+
+      // Additional cleanup: wait a bit for port to be released
+      await new Promise(resolve => setTimeout(resolve, 500));
+      console.log('[stopSignalHub] Cleanup complete');
     },
   };
 }

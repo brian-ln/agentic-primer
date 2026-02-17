@@ -633,13 +633,14 @@ export class SignalHubClient {
     const response = await this.sendAndWait(connectMsg);
 
     if (response.type === 'hub:connected') {
-      this.sessionId = response.metadata.sessionId as string;
+      const payload = response.payload as any;
+      this.sessionId = payload.sessionId as string;
       this.connectionInfo = {
         sessionId: this.sessionId,
-        serverVersion: response.metadata.serverVersion as string,
-        maxMessageSize: response.metadata.maxMessageSize as number,
-        heartbeatInterval: response.metadata.heartbeatInterval as number,
-        capabilities: response.metadata.capabilities as HubConnectionInfo['capabilities'],
+        serverVersion: payload.serverVersion as string,
+        maxMessageSize: payload.maxMessageSize as number,
+        heartbeatInterval: payload.heartbeatInterval as number,
+        capabilities: payload.capabilities as HubConnectionInfo['capabilities'],
         actorIdentity: response.metadata.actorIdentity as CanonicalAddress | undefined,
       };
 

@@ -15,8 +15,12 @@ export default defineConfig({
       exclude: ['**/*.test.ts', '**/__tests__/**'],
     },
     // Run tests sequentially to avoid port conflicts with Miniflare
-    sequence: {
-      concurrent: false,
+    pool: 'forks',
+    poolOptions: {
+      forks: {
+        singleFork: true,
+      },
     },
+    fileParallelism: false,
   },
 });
