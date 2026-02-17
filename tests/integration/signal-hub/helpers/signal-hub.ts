@@ -46,7 +46,6 @@ export async function startSignalHub(): Promise<SignalHubInstance> {
 
     const checkReady = (data: Buffer) => {
       const output = data.toString();
-      console.log('[wrangler output]:', output.substring(0, 200));
       if (output.includes('Ready on') || output.includes(`localhost:${TEST_PORT}`)) {
         clearTimeout(timeout);
         resolve();

@@ -88,6 +88,45 @@ export class SeagActorWrapper {
   }
 
   /**
+   * Broadcast message to all registered actors
+   */
+  async broadcast(
+    type: string,
+    data: unknown,
+    options?: { excludeSelf?: boolean; targetCapability?: string }
+  ): Promise<void> {
+    await this.client.broadcast(this.actorAddress, type, data, options);
+  }
+
+  /**
+   * Publish message to topic subscribers
+   */
+  async publish(topic: string, type: string, data: unknown): Promise<void> {
+    await this.client.publish(this.actorAddress, topic, type, data);
+  }
+
+  /**
+   * Subscribe to a topic
+   */
+  async subscribe(topic: string, durable?: boolean): Promise<string> {
+    return this.client.subscribe(this.actorAddress, topic, durable);
+  }
+
+  /**
+   * Unsubscribe from a topic
+   */
+  async unsubscribe(subscriptionId: string): Promise<void> {
+    await this.client.unsubscribe(this.actorAddress, subscriptionId);
+  }
+
+  /**
+   * Discover actors by pattern or capability
+   */
+  async discover(pattern?: string, capability?: string, limit?: number): Promise<Array<{ address: CanonicalAddress; capabilities: string[] }>> {
+    return this.client.discover(this.actorAddress, pattern, capability, limit);
+  }
+
+  /**
    * Wait for a specific message type
    */
   async waitForMessage(

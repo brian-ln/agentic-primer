@@ -228,15 +228,16 @@ export class SignalHubClient {
       from: actorAddress,
       to: '@(cloudflare/signal-hub)' as CanonicalAddress,
       type: 'hub:register',
-      payload: null,
+      payload: {
+        actorAddress,
+        capabilities,
+        metadata,
+        ttlSeconds: 300, // 5 minutes (will renew with heartbeat)
+      },
       pattern: 'ask',
       correlationId: null,
       timestamp: Date.now(),
-      metadata: {
-        capabilities,
-        metadata,
-        ttl: 300000, // 5 minutes (will renew with heartbeat)
-      },
+      metadata: {},
       ttl: 5000, // 5s timeout for registration
       signature: null,
     };
@@ -358,6 +359,187 @@ export class SignalHubClient {
     };
 
     return this.sendAndWait(hubSendMsg);
+  }
+
+  /**
+   * Broadcast a message to all registered actors
+   */
+  async broadcast(
+    from: CanonicalAddress,
+    type: string,
+    data: unknown,
+    options?: { excludeSelf?: boolean; targetCapability?: string }
+  ): Promise<void> {
+    if (this.state !== 'connected') {
+      throw new Error('Cannot broadcast: not connected to Signal Hub');
+    }
+
+    const broadcastMsg: SharedMessage = {
+      id: crypto.randomUUID(),
+      from,
+      to: '@(cloudflare/signal-hub)' as CanonicalAddress,
+      type: 'hub:broadcast',
+      pattern: 'tell',
+      correlationId: null,
+      timestamp: Date.now(),
+      payload: {
+        type,
+        data,
+        excludeSelf: options?.excludeSelf ?? false,
+      },
+      metadata: {
+        targetCapability: options?.targetCapability,
+      },
+      ttl: null,
+      signature: null,
+    };
+
+    this.sendMessage(broadcastMsg);
+  }
+
+  /**
+   * Publish a message to topic subscribers
+   */
+  async publish(
+    from: CanonicalAddress,
+    topic: string,
+    type: string,
+    data: unknown
+  ): Promise<void> {
+    if (this.state !== 'connected') {
+      throw new Error('Cannot publish: not connected to Signal Hub');
+    }
+
+    const publishMsg: SharedMessage = {
+      id: crypto.randomUUID(),
+      from,
+      to: '@(cloudflare/signal-hub)' as CanonicalAddress,
+      type: 'hub:publish',
+      pattern: 'tell',
+      correlationId: null,
+      timestamp: Date.now(),
+      payload: {
+        topic,
+        type,
+        data,
+      },
+      metadata: {},
+      ttl: null,
+      signature: null,
+    };
+
+    this.sendMessage(publishMsg);
+  }
+
+  /**
+   * Subscribe to a topic for pub/sub messaging
+   */
+  async subscribe(
+    from: CanonicalAddress,
+    topic: string,
+    durable: boolean = false
+  ): Promise<string> {
+    if (this.state !== 'connected') {
+      throw new Error('Cannot subscribe: not connected to Signal Hub');
+    }
+
+    const subscribeMsg: SharedMessage = {
+      id: crypto.randomUUID(),
+      from,
+      to: '@(cloudflare/signal-hub)' as CanonicalAddress,
+      type: 'hub:subscribe',
+      pattern: 'ask',
+      correlationId: null,
+      timestamp: Date.now(),
+      payload: {
+        topic,
+        durable,
+      },
+      metadata: {},
+      ttl: 5000,
+      signature: null,
+    };
+
+    const response = await this.sendAndWait(subscribeMsg);
+
+    if (response.type === 'hub:subscribed') {
+      const payload = response.payload as { subscriptionId: string };
+      return payload.subscriptionId;
+    } else if (response.type === 'hub:error') {
+      throw new Error(`Subscription failed: ${response.payload}`);
+    } else {
+      throw new Error(`Unexpected response to hub:subscribe: ${response.type}`);
+    }
+  }
+
+  /**
+   * Unsubscribe from a topic
+   */
+  async unsubscribe(from: CanonicalAddress, subscriptionId: string): Promise<void> {
+    if (this.state !== 'connected') {
+      throw new Error('Cannot unsubscribe: not connected to Signal Hub');
+    }
+
+    const unsubscribeMsg: SharedMessage = {
+      id: crypto.randomUUID(),
+      from,
+      to: '@(cloudflare/signal-hub)' as CanonicalAddress,
+      type: 'hub:unsubscribe',
+      pattern: 'tell',
+      correlationId: null,
+      timestamp: Date.now(),
+      payload: {
+        subscriptionId,
+      },
+      metadata: {},
+      ttl: null,
+      signature: null,
+    };
+
+    this.sendMessage(unsubscribeMsg);
+  }
+
+  /**
+   * Discover actors by glob pattern or capability
+   */
+  async discover(
+    from: CanonicalAddress,
+    pattern?: string,
+    capability?: string,
+    limit: number = 50
+  ): Promise<Array<{ address: CanonicalAddress; capabilities: string[] }>> {
+    if (this.state !== 'connected') {
+      throw new Error('Cannot discover: not connected to Signal Hub');
+    }
+
+    const discoverMsg: SharedMessage = {
+      id: crypto.randomUUID(),
+      from,
+      to: '@(cloudflare/signal-hub)' as CanonicalAddress,
+      type: 'hub:discover',
+      pattern: 'ask',
+      correlationId: null,
+      timestamp: Date.now(),
+      payload: {
+        pattern: pattern || '*',
+        capability,
+        limit: Math.min(limit, 100),
+      },
+      metadata: {},
+      ttl: 5000,
+      signature: null,
+    };
+
+    const response = await this.sendAndWait(discoverMsg);
+
+    if (response.type === 'hub:discovered') {
+      const payload = response.payload as { actors: Array<{ address: CanonicalAddress; capabilities: string[] }> };
+      return payload.actors;
+    } else if (response.type === 'hub:error') {
+      throw new Error(`Discovery failed: ${response.payload}`);
+    } else {
+      throw new Error(`Unexpected response to hub:discover: ${response.type}`);
+    }
   }
 
   // ---------------------------------------------------------------------------
