@@ -95,6 +95,7 @@ export class SignalHubClient {
   // Reconnection state
   private reconnectAttempt = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private userInitiatedDisconnect = false;
 
   // Heartbeat
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -147,6 +148,7 @@ export class SignalHubClient {
       return; // Already connected or connecting
     }
 
+    this.userInitiatedDisconnect = false;
     this.state = 'connecting';
     this.reconnectAttempt = 0;
 
@@ -166,6 +168,7 @@ export class SignalHubClient {
    * Disconnect from Signal Hub gracefully
    */
   async disconnect(): Promise<void> {
+    this.userInitiatedDisconnect = true;
     this.clearReconnectTimer();
     this.stopHeartbeat();
 
@@ -533,8 +536,9 @@ export class SignalHubClient {
 
     this.emit('disconnected', reason || `WebSocket closed (code ${code})`);
 
-    // Attempt reconnection if enabled and not a clean close
-    if (wasConnected && code !== 1000 && this.config.reconnect?.enabled) {
+    // Attempt reconnection if enabled and not user-initiated
+    // Note: Bun normalizes server-side closes to code 1000, so we can't rely on close code
+    if (wasConnected && !this.userInitiatedDisconnect && this.config.reconnect?.enabled) {
       this.scheduleReconnect();
     }
   }
@@ -563,8 +567,8 @@ export class SignalHubClient {
 
   private async sendAndWait(msg: SharedMessage): Promise<SharedMessage> {
     return new Promise((resolve, reject) => {
-      // Allow sending during 'connecting' state for hub:connect message
-      if (!this.ws || (this.state !== 'connected' && this.state !== 'connecting')) {
+      // Allow sending during 'connecting' or 'reconnecting' state for hub:connect message
+      if (!this.ws || (this.state !== 'connected' && this.state !== 'connecting' && this.state !== 'reconnecting')) {
         reject(new Error('Cannot send message: not connected'));
         return;
       }

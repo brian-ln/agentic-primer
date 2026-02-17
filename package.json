@@ -5,6 +5,7 @@
   "private": true,
   "workspaces": [
     "packages/*",
+    "services/*",
     "ugs",
     "tk-agents"
   ],

@@ -23,6 +23,7 @@ import type { SharedMessage, CanonicalAddress } from '@agentic-primer/protocols'
 let wsServer: ReturnType<typeof Bun.serve> | null = null;
 let wsClients: Set<any> = new Set();
 let receivedMessages: SharedMessage[] = [];
+let mockHeartbeatInterval = 25000; // Default: 25s (can be overridden for tests)
 
 function startMockSignalHub(): Promise<number> {
   wsClients = new Set();
@@ -81,7 +82,7 @@ function handleProtocolMessage(ws: any, msg: SharedMessage): void {
           sessionId: 'test-session-123',
           serverVersion: '0.1.0',
           maxMessageSize: 1048576,
-          heartbeatInterval: 25000,
+          heartbeatInterval: mockHeartbeatInterval,
           capabilities: {
             maxActorsPerInstance: 50000,
             supportsBackpressure: true,
@@ -176,6 +177,7 @@ describe('SignalHubClient', () => {
   let config: SignalHubConfig;
 
   beforeEach(async () => {
+    mockHeartbeatInterval = 25000; // Reset to default
     port = await startMockSignalHub();
     config = {
       url: `ws://localhost:${port}`,
@@ -242,6 +244,9 @@ describe('SignalHubClient', () => {
 
       expect(client.getState()).toBe('disconnected');
       expect(reason).toContain('disconnect');
+
+      // Wait a bit for the message to be processed by the server
+      await new Promise((resolve) => setTimeout(resolve, 50));
 
       // Verify hub:disconnect was sent
       const disconnectMsg = receivedMessages.find((m) => m.type === 'hub:disconnect');
@@ -418,18 +423,21 @@ describe('SignalHubClient', () => {
 
   describe('heartbeat', () => {
     test('sends hub:heartbeat at configured interval', async () => {
+      // Set mock server to return short heartbeat interval
+      mockHeartbeatInterval = 500;
+
       const client = new SignalHubClient({
         ...config,
-        heartbeatInterval: 500, // 500ms for testing
+        heartbeatInterval: 500, // 500ms for testing (server will override)
       });
 
       await client.connect();
 
-      // Clear received messages
+      // Clear received messages after connection (hub:connect already sent)
       receivedMessages = [];
 
-      // Wait for at least 2 heartbeats
-      await new Promise((resolve) => setTimeout(resolve, 1200));
+      // Wait for at least 2 heartbeat intervals (500ms each + buffer)
+      await new Promise((resolve) => setTimeout(resolve, 1100));
 
       // Verify heartbeats were sent
       const heartbeats = receivedMessages.filter((m) => m.type === 'hub:heartbeat');
@@ -439,6 +447,9 @@ describe('SignalHubClient', () => {
     });
 
     test('renews actor registrations with heartbeat', async () => {
+      // Set mock server to return short heartbeat interval
+      mockHeartbeatInterval = 500;
+
       const client = new SignalHubClient({
         ...config,
         heartbeatInterval: 500,
@@ -544,29 +555,33 @@ describe('SignalHubClient', () => {
         },
       });
 
-      await client.connect();
-
       let reconnectAttempted = false;
-      client.on('reconnecting', () => {
+      let reconnected = false;
+      let reconnectCount = 0;
+
+      client.on('reconnecting', (attempt) => {
         reconnectAttempted = true;
       });
 
-      let reconnected = false;
-      let reconnectCount = 0;
-      client.on('connected', () => {
+      client.on('connected', (sessionId) => {
         reconnectCount++;
         if (reconnectCount > 1) {
           reconnected = true;
         }
       });
 
+      await client.connect();
+
       // Simulate server closing connection
       for (const ws of wsClients) {
         ws.close(1006, 'Abnormal closure');
       }
 
-      // Wait for reconnection to complete
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Wait a bit for the close event to propagate
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // Wait for reconnection to complete (initial delay 100ms + connection time)
+      await new Promise((resolve) => setTimeout(resolve, 600));
 
       expect(reconnectAttempted).toBe(true);
       expect(reconnected).toBe(true);
@@ -587,9 +602,6 @@ describe('SignalHubClient', () => {
         },
       });
 
-      await client.connect();
-      await client.registerActor('@(local/test-actor)' as CanonicalAddress, ['compute']);
-
       let reregistered = false;
       let registerCount = 0;
       client.on('actorRegistered', () => {
@@ -599,6 +611,9 @@ describe('SignalHubClient', () => {
         }
       });
 
+      await client.connect();
+      await client.registerActor('@(local/test-actor)' as CanonicalAddress, ['compute']);
+
       // Clear received messages
       receivedMessages = [];
 
@@ -607,8 +622,11 @@ describe('SignalHubClient', () => {
         ws.close(1006, 'Abnormal closure');
       }
 
-      // Wait for reconnection and re-registration
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Wait a bit for the close event to propagate
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // Wait for reconnection and re-registration (initial delay 100ms + connection time)
+      await new Promise((resolve) => setTimeout(resolve, 600));
 
       expect(reregistered).toBe(true);
 
