@@ -110,12 +110,12 @@ export class BrowserActorWrapper {
   }
 
   /**
-   * Discover actors by capability
+   * Discover actors by capability (simplified test interface)
+   * For full control, use getClient().discover(from, pattern, capability, limit)
    */
-  async discover(capability?: string): Promise<any[]> {
-    // SignalHubClient.discover(from, pattern?, capability?, limit?)
-    // Pass capability as the 3rd parameter, not 2nd
-    return this.client.discover(this.actorAddress, '*', capability);
+  async discover(capability?: string, limit?: number): Promise<any[]> {
+    // Pass '*' as pattern to match all, and capability as filter
+    return this.client.discover(this.actorAddress, '*', capability, limit);
   }
 
   /**

@@ -150,6 +150,7 @@ export function handleSend(
     targetAddress,
     'tell',
     {
+      ...msg.metadata, // Preserve user metadata from original message
       forwarded: true,
       via: SIGNAL_HUB_ADDRESS,
       originalMessageId: msg.id,
