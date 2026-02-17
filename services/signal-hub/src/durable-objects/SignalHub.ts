@@ -51,6 +51,7 @@ const SIGNAL_HUB_ADDRESS = toCanonicalAddress('cloudflare/signal-hub');
  * - Backpressure and flow control
  */
 export class SignalHub implements DurableObject {
+  private ctx: DurableObjectState;
   private env: Env;
   private sessions: Map<WebSocket, Session>;
   private connections: Map<string, WebSocket>;
@@ -59,6 +60,7 @@ export class SignalHub implements DurableObject {
   private queueStats: QueueStats;
 
   constructor(state: DurableObjectState, env: Env) {
+    this.ctx = state;
     this.env = env;
     this.sessions = new Map();
     this.connections = new Map();
@@ -123,8 +125,8 @@ export class SignalHub implements DurableObject {
     // Store session and connection
     this.sessions.set(ws, session);
 
-    // Accept the WebSocket
-    ws.accept();
+    // CRITICAL: Use ctx.acceptWebSocket() for wrangler dev to route messages
+    this.ctx.acceptWebSocket(ws);
 
     console.log(`WebSocket connection accepted: ${session.sessionId}`);
   }

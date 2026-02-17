@@ -26,14 +26,16 @@ export interface SignalHubInstance {
 export async function startSignalHub(): Promise<SignalHubInstance> {
   const signalHubDir = join(__dirname, '../../../../services/signal-hub');
 
-  // Spawn wrangler dev on test port
-  const wranglerProcess = spawn('pnpm', ['wrangler', 'dev', '--port', TEST_PORT.toString()], {
+  // Spawn wrangler dev on test port with AUTH_ENABLED=false
+  const wranglerProcess = spawn('npx', [
+    'wrangler',
+    'dev',
+    '--port', TEST_PORT.toString(),
+    '--var', 'AUTH_ENABLED:false',
+  ], {
     cwd: signalHubDir,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: {
-      ...process.env,
-      AUTH_ENABLED: 'false',
-    },
+    env: process.env,
   });
 
   // Wait for server to be ready
@@ -42,17 +44,17 @@ export async function startSignalHub(): Promise<SignalHubInstance> {
       reject(new Error('Signal Hub failed to start within 10 seconds'));
     }, 10000);
 
-    wranglerProcess.stdout.on('data', (data: Buffer) => {
+    const checkReady = (data: Buffer) => {
       const output = data.toString();
+      console.log('[wrangler output]:', output.substring(0, 200));
       if (output.includes('Ready on') || output.includes(`localhost:${TEST_PORT}`)) {
         clearTimeout(timeout);
         resolve();
       }
-    });
+    };
 
-    wranglerProcess.stderr.on('data', (data: Buffer) => {
-      console.error('Signal Hub stderr:', data.toString());
-    });
+    wranglerProcess.stdout.on('data', checkReady);
+    wranglerProcess.stderr.on('data', checkReady);
 
     wranglerProcess.on('error', (error) => {
       clearTimeout(timeout);
