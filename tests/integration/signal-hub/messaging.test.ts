@@ -283,7 +283,7 @@ describe('Signal Hub - Cross-Runtime Messaging', () => {
         }
       };
 
-      browserActor.getClient().onMessage(handler);
+      browserActor.getClient().on('message', handler);
 
       // Send messages in sequence
       for (let i = 0; i < messageCount; i++) {

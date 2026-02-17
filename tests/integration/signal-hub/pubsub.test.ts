@@ -77,7 +77,7 @@ describe('Signal Hub - Pub/Sub', () => {
       await subscriberBrowser.subscribe('topic-a');
 
       let receivedFromB = false;
-      subscriberBrowser.getClient().onMessage((msg: any) => {
+      subscriberBrowser.getClient().on('message', (msg: any) => {
         if (msg.type === 'test:topic:b:message') {
           receivedFromB = true;
         }
@@ -95,7 +95,7 @@ describe('Signal Hub - Pub/Sub', () => {
 
     it('should receive messages only after subscription', async () => {
       let messageCount = 0;
-      subscriberBrowser.getClient().onMessage((msg: any) => {
+      subscriberBrowser.getClient().on('message', (msg: any) => {
         if (msg.type === 'test:before:after') {
           messageCount++;
         }
@@ -290,7 +290,7 @@ describe('Signal Hub - Pub/Sub', () => {
 
       // Track if second message arrives
       let receivedSecond = false;
-      subscriber.getClient().onMessage((msg: any) => {
+      subscriber.getClient().on('message', (msg: any) => {
         if (msg.type === 'test:unsub:second') {
           receivedSecond = true;
         }
