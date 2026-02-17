@@ -91,6 +91,94 @@ const widget2 = await client.registerActor({
 await client.send(widget1, widget2, 'data:update', { value: 42 });
 ```
 
+### Broadcast to All Actors
+
+```typescript
+// Broadcast announcement to all registered actors
+await client.broadcast(
+  '@(browser/admin)',
+  'system:announcement',
+  { message: 'Server maintenance in 5 minutes' },
+  {
+    excludeSelf: true,           // Don't send to sender
+    targetCapability: 'render'   // Only actors with 'render' capability
+  }
+);
+
+// Listen for broadcast acknowledgment
+client.on('message', (event) => {
+  if (event.message.type === 'hub:broadcast_ack') {
+    const { deliveredCount, failedCount } = event.message.payload;
+    console.log(`Broadcast delivered to ${deliveredCount} actors`);
+  }
+});
+```
+
+### Pub/Sub Messaging
+
+```typescript
+// Subscribe to a topic
+const subscriptionId = await client.subscribe(
+  '@(browser/listener)',
+  'events',     // topic
+  false         // durable (persist across reconnects)
+);
+
+// Listen for published messages
+client.on('message', (event) => {
+  if (event.message.type === 'user:login') {
+    console.log('User logged in:', event.message.payload);
+  }
+});
+
+// Publish to topic
+await client.publish(
+  '@(browser/publisher)',
+  'events',           // topic
+  'user:login',       // message type
+  { userId: '123' }   // data
+);
+
+// Unsubscribe when done
+await client.unsubscribe(
+  '@(browser/listener)',
+  subscriptionId
+);
+```
+
+### Actor Discovery
+
+```typescript
+// Discover all actors
+const allActors = await client.discover(
+  '@(browser/coordinator)',
+  '*'  // pattern
+);
+
+console.log('Found actors:', allActors.length);
+allActors.forEach(actor => {
+  console.log(`- ${actor.address}: ${actor.capabilities.join(', ')}`);
+});
+
+// Discover specific actors
+const browserWidgets = await client.discover(
+  '@(browser/coordinator)',
+  '@(browser/widget-*)',  // glob pattern
+  'render',                // capability filter
+  20                       // limit results
+);
+
+// Use discovered actors
+for (const actor of browserWidgets) {
+  await client.send(
+    '@(browser/coordinator)',
+    actor.address,
+    'widget:update',
+    { data: 'refresh' }
+  );
+}
+```
+
 ### Error Handling
 
 ```typescript

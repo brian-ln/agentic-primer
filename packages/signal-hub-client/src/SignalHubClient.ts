@@ -416,6 +416,229 @@ export class SignalHubClient {
     return deferred.promise;
   }
 
+  /**
+   * Broadcast a message to all registered actors
+   */
+  async broadcast(
+    from: CanonicalAddress,
+    type: string,
+    data: unknown,
+    options?: { excludeSelf?: boolean; targetCapability?: string }
+  ): Promise<void> {
+    if (!this.connected) {
+      throw new Error('Not connected to Signal Hub');
+    }
+
+    const broadcastMsg: SharedMessage = {
+      id: crypto.randomUUID(),
+      from,
+      to: '@(cloudflare/signal-hub)' as CanonicalAddress,
+      type: 'hub:broadcast',
+      pattern: 'tell',
+      correlationId: null,
+      timestamp: Date.now(),
+      payload: {
+        type,
+        data,
+        excludeSelf: options?.excludeSelf ?? false,
+      },
+      metadata: {
+        targetCapability: options?.targetCapability,
+      },
+      ttl: null,
+      signature: null,
+    };
+
+    await this.sendMessage(broadcastMsg);
+  }
+
+  /**
+   * Publish a message to topic subscribers
+   */
+  async publish(
+    from: CanonicalAddress,
+    topic: string,
+    type: string,
+    data: unknown
+  ): Promise<void> {
+    if (!this.connected) {
+      throw new Error('Not connected to Signal Hub');
+    }
+
+    const publishMsg: SharedMessage = {
+      id: crypto.randomUUID(),
+      from,
+      to: '@(cloudflare/signal-hub)' as CanonicalAddress,
+      type: 'hub:publish',
+      pattern: 'tell',
+      correlationId: null,
+      timestamp: Date.now(),
+      payload: {
+        topic,
+        type,
+        data,
+      },
+      metadata: {},
+      ttl: null,
+      signature: null,
+    };
+
+    await this.sendMessage(publishMsg);
+  }
+
+  /**
+   * Subscribe to a topic for pub/sub messaging
+   */
+  async subscribe(
+    from: CanonicalAddress,
+    topic: string,
+    durable: boolean = false
+  ): Promise<string> {
+    if (!this.connected) {
+      throw new Error('Not connected to Signal Hub');
+    }
+
+    const subscribeMsg: SharedMessage = {
+      id: crypto.randomUUID(),
+      from,
+      to: '@(cloudflare/signal-hub)' as CanonicalAddress,
+      type: 'hub:subscribe',
+      pattern: 'ask',
+      correlationId: null,
+      timestamp: Date.now(),
+      payload: {
+        topic,
+        durable,
+      },
+      metadata: {},
+      ttl: 5000,
+      signature: null,
+    };
+
+    await this.sendMessage(subscribeMsg);
+
+    // Wait for hub:subscribed
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.off('message', handler);
+        reject(new Error('Subscription timeout'));
+      }, 5000);
+
+      const handler = (event: HubMessageEvent) => {
+        if (
+          event.message.type === 'hub:subscribed' &&
+          event.message.correlationId === subscribeMsg.id
+        ) {
+          clearTimeout(timeout);
+          this.off('message', handler);
+          const payload = event.message.payload as any;
+          resolve(payload.subscriptionId);
+        } else if (
+          event.message.type === 'hub:error' &&
+          event.message.correlationId === subscribeMsg.id
+        ) {
+          clearTimeout(timeout);
+          this.off('message', handler);
+          const error = event.message.payload as HubError;
+          reject(new Error(`Subscription failed: ${error.message}`));
+        }
+      };
+
+      this.on('message', handler);
+    });
+  }
+
+  /**
+   * Unsubscribe from a topic
+   */
+  async unsubscribe(from: CanonicalAddress, subscriptionId: string): Promise<void> {
+    if (!this.connected) {
+      throw new Error('Not connected to Signal Hub');
+    }
+
+    const unsubscribeMsg: SharedMessage = {
+      id: crypto.randomUUID(),
+      from,
+      to: '@(cloudflare/signal-hub)' as CanonicalAddress,
+      type: 'hub:unsubscribe',
+      pattern: 'tell',
+      correlationId: null,
+      timestamp: Date.now(),
+      payload: {
+        subscriptionId,
+      },
+      metadata: {},
+      ttl: null,
+      signature: null,
+    };
+
+    await this.sendMessage(unsubscribeMsg);
+  }
+
+  /**
+   * Discover actors by glob pattern or capability
+   */
+  async discover(
+    from: CanonicalAddress,
+    pattern?: string,
+    capability?: string,
+    limit: number = 50
+  ): Promise<Array<{ address: CanonicalAddress; capabilities: string[] }>> {
+    if (!this.connected) {
+      throw new Error('Not connected to Signal Hub');
+    }
+
+    const discoverMsg: SharedMessage = {
+      id: crypto.randomUUID(),
+      from,
+      to: '@(cloudflare/signal-hub)' as CanonicalAddress,
+      type: 'hub:discover',
+      pattern: 'ask',
+      correlationId: null,
+      timestamp: Date.now(),
+      payload: {
+        pattern: pattern || '*',
+        capability,
+        limit: Math.min(limit, 100),
+      },
+      metadata: {},
+      ttl: 5000,
+      signature: null,
+    };
+
+    await this.sendMessage(discoverMsg);
+
+    // Wait for hub:discovered
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.off('message', handler);
+        reject(new Error('Discovery timeout'));
+      }, 5000);
+
+      const handler = (event: HubMessageEvent) => {
+        if (
+          event.message.type === 'hub:discovered' &&
+          event.message.correlationId === discoverMsg.id
+        ) {
+          clearTimeout(timeout);
+          this.off('message', handler);
+          const payload = event.message.payload as any;
+          resolve(payload.actors || []);
+        } else if (
+          event.message.type === 'hub:error' &&
+          event.message.correlationId === discoverMsg.id
+        ) {
+          clearTimeout(timeout);
+          this.off('message', handler);
+          const error = event.message.payload as HubError;
+          reject(new Error(`Discovery failed: ${error.message}`));
+        }
+      };
+
+      this.on('message', handler);
+    });
+  }
+
   // -------------------------------------------------------------------------
   // Public API - Events
   // -------------------------------------------------------------------------

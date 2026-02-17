@@ -180,6 +180,109 @@ const messageId = await client.sendWithAck(
 console.log('Message delivered:', messageId);
 ```
 
+#### `broadcast(from, type, data, options?): Promise<void>`
+
+Broadcast a message to all registered actors.
+
+```typescript
+await client.broadcast(
+  '@(browser/admin)',
+  'system:announcement',
+  { message: 'Maintenance in 5 minutes' },
+  {
+    excludeSelf: true,           // Don't send to sender (optional)
+    targetCapability: 'render'   // Only actors with this capability (optional)
+  }
+);
+```
+
+**Options:**
+- `excludeSelf` (boolean): Exclude sender from broadcast (default: false)
+- `targetCapability` (string): Only broadcast to actors with this capability
+
+#### `publish(from, topic, type, data): Promise<void>`
+
+Publish a message to topic subscribers.
+
+```typescript
+await client.publish(
+  '@(browser/publisher)',
+  'events',                    // topic
+  'user:login',               // message type
+  { userId: 'user-123' }      // data
+);
+```
+
+#### `subscribe(from, topic, durable?): Promise<string>`
+
+Subscribe to a topic for pub/sub messaging. Returns subscription ID.
+
+```typescript
+const subscriptionId = await client.subscribe(
+  '@(browser/subscriber)',
+  'events',    // topic
+  false        // durable (persist across reconnects, default: false)
+);
+
+console.log('Subscription ID:', subscriptionId);
+```
+
+#### `unsubscribe(from, subscriptionId): Promise<void>`
+
+Unsubscribe from a topic.
+
+```typescript
+await client.unsubscribe(
+  '@(browser/subscriber)',
+  'sub-xyz-123'  // subscription ID from subscribe()
+);
+```
+
+#### `discover(from, pattern?, capability?, limit?): Promise<Actor[]>`
+
+Discover actors by pattern or capability.
+
+```typescript
+// Discover all actors
+const allActors = await client.discover(
+  '@(browser/coordinator)',
+  '*'  // pattern (default: '*')
+);
+
+// Discover browser actors
+const browserActors = await client.discover(
+  '@(browser/coordinator)',
+  '@(browser/*)'
+);
+
+// Discover by capability
+const renderActors = await client.discover(
+  '@(browser/coordinator)',
+  '*',        // pattern
+  'render'    // capability
+);
+
+// Limit results
+const limitedActors = await client.discover(
+  '@(browser/coordinator)',
+  '*',
+  undefined,
+  10  // limit (max: 100, default: 50)
+);
+
+// Result format
+allActors.forEach(actor => {
+  console.log('Address:', actor.address);
+  console.log('Capabilities:', actor.capabilities);
+});
+```
+
+**Parameters:**
+- `from` (CanonicalAddress): Actor making the request
+- `pattern` (string, optional): Glob pattern (default: '*')
+- `capability` (string, optional): Filter by capability
+- `limit` (number, optional): Max results 1-100 (default: 50)
+
 ### Events
 
 #### `on(event, handler): void`
