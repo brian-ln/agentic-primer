@@ -10,7 +10,7 @@
  * - Reconnection
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { setupTestEnvironment, teardownTestEnvironment, sleep, type TestEnvironment } from './setup.js';
 import { createSeagActor, type SeagActorWrapper } from './helpers/seag-actor.js';
 import { createBrowserActor, type BrowserActorWrapper } from './helpers/browser-actor.js';

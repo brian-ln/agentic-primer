@@ -173,6 +173,11 @@ export class SignalHubClient {
       this.ws = null;
     }
 
+    // Clear session data
+    this.sessionId = null;
+    this.actorIdentity = null;
+    this.serverVersion = null;
+
     this.setState('disconnected');
   }
 
