@@ -1,0 +1,90 @@
+graph TB
+    subgraph CloudflareEdge["Cloudflare Edge Network"]
+        subgraph Workers["Cloudflare Workers"]
+            WorkerEntry["Worker Entry Point<br/>(index.ts)<br/>HTTP → DO Router"]
+
+            subgraph SignalHubDO["Signal Hub Durable Object"]
+                DOCore["SignalHub Class<br/>(SignalHub.ts)<br/>WebSocket Server"]
+
+                subgraph Handlers["Message Handlers"]
+                    ConnectionH["connection.ts<br/>connect, heartbeat, disconnect"]
+                    RegistrationH["registration.ts<br/>register, discover, list, renew"]
+                    MessagingH["messaging.ts<br/>send, broadcast"]
+                    PubSubH["pubsub.ts<br/>subscribe, publish, unsubscribe"]
+                    FlowControlH["flowcontrol.ts<br/>queue_stats, backpressure"]
+                end
+
+                subgraph State["In-Memory State"]
+                    Sessions["Sessions<br/>Map&lt;WebSocket, Session&gt;<br/>Connection state"]
+                    Registry["Actor Registry<br/>Map&lt;address, ActorRegistration&gt;<br/>Actor lookup"]
+                    Subscriptions["Subscriptions<br/>Map&lt;topic, Set&lt;address&gt;&gt;<br/>Pub/sub routing"]
+                    QueueStats["Queue Stats<br/>pending, processed, failed"]
+                end
+
+                Auth["JWT Auth<br/>(jwt.ts)<br/>Token validation"]
+            end
+        end
+    end
+
+    subgraph SEAGRuntime["SEAG Runtime (Node.js)"]
+        SEAGClient["SignalHubClient<br/>(ugs/src/messaging/signal-hub/client.ts)<br/>WebSocket Client"]
+        SEAGActors["SEAG Actors<br/>@(seag/coordinator)<br/>@(seag/compute)"]
+        ActorSystem["ActorSystem<br/>Message routing"]
+    end
+
+    subgraph BrowserRuntime["Browser Runtime (Chrome)"]
+        BrowserClient["SignalHubClient<br/>(packages/signal-hub-client/SignalHubClient.ts)<br/>WebSocket Client"]
+        BrowserActors["Browser Actors<br/>@(browser/widget-123)<br/>@(browser/ui-panel)"]
+        Extension["Chrome Extension<br/>MCP Integration"]
+    end
+
+    subgraph Protocols["Protocol Layer"]
+        SharedMessage["SharedMessage<br/>@agentic-primer/protocols<br/>Wire format"]
+        HubProtocol["Hub Protocol<br/>hub:* messages<br/>Control plane"]
+        AppProtocol["App Protocol<br/>app:* messages<br/>Data plane"]
+    end
+
+    %% Connections
+    WorkerEntry --> DOCore
+    DOCore --> ConnectionH
+    DOCore --> RegistrationH
+    DOCore --> MessagingH
+    DOCore --> PubSubH
+    DOCore --> FlowControlH
+
+    ConnectionH -.->|read/write| Sessions
+    RegistrationH -.->|read/write| Registry
+    MessagingH -.->|read| Registry
+    PubSubH -.->|read/write| Subscriptions
+    FlowControlH -.->|read/write| QueueStats
+
+    ConnectionH -.->|validate JWT| Auth
+
+    SEAGClient -->|WebSocket<br/>WSS| WorkerEntry
+    BrowserClient -->|WebSocket<br/>WSS| WorkerEntry
+
+    SEAGActors --> ActorSystem
+    ActorSystem --> SEAGClient
+
+    BrowserActors --> Extension
+    Extension --> BrowserClient
+
+    SEAGClient -.->|uses| SharedMessage
+    BrowserClient -.->|uses| SharedMessage
+    DOCore -.->|uses| SharedMessage
+
+    SharedMessage --> HubProtocol
+    SharedMessage --> AppProtocol
+
+    %% Styling
+    classDef cloudflare fill:#f96,stroke:#333,stroke-width:2px
+    classDef client fill:#9cf,stroke:#333,stroke-width:2px
+    classDef state fill:#ffc,stroke:#333,stroke-width:2px
+    classDef protocol fill:#cfc,stroke:#333,stroke-width:2px
+    classDef handler fill:#fcf,stroke:#333,stroke-width:2px
+
+    class WorkerEntry,DOCore cloudflare
+    class SEAGClient,BrowserClient client
+    class Sessions,Registry,Subscriptions,QueueStats state
+    class SharedMessage,HubProtocol,AppProtocol protocol
+    class ConnectionH,RegistrationH,MessagingH,PubSubH,FlowControlH handler

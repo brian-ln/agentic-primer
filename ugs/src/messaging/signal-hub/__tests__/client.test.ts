@@ -74,11 +74,7 @@ function handleProtocolMessage(ws: any, msg: SharedMessage): void {
         from: '@(cloudflare/signal-hub)' as CanonicalAddress,
         to: msg.from,
         type: 'hub:connected',
-        payload: null,
-        pattern: 'tell',
-        correlationId: msg.id,
-        timestamp: Date.now(),
-        metadata: {
+        payload: {
           sessionId: 'test-session-123',
           serverVersion: '0.1.0',
           maxMessageSize: 1048576,
@@ -89,6 +85,10 @@ function handleProtocolMessage(ws: any, msg: SharedMessage): void {
             supportedContentTypes: ['application/json'],
           },
         },
+        pattern: 'tell',
+        correlationId: msg.id,
+        timestamp: Date.now(),
+        metadata: {},
         ttl: null,
         signature: null,
       };
@@ -294,8 +294,8 @@ describe('SignalHubClient', () => {
       const registerMsg = receivedMessages.find((m) => m.type === 'hub:register');
       expect(registerMsg).toBeDefined();
       expect(registerMsg!.from).toBe('@(local/test-actor)');
-      expect(registerMsg!.metadata.capabilities).toEqual(['compute', 'inference']);
-      expect(registerMsg!.metadata.metadata).toEqual({ version: '1.0.0' });
+      expect((registerMsg!.payload as any).capabilities).toEqual(['compute', 'inference']);
+      expect((registerMsg!.payload as any).metadata).toEqual({ version: '1.0.0' });
 
       // Verify actor is in registered actors list
       const registeredActors = client.getRegisteredActors();

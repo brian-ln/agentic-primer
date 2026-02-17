@@ -60,15 +60,8 @@ export function handleSend(
     throw new HubError('internal_error', 'payload.type is required');
   }
 
-  // Check message size
-  const maxSize = parseInt(env.MAX_MESSAGE_SIZE, 10);
-  const messageSize = JSON.stringify(msg).length;
-  if (messageSize > maxSize) {
-    throw new HubError(
-      'message_too_large',
-      `Message size (${messageSize}) exceeds limit (${maxSize})`
-    );
-  }
+  // NOTE: Message size check now happens before JSON.parse in SignalHub.webSocketMessage()
+  // This prevents DoS attacks from large payloads exhausting memory during parsing
 
   // CRITICAL: Target address is in payload.to, NOT msg.to!
   const targetAddress = (payload.to as CanonicalAddress) || msg.to;

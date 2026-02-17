@@ -55,10 +55,18 @@ export function handleRegister(
   const registeredAt = Date.now();
   const expiresAt = registeredAt + ttl;
 
-  // Check registry limit
+  // Check registry capacity (50K actor limit due to Durable Object constraints)
   const registryLimit = parseInt(env.ACTOR_REGISTRY_LIMIT, 10);
   if (registry.size >= registryLimit && !registry.has(payload.actorAddress)) {
-    throw new HubError('rate_limited', `Registry full (max: ${registryLimit} actors)`);
+    throw new HubError(
+      'rate_limited',
+      `Registry at capacity (${registry.size}/${registryLimit} actors). Cannot register new actors. Existing actors can still renew registrations.`,
+      {
+        currentSize: registry.size,
+        limit: registryLimit,
+        action: 'retry_later_or_use_different_hub',
+      }
+    );
   }
 
   // Get existing version or start at 1

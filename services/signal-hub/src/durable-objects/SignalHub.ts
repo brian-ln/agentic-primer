@@ -18,6 +18,7 @@ import {
   toCanonicalAddress,
   validateSharedMessage,
   createErrorMessage,
+  createTokenBucket,
 } from '../utils';
 
 // Handlers
@@ -111,7 +112,7 @@ export class SignalHub implements DurableObject {
    * Handle new WebSocket connection
    */
   private handleWebSocketConnection(ws: WebSocket): void {
-    // Create session
+    // Create session with initial connection state and rate limiting
     const session: Session = {
       sessionId: generateSessionId(),
       actorIdentity: null,
@@ -120,6 +121,8 @@ export class SignalHub implements DurableObject {
       lastHeartbeat: Date.now(),
       authenticated: false,
       paused: false,
+      connectionState: 'connecting', // Initial state before hub:connect
+      rateLimitBucket: createTokenBucket(100, 100 / 60), // 100 msg/min = 1.67 msg/sec
     };
 
     // Store session and connection
@@ -128,7 +131,12 @@ export class SignalHub implements DurableObject {
     // CRITICAL: Use ctx.acceptWebSocket() for wrangler dev to route messages
     this.ctx.acceptWebSocket(ws);
 
-    console.log(`WebSocket connection accepted: ${session.sessionId}`);
+    console.log(JSON.stringify({
+      event: 'websocket_connection_accepted',
+      sessionId: session.sessionId,
+      connectionState: session.connectionState,
+      timestamp: Date.now(),
+    }));
   }
 
   /**
@@ -210,8 +218,27 @@ export class SignalHub implements DurableObject {
     // Connection lifecycle
     if (messageType === 'hub:connect') {
       const response = await handleConnect(msg, session, this.env);
+
+      // CRITICAL: Detect duplicate connections (same actorIdentity)
+      // If actor is already connected, close old session and keep new one
+      if (session.actorIdentity) {
+        this.handleDuplicateConnection(session.actorIdentity, session.sessionId, ws);
+      }
+
+      // Update connection state to connected
+      session.connectionState = 'connected';
+
       // Store connection after successful connect
       this.connections.set(session.sessionId, ws);
+
+      console.log(JSON.stringify({
+        event: 'actor_connected',
+        sessionId: session.sessionId,
+        actorIdentity: session.actorIdentity,
+        connectionState: session.connectionState,
+        timestamp: Date.now(),
+      }));
+
       return response;
     }
 
@@ -227,12 +254,39 @@ export class SignalHub implements DurableObject {
 
     // Disconnect
     if (messageType === 'hub:disconnect') {
-      console.log(`[routeMessage] Processing hub:disconnect for session ${session.sessionId}`);
+      console.log(JSON.stringify({
+        event: 'disconnect_requested',
+        sessionId: session.sessionId,
+        actorIdentity: session.actorIdentity,
+        timestamp: Date.now(),
+      }));
+
+      // Update connection state
+      session.connectionState = 'disconnecting';
+
       const response = handleDisconnect(msg, session);
+
+      // CRITICAL: Send disconnect acknowledgment BEFORE closing WebSocket
+      // Otherwise the response is sent on a closed socket and never reaches the client
+      if (response) {
+        console.log(JSON.stringify({
+          event: 'sending_disconnect_ack',
+          sessionId: session.sessionId,
+          timestamp: Date.now(),
+        }));
+        ws.send(JSON.stringify(response));
+      }
+
       this.cleanupConnection(ws, session);
-      console.log(`[routeMessage] Closing WebSocket after disconnect`);
+      console.log(JSON.stringify({
+        event: 'closing_websocket',
+        sessionId: session.sessionId,
+        timestamp: Date.now(),
+      }));
       ws.close(1000, 'Client requested disconnect');
-      return response;
+
+      // Return null to prevent double-send in webSocketMessage handler
+      return null;
     }
 
     // Actor registration
@@ -334,13 +388,92 @@ export class SignalHub implements DurableObject {
   }
 
   /**
+   * Handle duplicate connection detection
+   * Closes old session when same actor connects again (last connection wins)
+   */
+  private handleDuplicateConnection(
+    actorIdentity: CanonicalAddress,
+    newSessionId: string,
+    newWs: WebSocket
+  ): void {
+    // Find existing session with same actorIdentity
+    for (const [ws, session] of this.sessions.entries()) {
+      if (
+        session.actorIdentity === actorIdentity &&
+        session.sessionId !== newSessionId &&
+        session.connectionState !== 'disconnected'
+      ) {
+        console.log(JSON.stringify({
+          event: 'duplicate_connection_detected',
+          actorIdentity,
+          oldSessionId: session.sessionId,
+          newSessionId,
+          timestamp: Date.now(),
+        }));
+
+        // Send disconnect notification to old session
+        try {
+          const disconnectMsg = {
+            id: crypto.randomUUID(),
+            type: 'hub:disconnect',
+            from: toCanonicalAddress('cloudflare/signal-hub'),
+            to: actorIdentity,
+            payload: {
+              reason: 'duplicate_connection',
+              message: 'New connection established for this actor',
+            },
+            timestamp: Date.now(),
+            metadata: {},
+          };
+
+          console.log(JSON.stringify({
+            event: 'sending_duplicate_disconnect',
+            oldSessionId: session.sessionId,
+            timestamp: Date.now(),
+          }));
+
+          ws.send(JSON.stringify(disconnectMsg));
+        } catch (err) {
+          console.error('Failed to send disconnect to old session:', err);
+        }
+
+        // Clean up old session
+        this.cleanupConnection(ws, session);
+
+        // Close old WebSocket
+        ws.close(1000, 'Duplicate connection - new session established');
+
+        console.log(JSON.stringify({
+          event: 'old_session_closed',
+          oldSessionId: session.sessionId,
+          newSessionId,
+          timestamp: Date.now(),
+        }));
+      }
+    }
+  }
+
+  /**
    * Cleanup connection resources
    */
   private cleanupConnection(ws: WebSocket, session: Session): void {
-    console.log(`[cleanupConnection] Starting cleanup for session ${session.sessionId}`);
-    console.log(`[cleanupConnection] Registry size before: ${this.registry.size}`);
-    console.log(`[cleanupConnection] Sessions size before: ${this.sessions.size}`);
-    console.log(`[cleanupConnection] Connections size before: ${this.connections.size}`);
+    const now = Date.now();
+    const sessionDuration = now - session.connectedAt;
+
+    // Update session state
+    session.connectionState = 'disconnected';
+    session.disconnectedAt = now;
+
+    console.log(JSON.stringify({
+      event: 'cleanup_connection_start',
+      sessionId: session.sessionId,
+      actorIdentity: session.actorIdentity,
+      sessionDuration,
+      registrySize: this.registry.size,
+      sessionsSize: this.sessions.size,
+      connectionsSize: this.connections.size,
+      timestamp: now,
+    }));
 
     // Remove from sessions
     this.sessions.delete(ws);
@@ -351,11 +484,15 @@ export class SignalHub implements DurableObject {
     // Cleanup registrations for this connection
     let removedCount = 0;
     for (const [address, registration] of this.registry.entries()) {
-      console.log(`[cleanupConnection] Checking registration: address=${address}, connectionId=${registration.connectionId}, session.sessionId=${session.sessionId}, match=${registration.connectionId === session.sessionId}`);
       if (registration.connectionId === session.sessionId) {
         this.registry.delete(address);
         removedCount++;
-        console.log(`[cleanupConnection] Unregistered actor on disconnect: ${address}`);
+        console.log(JSON.stringify({
+          event: 'actor_unregistered_on_disconnect',
+          actorAddress: address,
+          sessionId: session.sessionId,
+          timestamp: now,
+        }));
       }
     }
 
@@ -364,11 +501,15 @@ export class SignalHub implements DurableObject {
       cleanupSubscriptions(this.subscriptions, session.actorIdentity);
     }
 
-    console.log(`[cleanupConnection] Removed ${removedCount} registrations`);
-    console.log(`[cleanupConnection] Registry size after: ${this.registry.size}`);
-    console.log(`[cleanupConnection] Sessions size after: ${this.sessions.size}`);
-    console.log(`[cleanupConnection] Connections size after: ${this.connections.size}`);
-    console.log(`[cleanupConnection] Cleaned up session: ${session.sessionId}`);
+    console.log(JSON.stringify({
+      event: 'cleanup_connection_complete',
+      sessionId: session.sessionId,
+      removedRegistrations: removedCount,
+      registrySize: this.registry.size,
+      sessionsSize: this.sessions.size,
+      connectionsSize: this.connections.size,
+      timestamp: now,
+    }));
   }
 
   /**

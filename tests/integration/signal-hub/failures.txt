@@ -1,0 +1,37 @@
+FAILURE ANALYSIS - 13 Tests
+===========================
+
+Category 1: MODULE NOT FOUND (1 test file)
+- errors.test.ts: Cannot find module '../../../../ugs/src/messaging/signal-hub/client'
+  → Entire test file fails to load
+  
+Category 2: BROADCAST TIMEOUTS (5 tests)
+- should broadcast from SEAG to all browser actors
+- should return broadcast acknowledgment with recipient count
+- should preserve complex payloads in broadcasts
+- should deliver broadcast to many actors
+- Timeout waiting for message (5000ms)
+  → Broadcast messages not being delivered
+
+Category 3: PUB/SUB TIMEOUTS (5 tests)
+- should subscribe to topic and receive published messages
+- should receive messages only after subscription
+- should deliver topic messages to all subscribers
+- should support multiple topics with different subscriber sets
+- should stop receiving messages after unsubscribe
+- should deliver SEAG publisher messages to both SEAG and browser subscribers
+- should deliver browser publisher messages to both SEAG and browser subscribers
+  → Topic messages not being delivered to subscribers
+
+Category 4: MESSAGE ORDERING (1 test)
+- should maintain message order within a connection
+  → Expected 10 messages, received 0
+  → Messages not being captured/delivered
+
+Category 5: CONNECTION LIFECYCLE (1 test)
+- should disconnect gracefully
+  → Expected sessionId to be null after disconnect
+  → Session not being cleaned up
+
+Category 6: METADATA (0 tests - PASSING!)
+- ✓ should preserve message metadata is now passing

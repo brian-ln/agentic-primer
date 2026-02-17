@@ -48,6 +48,8 @@ export interface ActorRegistration {
 // Session State
 // ===========================
 
+export type ConnectionState = 'connecting' | 'connected' | 'disconnecting' | 'disconnected';
+
 export interface Session {
   sessionId: string;
   actorIdentity: CanonicalAddress | null; // Verified from JWT
@@ -56,6 +58,9 @@ export interface Session {
   lastHeartbeat: number;
   authenticated: boolean;
   paused: boolean; // Backpressure state
+  connectionState: ConnectionState; // Track connection lifecycle state
+  disconnectedAt?: number; // Track when session was disconnected
+  rateLimitBucket: TokenBucket; // Rate limiting per session (100 msg/min)
 }
 
 // ===========================
