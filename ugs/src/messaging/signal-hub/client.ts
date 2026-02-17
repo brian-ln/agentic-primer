@@ -172,7 +172,7 @@ export class SignalHubClient {
     this.clearReconnectTimer();
     this.stopHeartbeat();
 
-    // Send hub:disconnect if connected
+    // Send hub:disconnect if connected and wait for ack
     if (this.ws && this.state === 'connected') {
       const disconnectMsg: SharedMessage = {
         id: crypto.randomUUID(),
@@ -180,18 +180,19 @@ export class SignalHubClient {
         to: '@(cloudflare/signal-hub)' as CanonicalAddress,
         type: 'hub:disconnect',
         payload: null,
-        pattern: 'tell',
+        pattern: 'ask', // Use 'ask' to get acknowledgment
         correlationId: null,
         timestamp: Date.now(),
         metadata: {},
-        ttl: null,
+        ttl: 500, // 500ms timeout for disconnect ack
         signature: null,
       };
 
       try {
-        this.ws.send(JSON.stringify(disconnectMsg));
+        // Send disconnect and wait for ack (sendAndWait handles ask/response pattern)
+        await this.sendAndWait(disconnectMsg);
       } catch {
-        // Ignore send errors during disconnect
+        // Timeout or error - proceed with disconnect anyway
       }
     }
 
@@ -677,7 +678,7 @@ export class SignalHubClient {
         clearTimeout(pending.timeout);
         this.pendingAsks.delete(msg.correlationId);
         pending.resolve(msg);
-        return;
+        // Fall through to also emit the message for listeners
       }
 
       // Handle incoming messages

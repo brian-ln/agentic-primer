@@ -115,10 +115,10 @@ export function handleHeartbeat(msg: SharedMessage, session: Session): SharedMes
  * Handle hub:disconnect message
  */
 export function handleDisconnect(msg: SharedMessage, session: Session): SharedMessage {
-  const payload = msg.payload as { reason?: string };
+  const payload = msg.payload as { reason?: string } | null;
 
   // Log disconnect reason
-  console.log(`Client disconnecting: ${payload.reason ?? 'no reason provided'}`);
+  console.log(`Client disconnecting: ${payload?.reason ?? 'no reason provided'}`);
 
   // No response needed - connection will close
   return createReply('hub:disconnect', { acknowledged: true }, msg, SIGNAL_HUB_ADDRESS);

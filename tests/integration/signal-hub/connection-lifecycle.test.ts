@@ -131,9 +131,9 @@ describe('Signal Hub - Connection Lifecycle (P0 Fixes)', () => {
       });
 
       // Verify actor is registered by discovering it
-      const discovery1 = await actor1.discover({ capability: 'compute' });
-      expect(discovery1.actors.length).toBeGreaterThan(0);
-      const found1 = discovery1.actors.find((a) => a.actorAddress === env.seagAddress);
+      const discovery1 = await actor1.discover('compute');
+      expect(discovery1.length).toBeGreaterThan(0);
+      const found1 = discovery1.find((a) => a.address === env.seagAddress);
       expect(found1).toBeTruthy();
 
       // Create duplicate connection
@@ -150,8 +150,8 @@ describe('Signal Hub - Connection Lifecycle (P0 Fixes)', () => {
       expect(actor1.getState()).toBe('disconnected');
 
       // Discovery should show only NEW actor's registrations
-      const discovery2 = await actor2.discover({ capability: 'compute' });
-      const found2 = discovery2.actors.find((a) => a.actorAddress === env.seagAddress);
+      const discovery2 = await actor2.discover('compute');
+      const found2 = discovery2.find((a) => a.address === env.seagAddress);
       expect(found2).toBeTruthy();
       expect(found2?.capabilities).toContain('inference'); // New capabilities
 
@@ -181,10 +181,11 @@ describe('Signal Hub - Connection Lifecycle (P0 Fixes)', () => {
         }
       });
 
-      // Track WebSocket close event
-      actor.getClient().once('close', () => {
+      // Track disconnected event (fired when WebSocket closes)
+      const disconnectedHandler = () => {
         websocketCloseTimestamp = Date.now();
-      });
+      };
+      actor.getClient().on('disconnected', disconnectedHandler);
 
       // Disconnect
       await actor.disconnect();
