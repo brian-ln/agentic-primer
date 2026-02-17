@@ -19,6 +19,7 @@ import {
   validateSharedMessage,
   createErrorMessage,
   createTokenBucket,
+  consumeToken,
 } from '../utils';
 
 // Handlers
@@ -151,6 +152,18 @@ export class SignalHub implements DurableObject {
     }
 
     try {
+      // Check raw message size BEFORE parsing (DoS protection)
+      const rawSize = typeof message === 'string' ? message.length : message.byteLength;
+      const maxSize = parseInt(this.env.MAX_MESSAGE_SIZE, 10);
+
+      if (rawSize > maxSize) {
+        throw new HubError(
+          'message_too_large',
+          `Message size (${rawSize} bytes) exceeds limit (${maxSize} bytes) before parsing`,
+          { actualSize: rawSize, maxSize }
+        );
+      }
+
       // Parse message
       const rawMessage =
         typeof message === 'string' ? message : new TextDecoder().decode(message);
@@ -214,6 +227,21 @@ export class SignalHub implements DurableObject {
     ws: WebSocket
   ): Promise<SharedMessage | null> {
     const messageType = msg.type;
+
+    // Rate limiting check (skip for hub:connect to allow initial connection)
+    if (messageType !== 'hub:connect') {
+      if (!consumeToken(session.rateLimitBucket)) {
+        // Calculate retry-after time
+        const tokensNeeded = 1 - session.rateLimitBucket.tokens;
+        const retryAfter = Math.ceil(tokensNeeded / session.rateLimitBucket.refillRate);
+
+        throw new HubError(
+          'rate_limited',
+          `Rate limit exceeded. Max 100 messages per minute.`,
+          { retryAfter, limit: '100 messages/min' }
+        );
+      }
+    }
 
     // Connection lifecycle
     if (messageType === 'hub:connect') {
