@@ -89,7 +89,7 @@ describe('Signal Hub - Cross-Runtime Messaging', () => {
 
       // Wait for acknowledgment
       const ack = await ackPromise;
-      expect(ack.type).toBe('hub:delivered');
+      expect(ack.type).toBe('hub:delivery_ack');
     });
 
     it('should preserve payload integrity', async () => {
