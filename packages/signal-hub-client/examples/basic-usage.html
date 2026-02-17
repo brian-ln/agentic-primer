@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Signal Hub Client - Basic Usage</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+
+    .container {
+      background: white;
+      border-radius: 8px;
+      padding: 24px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      margin-top: 0;
+      color: #333;
+    }
+
+    h2 {
+      color: #555;
+      font-size: 18px;
+      margin-top: 24px;
+      margin-bottom: 12px;
+    }
+
+    .status {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-weight: 500;
+      font-size: 14px;
+    }
+
+    .status.disconnected { background: #fee; color: #c33; }
+    .status.connecting { background: #ffd; color: #880; }
+    .status.connected { background: #efe; color: #3a3; }
+    .status.reconnecting { background: #ffd; color: #880; }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 4px;
+      font-weight: 500;
+      color: #555;
+    }
+
+    input, textarea, button {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+
+    textarea {
+      font-family: 'Monaco', 'Courier New', monospace;
+      resize: vertical;
+    }
+
+    button {
+      background: #0066cc;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-weight: 500;
+      margin-right: 8px;
+      width: auto;
+      min-width: 120px;
+    }
+
+    button:hover {
+      background: #0052a3;
+    }
+
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    .log {
+      background: #f9f9f9;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 12px;
+      height: 300px;
+      overflow-y: auto;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 12px;
+      color: #333;
+    }
+
+    .log-entry {
+      margin-bottom: 4px;
+      padding: 2px 0;
+    }
+
+    .log-entry.error { color: #c33; }
+    .log-entry.success { color: #3a3; }
+    .log-entry.info { color: #06c; }
+
+    .actors-list {
+      background: #f9f9f9;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 12px;
+      min-height: 60px;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 12px;
+    }
+
+    .actor-badge {
+      display: inline-block;
+      background: #e6f3ff;
+      color: #0066cc;
+      padding: 4px 8px;
+      border-radius: 4px;
+      margin: 4px 4px 4px 0;
+      font-size: 11px;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 8px;
+      margin-top: 12px;
+      font-size: 14px;
+    }
+
+    .info-label {
+      font-weight: 500;
+      color: #666;
+    }
+
+    .info-value {
+      color: #333;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Signal Hub Client - Basic Usage Example</h1>
+    <p>Connect to Signal Hub, register actors, and send/receive messages.</p>
+  </div>
+
+  <div class="container">
+    <h2>Configuration</h2>
+    <div class="form-group">
+      <label for="url">Signal Hub URL</label>
+      <input type="text" id="url" placeholder="wss://signal-hub.example.com" value="ws://localhost:8787">
+    </div>
+    <div class="form-group">
+      <label for="jwt">JWT Token</label>
+      <input type="text" id="jwt" placeholder="eyJhbGc...">
+    </div>
+    <button id="connectBtn">Connect</button>
+    <button id="disconnectBtn" disabled>Disconnect</button>
+  </div>
+
+  <div class="container">
+    <h2>Connection Status</h2>
+    <div class="info-grid">
+      <div class="info-label">State:</div>
+      <div class="info-value">
+        <span id="connectionState" class="status disconnected">disconnected</span>
+      </div>
+      <div class="info-label">Session ID:</div>
+      <div class="info-value" id="sessionId">-</div>
+      <div class="info-label">Server Version:</div>
+      <div class="info-value" id="serverVersion">-</div>
+      <div class="info-label">Actor Identity:</div>
+      <div class="info-value" id="actorIdentity">-</div>
+    </div>
+  </div>
+
+  <div class="container">
+    <h2>Actor Registration</h2>
+    <div class="form-group">
+      <label for="actorAddress">Actor Address (leave empty for auto-generate)</label>
+      <input type="text" id="actorAddress" placeholder="@(browser/my-widget)">
+    </div>
+    <div class="form-group">
+      <label for="capabilities">Capabilities (comma-separated)</label>
+      <input type="text" id="capabilities" placeholder="render, interact, update" value="render, interact">
+    </div>
+    <button id="registerBtn" disabled>Register Actor</button>
+
+    <h2>Registered Actors</h2>
+    <div class="actors-list" id="actorsList">
+      <em>No actors registered</em>
+    </div>
+  </div>
+
+  <div class="container">
+    <h2>Send Message</h2>
+    <div class="form-group">
+      <label for="fromAddress">From (select registered actor)</label>
+      <input type="text" id="fromAddress" placeholder="@(browser/my-widget)">
+    </div>
+    <div class="form-group">
+      <label for="toAddress">To</label>
+      <input type="text" id="toAddress" placeholder="@(local/coordinator)">
+    </div>
+    <div class="form-group">
+      <label for="messageType">Message Type</label>
+      <input type="text" id="messageType" placeholder="app:test" value="app:test">
+    </div>
+    <div class="form-group">
+      <label for="messageData">Message Data (JSON)</label>
+      <textarea id="messageData" rows="4">{ "action": "test", "timestamp": 0 }</textarea>
+    </div>
+    <button id="sendBtn" disabled>Send Message</button>
+    <button id="sendWithAckBtn" disabled>Send with Ack</button>
+  </div>
+
+  <div class="container">
+    <h2>Activity Log</h2>
+    <div class="log" id="log"></div>
+    <button id="clearLogBtn" style="margin-top: 12px; width: 120px;">Clear Log</button>
+  </div>
+
+  <script type="module">
+    // Import from the built package (adjust path as needed)
+    import { SignalHubClient, generateBrowserAddress } from '../dist/index.js';
+
+    // State
+    let client = null;
+    const registeredActors = new Set();
+
+    // DOM elements
+    const urlInput = document.getElementById('url');
+    const jwtInput = document.getElementById('jwt');
+    const connectBtn = document.getElementById('connectBtn');
+    const disconnectBtn = document.getElementById('disconnectBtn');
+    const connectionState = document.getElementById('connectionState');
+    const sessionId = document.getElementById('sessionId');
+    const serverVersion = document.getElementById('serverVersion');
+    const actorIdentity = document.getElementById('actorIdentity');
+    const actorAddress = document.getElementById('actorAddress');
+    const capabilities = document.getElementById('capabilities');
+    const registerBtn = document.getElementById('registerBtn');
+    const actorsList = document.getElementById('actorsList');
+    const fromAddress = document.getElementById('fromAddress');
+    const toAddress = document.getElementById('toAddress');
+    const messageType = document.getElementById('messageType');
+    const messageData = document.getElementById('messageData');
+    const sendBtn = document.getElementById('sendBtn');
+    const sendWithAckBtn = document.getElementById('sendWithAckBtn');
+    const log = document.getElementById('log');
+    const clearLogBtn = document.getElementById('clearLogBtn');
+
+    // Logging
+    function addLog(message, type = 'info') {
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      const timestamp = new Date().toLocaleTimeString();
+      entry.textContent = `[${timestamp}] ${message}`;
+      log.appendChild(entry);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function updateConnectionState(state) {
+      connectionState.textContent = state;
+      connectionState.className = `status ${state}`;
+    }
+
+    function updateActorsList() {
+      if (registeredActors.size === 0) {
+        actorsList.innerHTML = '<em>No actors registered</em>';
+      } else {
+        actorsList.innerHTML = Array.from(registeredActors)
+          .map(addr => `<span class="actor-badge">${addr}</span>`)
+          .join('');
+      }
+    }
+
+    // Connect button
+    connectBtn.addEventListener('click', async () => {
+      const url = urlInput.value.trim();
+      const jwt = jwtInput.value.trim() || 'dev-token';
+
+      if (!url) {
+        addLog('Please enter Signal Hub URL', 'error');
+        return;
+      }
+
+      try {
+        addLog('Creating client...', 'info');
+        client = new SignalHubClient({
+          url,
+          jwt,
+          autoReconnect: true,
+          heartbeatInterval: 25000
+        });
+
+        // Event handlers
+        client.on('connected', (event) => {
+          addLog('Connected to Signal Hub', 'success');
+          sessionId.textContent = event.sessionId || '-';
+          serverVersion.textContent = event.serverVersion || '-';
+          actorIdentity.textContent = event.actorIdentity || '-';
+          connectBtn.disabled = true;
+          disconnectBtn.disabled = false;
+          registerBtn.disabled = false;
+        });
+
+        client.on('disconnected', () => {
+          addLog('Disconnected from Signal Hub', 'info');
+          sessionId.textContent = '-';
+          serverVersion.textContent = '-';
+          actorIdentity.textContent = '-';
+          connectBtn.disabled = false;
+          disconnectBtn.disabled = true;
+          registerBtn.disabled = true;
+          sendBtn.disabled = true;
+          sendWithAckBtn.disabled = true;
+        });
+
+        client.on('error', (event) => {
+          addLog(`Error: ${event.message} ${event.code ? `(${event.code})` : ''}`, 'error');
+        });
+
+        client.on('stateChange', (state) => {
+          updateConnectionState(state);
+          addLog(`State changed: ${state}`, 'info');
+        });
+
+        client.on('message', (event) => {
+          const msg = event.message;
+          addLog(`Received: ${msg.type} from ${msg.from}`, 'success');
+          addLog(`  Payload: ${JSON.stringify(msg.payload)}`, 'info');
+        });
+
+        // Connect
+        addLog('Connecting...', 'info');
+        await client.connect();
+      } catch (error) {
+        addLog(`Connection failed: ${error.message}`, 'error');
+      }
+    });
+
+    // Disconnect button
+    disconnectBtn.addEventListener('click', async () => {
+      try {
+        addLog('Disconnecting...', 'info');
+        await client.disconnect();
+        client = null;
+        registeredActors.clear();
+        updateActorsList();
+      } catch (error) {
+        addLog(`Disconnect failed: ${error.message}`, 'error');
+      }
+    });
+
+    // Register actor button
+    registerBtn.addEventListener('click', async () => {
+      try {
+        const address = actorAddress.value.trim() || generateBrowserAddress();
+        const caps = capabilities.value
+          .split(',')
+          .map(c => c.trim())
+          .filter(c => c);
+
+        addLog(`Registering actor ${address}...`, 'info');
+
+        const registeredAddress = await client.registerActor({
+          address,
+          capabilities: caps,
+          metadata: { registeredAt: Date.now() }
+        });
+
+        registeredActors.add(registeredAddress);
+        updateActorsList();
+        addLog(`Actor registered: ${registeredAddress}`, 'success');
+
+        // Enable send buttons if we have at least one actor
+        sendBtn.disabled = false;
+        sendWithAckBtn.disabled = false;
+
+        // Update from address field if empty
+        if (!fromAddress.value) {
+          fromAddress.value = registeredAddress;
+        }
+
+        // Clear form
+        actorAddress.value = '';
+      } catch (error) {
+        addLog(`Registration failed: ${error.message}`, 'error');
+      }
+    });
+
+    // Send message button
+    sendBtn.addEventListener('click', async () => {
+      try {
+        const from = fromAddress.value.trim();
+        const to = toAddress.value.trim();
+        const type = messageType.value.trim();
+        let data;
+
+        try {
+          // Add timestamp if it's 0
+          const dataText = messageData.value.replace('"timestamp": 0', `"timestamp": ${Date.now()}`);
+          data = JSON.parse(dataText);
+        } catch (e) {
+          addLog('Invalid JSON in message data', 'error');
+          return;
+        }
+
+        if (!from || !to || !type) {
+          addLog('Please fill in all message fields', 'error');
+          return;
+        }
+
+        addLog(`Sending ${type} to ${to}...`, 'info');
+        await client.send(from, to, type, data);
+        addLog('Message sent', 'success');
+      } catch (error) {
+        addLog(`Send failed: ${error.message}`, 'error');
+      }
+    });
+
+    // Send with ack button
+    sendWithAckBtn.addEventListener('click', async () => {
+      try {
+        const from = fromAddress.value.trim();
+        const to = toAddress.value.trim();
+        const type = messageType.value.trim();
+        let data;
+
+        try {
+          const dataText = messageData.value.replace('"timestamp": 0', `"timestamp": ${Date.now()}`);
+          data = JSON.parse(dataText);
+        } catch (e) {
+          addLog('Invalid JSON in message data', 'error');
+          return;
+        }
+
+        if (!from || !to || !type) {
+          addLog('Please fill in all message fields', 'error');
+          return;
+        }
+
+        addLog(`Sending ${type} to ${to} (with ack)...`, 'info');
+        const messageId = await client.sendWithAck(from, to, type, data);
+        addLog(`Message delivered: ${messageId}`, 'success');
+      } catch (error) {
+        addLog(`Send failed: ${error.message}`, 'error');
+      }
+    });
+
+    // Clear log button
+    clearLogBtn.addEventListener('click', () => {
+      log.innerHTML = '';
+    });
+
+    // Initial log message
+    addLog('Ready. Configure and connect to Signal Hub.', 'info');
+  </script>
+</body>
+</html>

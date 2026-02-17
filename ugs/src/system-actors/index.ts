@@ -43,3 +43,8 @@ export {
   SignalHubBridgeActor,
   type SignalHubBridgeConfig,
 } from './signal-hub-bridge.ts';
+
+export {
+  SignalHubClientActor,
+  type SignalHubClientActorConfig,
+} from './signal-hub-client-actor.ts';

@@ -1,0 +1,37 @@
+name = "signal-hub"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Durable Object binding
+[durable_objects]
+bindings = [
+  { name = "SIGNAL_HUB", class_name = "SignalHub" }
+]
+
+# Migration for Durable Object
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SignalHub"]
+
+# Environment variables
+[vars]
+PROTOCOL_VERSION = "0.1.0"
+MAX_MESSAGE_SIZE = "1048576"  # 1MB (Cloudflare WebSocket limit)
+HEARTBEAT_INTERVAL = "30000"  # 30s
+ACTOR_REGISTRY_LIMIT = "50000"
+DEFAULT_ACTOR_TTL = "300000"  # 5 minutes
+MAX_ACTOR_TTL = "3600000"  # 1 hour
+BROADCAST_SYNC_THRESHOLD = "100"
+
+# Development environment
+[env.development]
+[env.development.vars]
+JWT_SECRET = "dev-secret-change-in-production"
+AUTH_ENABLED = "false"
+
+# Production environment
+[env.production]
+[env.production.vars]
+AUTH_ENABLED = "true"
+# JWT_SECRET should be set via wrangler secret put JWT_SECRET

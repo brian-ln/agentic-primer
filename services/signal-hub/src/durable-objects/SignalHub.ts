@@ -1,0 +1,369 @@
+/**
+ * SignalHub Durable Object
+ *
+ * Main WebSocket server implementing Signal Hub protocol
+ */
+
+import type {
+  Env,
+  SharedMessage,
+  Session,
+  ActorRegistration,
+  CanonicalAddress,
+  QueueStats,
+} from '../types';
+import { HubError } from '../types';
+import {
+  generateSessionId,
+  toCanonicalAddress,
+  validateSharedMessage,
+  createErrorMessage,
+} from '../utils';
+
+// Handlers
+import { handleConnect, handleHeartbeat, handleDisconnect } from '../handlers/connection';
+import {
+  handleRegister,
+  handleUnregister,
+  handleDiscover,
+  handleListActors,
+  handleRenew,
+} from '../handlers/registration';
+import { handleSend, handleBroadcast } from '../handlers/messaging';
+import {
+  handleSubscribe,
+  handlePublish,
+  handleUnsubscribe,
+  cleanupSubscriptions,
+} from '../handlers/pubsub';
+import { handleQueueStats } from '../handlers/flowcontrol';
+
+const SIGNAL_HUB_ADDRESS = toCanonicalAddress('cloudflare/signal-hub');
+
+/**
+ * SignalHub Durable Object Class
+ *
+ * Implements hibernatable WebSocket server with:
+ * - Connection lifecycle management
+ * - Actor registration and discovery
+ * - Point-to-point and broadcast messaging
+ * - Pub/sub topic subscriptions
+ * - Backpressure and flow control
+ */
+export class SignalHub implements DurableObject {
+  private env: Env;
+  private sessions: Map<WebSocket, Session>;
+  private connections: Map<string, WebSocket>;
+  private registry: Map<string, ActorRegistration>;
+  private subscriptions: Map<string, Set<CanonicalAddress>>;
+  private queueStats: QueueStats;
+
+  constructor(state: DurableObjectState, env: Env) {
+    this.env = env;
+    this.sessions = new Map();
+    this.connections = new Map();
+    this.registry = new Map();
+    this.subscriptions = new Map();
+    this.queueStats = {
+      pending: 0,
+      processed: 0,
+      failed: 0,
+      paused: false,
+    };
+
+    // Enable hibernation for WebSocket connections
+    state.setWebSocketAutoResponse(
+      new WebSocketRequestResponsePair(
+        JSON.stringify({ type: 'ping' }),
+        JSON.stringify({ type: 'pong' })
+      )
+    );
+
+    console.log('SignalHub Durable Object initialized');
+  }
+
+  /**
+   * HTTP fetch handler - upgrade to WebSocket
+   */
+  async fetch(request: Request): Promise<Response> {
+    const upgradeHeader = request.headers.get('Upgrade');
+
+    if (upgradeHeader !== 'websocket') {
+      return new Response('Expected WebSocket upgrade', { status: 426 });
+    }
+
+    // Create WebSocket pair
+    const pair = new WebSocketPair();
+    const [client, server] = Object.values(pair);
+
+    // Accept WebSocket connection
+    this.handleWebSocketConnection(server);
+
+    return new Response(null, {
+      status: 101,
+      webSocket: client,
+    });
+  }
+
+  /**
+   * Handle new WebSocket connection
+   */
+  private handleWebSocketConnection(ws: WebSocket): void {
+    // Create session
+    const session: Session = {
+      sessionId: generateSessionId(),
+      actorIdentity: null,
+      capabilities: [],
+      connectedAt: Date.now(),
+      lastHeartbeat: Date.now(),
+      authenticated: false,
+      paused: false,
+    };
+
+    // Store session and connection
+    this.sessions.set(ws, session);
+
+    // Accept the WebSocket
+    ws.accept();
+
+    console.log(`WebSocket connection accepted: ${session.sessionId}`);
+  }
+
+  /**
+   * Handle incoming WebSocket message
+   */
+  async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
+    const session = this.sessions.get(ws);
+    if (!session) {
+      console.error('WebSocket message from unknown session');
+      ws.close(1011, 'Unknown session');
+      return;
+    }
+
+    try {
+      // Parse message
+      const rawMessage =
+        typeof message === 'string' ? message : new TextDecoder().decode(message);
+      const parsedMessage = JSON.parse(rawMessage);
+
+      // Validate SharedMessage structure
+      if (!validateSharedMessage(parsedMessage)) {
+        throw new HubError('internal_error', 'Invalid SharedMessage structure');
+      }
+
+      const msg = parsedMessage as SharedMessage;
+
+      // Update heartbeat timestamp
+      session.lastHeartbeat = Date.now();
+
+      // Route message by type
+      const response = await this.routeMessage(msg, session, ws);
+
+      // Send response if returned
+      if (response) {
+        ws.send(JSON.stringify(response));
+      }
+
+      // Update stats
+      this.queueStats.processed++;
+    } catch (err) {
+      console.error('Error processing WebSocket message:', err);
+
+      // Send error response
+      try {
+        const parsedMessage = JSON.parse(
+          typeof message === 'string' ? message : new TextDecoder().decode(message)
+        );
+
+        const errorMessage = createErrorMessage(
+          err instanceof HubError ? err.code : 'internal_error',
+          err instanceof Error ? err.message : 'Unknown error',
+          parsedMessage,
+          SIGNAL_HUB_ADDRESS,
+          err instanceof HubError ? err.details : undefined
+        );
+
+        ws.send(JSON.stringify(errorMessage));
+      } catch {
+        // Failed to send error - close connection
+        ws.close(1011, 'Internal error');
+      }
+
+      this.queueStats.failed++;
+    }
+  }
+
+  /**
+   * Route message to appropriate handler
+   */
+  private async routeMessage(
+    msg: SharedMessage,
+    session: Session,
+    ws: WebSocket
+  ): Promise<SharedMessage | null> {
+    const messageType = msg.type;
+
+    // Connection lifecycle
+    if (messageType === 'hub:connect') {
+      const response = await handleConnect(msg, session, this.env);
+      // Store connection after successful connect
+      this.connections.set(session.sessionId, ws);
+      return response;
+    }
+
+    // Check authentication for subsequent messages (if auth enabled)
+    if (this.env.AUTH_ENABLED === 'true' && !session.authenticated) {
+      throw new HubError('unauthorized', 'Not authenticated - send hub:connect first');
+    }
+
+    // Heartbeat
+    if (messageType === 'hub:heartbeat') {
+      return handleHeartbeat(msg, session);
+    }
+
+    // Disconnect
+    if (messageType === 'hub:disconnect') {
+      const response = handleDisconnect(msg, session);
+      this.cleanupConnection(ws, session);
+      ws.close(1000, 'Client requested disconnect');
+      return response;
+    }
+
+    // Actor registration
+    if (messageType === 'hub:register') {
+      return handleRegister(msg, this.registry, session.sessionId, this.env);
+    }
+
+    if (messageType === 'hub:unregister') {
+      handleUnregister(msg, this.registry);
+      return null; // Fire-and-forget
+    }
+
+    if (messageType === 'hub:discover') {
+      return handleDiscover(msg, this.registry);
+    }
+
+    if (messageType === 'hub:list_actors') {
+      return handleListActors(msg, this.registry);
+    }
+
+    if (messageType === 'hub:renew') {
+      return handleRenew(msg, this.registry, this.env);
+    }
+
+    // Messaging
+    if (messageType === 'hub:send') {
+      return handleSend(msg, this.registry, this.connections, this.env);
+    }
+
+    if (messageType === 'hub:broadcast') {
+      return handleBroadcast(msg, this.registry, this.connections, this.env);
+    }
+
+    // Pub/sub
+    if (messageType === 'hub:subscribe') {
+      if (!session.actorIdentity) {
+        throw new HubError('unauthorized', 'Actor identity required for subscriptions');
+      }
+      return handleSubscribe(msg, this.subscriptions, session.actorIdentity);
+    }
+
+    if (messageType === 'hub:publish') {
+      return handlePublish(msg, this.subscriptions, this.registry, this.connections);
+    }
+
+    if (messageType === 'hub:unsubscribe') {
+      if (!session.actorIdentity) {
+        throw new HubError('unauthorized', 'Actor identity required for subscriptions');
+      }
+      handleUnsubscribe(msg, this.subscriptions, session.actorIdentity);
+      return null; // Fire-and-forget
+    }
+
+    // Flow control
+    if (messageType === 'hub:queue_stats') {
+      return handleQueueStats(msg, this.queueStats);
+    }
+
+    // Unknown message type
+    throw new HubError('internal_error', `Unknown message type: ${messageType}`);
+  }
+
+  /**
+   * Handle WebSocket close
+   */
+  async webSocketClose(
+    ws: WebSocket,
+    code: number,
+    reason: string,
+    wasClean: boolean
+  ): Promise<void> {
+    const session = this.sessions.get(ws);
+    if (!session) {
+      return;
+    }
+
+    console.log(
+      `WebSocket closed: ${session.sessionId} (code=${code}, reason=${reason}, clean=${wasClean})`
+    );
+
+    this.cleanupConnection(ws, session);
+  }
+
+  /**
+   * Handle WebSocket error
+   */
+  async webSocketError(ws: WebSocket, error: Error): Promise<void> {
+    const session = this.sessions.get(ws);
+    console.error(
+      `WebSocket error: ${session?.sessionId ?? 'unknown'}`,
+      error
+    );
+
+    if (session) {
+      this.cleanupConnection(ws, session);
+    }
+  }
+
+  /**
+   * Cleanup connection resources
+   */
+  private cleanupConnection(ws: WebSocket, session: Session): void {
+    // Remove from sessions
+    this.sessions.delete(ws);
+
+    // Remove from connections
+    this.connections.delete(session.sessionId);
+
+    // Cleanup registrations for this connection
+    for (const [address, registration] of this.registry.entries()) {
+      if (registration.connectionId === session.sessionId) {
+        this.registry.delete(address);
+        console.log(`Unregistered actor on disconnect: ${address}`);
+      }
+    }
+
+    // Cleanup subscriptions
+    if (session.actorIdentity) {
+      cleanupSubscriptions(this.subscriptions, session.actorIdentity);
+    }
+
+    console.log(`Cleaned up session: ${session.sessionId}`);
+  }
+
+  /**
+   * Alarm handler (for future use - scheduled cleanup, etc.)
+   */
+  async alarm(): Promise<void> {
+    console.log('SignalHub alarm triggered');
+
+    // Cleanup expired registrations
+    const now = Date.now();
+    for (const [address, registration] of this.registry.entries()) {
+      if (now >= registration.expiresAt) {
+        this.registry.delete(address);
+        console.log(`Expired actor registration: ${address}`);
+      }
+    }
+  }
+}

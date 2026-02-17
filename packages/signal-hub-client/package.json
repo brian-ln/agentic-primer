@@ -1,0 +1,39 @@
+{
+  "name": "@agentic-primer/signal-hub-client",
+  "version": "0.1.0",
+  "description": "Lightweight browser client for Signal Hub WebSocket protocol",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "signal-hub",
+    "websocket",
+    "browser",
+    "actor-model",
+    "real-time"
+  ],
+  "author": "Brian Lloyd-Newberry",
+  "license": "MIT",
+  "peerDependencies": {
+    "@agentic-primer/protocols": "^0.1.0"
+  },
+  "devDependencies": {
+    "@agentic-primer/protocols": "workspace:*",
+    "typescript": "^5.3.3"
+  }
+}

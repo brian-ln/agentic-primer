@@ -1,0 +1,27 @@
+{
+  "name": "@agentic-primer/signal-hub",
+  "version": "0.1.0",
+  "description": "Signal Hub - WebSocket-based message router on Cloudflare Durable Objects",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@agentic-primer/protocols": "workspace:*",
+    "jose": "^5.10.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.12.10",
+    "@cloudflare/workers-types": "^4.20250109.0",
+    "miniflare": "^4.20260205.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.4",
+    "wrangler": "^3.99.0"
+  }
+}

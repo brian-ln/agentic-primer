@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Signal Hub Client - Advanced Usage</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .app {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .header {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+    .header h1 {
+      color: #667eea;
+      margin-bottom: 8px;
+    }
+
+    .header p {
+      color: #666;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    .panel {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+    .panel h2 {
+      color: #333;
+      font-size: 18px;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid #f0f0f0;
+    }
+
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .status-card {
+      background: #f9f9f9;
+      padding: 12px;
+      border-radius: 8px;
+      border-left: 4px solid #667eea;
+    }
+
+    .status-card label {
+      display: block;
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 4px;
+    }
+
+    .status-card .value {
+      font-family: 'Monaco', monospace;
+      font-size: 14px;
+      color: #333;
+      font-weight: 500;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .badge.success { background: #d4edda; color: #155724; }
+    .badge.danger { background: #f8d7da; color: #721c24; }
+    .badge.warning { background: #fff3cd; color: #856404; }
+    .badge.info { background: #d1ecf1; color: #0c5460; }
+
+    .actor-grid {
+      display: grid;
+      gap: 8px;
+    }
+
+    .actor-item {
+      background: #f9f9f9;
+      padding: 12px;
+      border-radius: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border: 1px solid #e0e0e0;
+    }
+
+    .actor-address {
+      font-family: 'Monaco', monospace;
+      font-size: 13px;
+      color: #667eea;
+      font-weight: 600;
+    }
+
+    .actor-caps {
+      font-size: 11px;
+      color: #666;
+    }
+
+    .message-flow {
+      background: #f9f9f9;
+      border-radius: 8px;
+      padding: 12px;
+      max-height: 300px;
+      overflow-y: auto;
+      font-family: 'Monaco', monospace;
+      font-size: 11px;
+    }
+
+    .message-item {
+      padding: 8px;
+      margin-bottom: 8px;
+      border-radius: 4px;
+      border-left: 3px solid #667eea;
+      background: white;
+    }
+
+    .message-item.sent {
+      border-left-color: #28a745;
+    }
+
+    .message-item.received {
+      border-left-color: #007bff;
+    }
+
+    .message-item.error {
+      border-left-color: #dc3545;
+    }
+
+    .btn {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+
+    .btn:hover {
+      background: #5568d3;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+
+    .btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn.secondary {
+      background: #6c757d;
+    }
+
+    .btn.danger {
+      background: #dc3545;
+    }
+
+    .btn.success {
+      background: #28a745;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .stat {
+      text-align: center;
+      padding: 12px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 8px;
+      color: white;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      opacity: 0.9;
+      text-transform: uppercase;
+    }
+
+    .log-viewer {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 16px;
+      border-radius: 8px;
+      font-family: 'Monaco', monospace;
+      font-size: 12px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .log-entry {
+      margin-bottom: 4px;
+      padding: 2px 0;
+    }
+
+    .log-entry.error { color: #f48771; }
+    .log-entry.success { color: #89d185; }
+    .log-entry.info { color: #6cb6ff; }
+    .log-entry.warn { color: #e5c07b; }
+
+    .full-width {
+      grid-column: 1 / -1;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <h1>Signal Hub Client - Advanced Demo</h1>
+      <p>Multi-actor coordination with real-time message flow visualization</p>
+    </div>
+
+    <div class="grid">
+      <!-- Connection Panel -->
+      <div class="panel">
+        <h2>Connection</h2>
+        <div class="status-grid">
+          <div class="status-card">
+            <label>State</label>
+            <div class="value">
+              <span id="state" class="badge danger">disconnected</span>
+            </div>
+          </div>
+          <div class="status-card">
+            <label>Session ID</label>
+            <div class="value" id="sessionId">-</div>
+          </div>
+          <div class="status-card">
+            <label>Server Version</label>
+            <div class="value" id="serverVersion">-</div>
+          </div>
+          <div class="status-card">
+            <label>Uptime</label>
+            <div class="value" id="uptime">-</div>
+          </div>
+        </div>
+        <div class="btn-group">
+          <button class="btn success" id="connectBtn">Connect</button>
+          <button class="btn danger" id="disconnectBtn" disabled>Disconnect</button>
+        </div>
+      </div>
+
+      <!-- Actors Panel -->
+      <div class="panel">
+        <h2>Registered Actors</h2>
+        <div class="actor-grid" id="actorsList">
+          <em style="color: #999; font-size: 14px;">No actors registered</em>
+        </div>
+        <div class="btn-group">
+          <button class="btn" id="registerActorBtn" disabled>Register Actor</button>
+          <button class="btn secondary" id="registerMultipleBtn" disabled>Register 3 Actors</button>
+        </div>
+      </div>
+
+      <!-- Statistics Panel -->
+      <div class="panel full-width">
+        <h2>Statistics</h2>
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-value" id="statMessages">0</div>
+            <div class="stat-label">Messages Sent</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" id="statReceived">0</div>
+            <div class="stat-label">Messages Received</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" id="statActors">0</div>
+            <div class="stat-label">Active Actors</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" id="statErrors">0</div>
+            <div class="stat-label">Errors</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Message Flow Panel -->
+      <div class="panel full-width">
+        <h2>Message Flow</h2>
+        <div class="message-flow" id="messageFlow">
+          <em style="color: #999;">No messages yet</em>
+        </div>
+        <div class="btn-group">
+          <button class="btn" id="sendTestBtn" disabled>Send Test Message</button>
+          <button class="btn secondary" id="sendBroadcastBtn" disabled>Broadcast to All</button>
+          <button class="btn secondary" id="clearFlowBtn">Clear</button>
+        </div>
+      </div>
+
+      <!-- Activity Log Panel -->
+      <div class="panel full-width">
+        <h2>Activity Log</h2>
+        <div class="log-viewer" id="log"></div>
+        <div class="btn-group">
+          <button class="btn secondary" id="clearLogBtn">Clear Log</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { SignalHubClient, generateBrowserAddress } from '../dist/index.js';
+
+    // State
+    let client = null;
+    const actors = new Map();
+    let stats = {
+      sent: 0,
+      received: 0,
+      errors: 0
+    };
+    let connectionTime = null;
+
+    // DOM elements
+    const connectBtn = document.getElementById('connectBtn');
+    const disconnectBtn = document.getElementById('disconnectBtn');
+    const state = document.getElementById('state');
+    const sessionId = document.getElementById('sessionId');
+    const serverVersion = document.getElementById('serverVersion');
+    const uptime = document.getElementById('uptime');
+    const actorsList = document.getElementById('actorsList');
+    const registerActorBtn = document.getElementById('registerActorBtn');
+    const registerMultipleBtn = document.getElementById('registerMultipleBtn');
+    const messageFlow = document.getElementById('messageFlow');
+    const sendTestBtn = document.getElementById('sendTestBtn');
+    const sendBroadcastBtn = document.getElementById('sendBroadcastBtn');
+    const clearFlowBtn = document.getElementById('clearFlowBtn');
+    const log = document.getElementById('log');
+    const clearLogBtn = document.getElementById('clearLogBtn');
+    const statMessages = document.getElementById('statMessages');
+    const statReceived = document.getElementById('statReceived');
+    const statActors = document.getElementById('statActors');
+    const statErrors = document.getElementById('statErrors');
+
+    // Logging
+    function addLog(message, type = 'info') {
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      const timestamp = new Date().toLocaleTimeString();
+      entry.textContent = `[${timestamp}] ${message}`;
+      log.appendChild(entry);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function addMessageFlow(message, type = 'info') {
+      if (messageFlow.querySelector('em')) {
+        messageFlow.innerHTML = '';
+      }
+      const item = document.createElement('div');
+      item.className = `message-item ${type}`;
+      const timestamp = new Date().toLocaleTimeString();
+      item.textContent = `[${timestamp}] ${message}`;
+      messageFlow.appendChild(item);
+      messageFlow.scrollTop = messageFlow.scrollHeight;
+    }
+
+    function updateState(newState) {
+      state.textContent = newState;
+      state.className = `badge ${
+        newState === 'connected' ? 'success' :
+        newState === 'connecting' || newState === 'reconnecting' ? 'warning' :
+        'danger'
+      }`;
+    }
+
+    function updateStats() {
+      statMessages.textContent = stats.sent;
+      statReceived.textContent = stats.received;
+      statActors.textContent = actors.size;
+      statErrors.textContent = stats.errors;
+    }
+
+    function updateActorsList() {
+      if (actors.size === 0) {
+        actorsList.innerHTML = '<em style="color: #999; font-size: 14px;">No actors registered</em>';
+      } else {
+        actorsList.innerHTML = '';
+        actors.forEach((data, address) => {
+          const item = document.createElement('div');
+          item.className = 'actor-item';
+          item.innerHTML = `
+            <div>
+              <div class="actor-address">${address}</div>
+              <div class="actor-caps">${data.capabilities.join(', ')}</div>
+            </div>
+            <span class="badge info">Active</span>
+          `;
+          actorsList.appendChild(item);
+        });
+      }
+      updateStats();
+    }
+
+    function updateUptime() {
+      if (connectionTime) {
+        const elapsed = Date.now() - connectionTime;
+        const seconds = Math.floor(elapsed / 1000);
+        const minutes = Math.floor(seconds / 60);
+        const hours = Math.floor(minutes / 60);
+        uptime.textContent = `${hours}h ${minutes % 60}m ${seconds % 60}s`;
+      }
+    }
+
+    // Connect
+    connectBtn.addEventListener('click', async () => {
+      try {
+        addLog('Creating Signal Hub client...', 'info');
+        client = new SignalHubClient({
+          url: 'ws://localhost:8787',
+          jwt: 'dev-token',
+          autoReconnect: true,
+          heartbeatInterval: 25000
+        });
+
+        client.on('connected', (event) => {
+          addLog('Connected to Signal Hub', 'success');
+          sessionId.textContent = event.sessionId;
+          serverVersion.textContent = event.serverVersion;
+          connectionTime = Date.now();
+          connectBtn.disabled = true;
+          disconnectBtn.disabled = false;
+          registerActorBtn.disabled = false;
+          registerMultipleBtn.disabled = false;
+        });
+
+        client.on('disconnected', () => {
+          addLog('Disconnected from Signal Hub', 'warn');
+          sessionId.textContent = '-';
+          serverVersion.textContent = '-';
+          connectionTime = null;
+          uptime.textContent = '-';
+          connectBtn.disabled = false;
+          disconnectBtn.disabled = true;
+          registerActorBtn.disabled = true;
+          registerMultipleBtn.disabled = true;
+          sendTestBtn.disabled = true;
+          sendBroadcastBtn.disabled = true;
+        });
+
+        client.on('error', (event) => {
+          addLog(`Error: ${event.message}`, 'error');
+          stats.errors++;
+          updateStats();
+        });
+
+        client.on('stateChange', (newState) => {
+          updateState(newState);
+        });
+
+        client.on('message', (event) => {
+          const msg = event.message;
+          addLog(`Received: ${msg.type} from ${msg.from}`, 'success');
+          addMessageFlow(`← ${msg.type} from ${msg.from}`, 'received');
+          stats.received++;
+          updateStats();
+        });
+
+        await client.connect();
+      } catch (error) {
+        addLog(`Connection failed: ${error.message}`, 'error');
+        stats.errors++;
+        updateStats();
+      }
+    });
+
+    // Disconnect
+    disconnectBtn.addEventListener('click', async () => {
+      try {
+        await client.disconnect();
+        actors.clear();
+        updateActorsList();
+      } catch (error) {
+        addLog(`Disconnect failed: ${error.message}`, 'error');
+      }
+    });
+
+    // Register single actor
+    registerActorBtn.addEventListener('click', async () => {
+      try {
+        const address = generateBrowserAddress(`widget-${actors.size + 1}`);
+        const capabilities = ['render', 'update', 'interact'];
+
+        addLog(`Registering ${address}...`, 'info');
+        await client.registerActor({
+          address,
+          capabilities,
+          metadata: { type: 'widget', index: actors.size }
+        });
+
+        actors.set(address, { capabilities });
+        updateActorsList();
+        addLog(`Actor registered: ${address}`, 'success');
+
+        if (actors.size === 1) {
+          sendTestBtn.disabled = false;
+          sendBroadcastBtn.disabled = false;
+        }
+      } catch (error) {
+        addLog(`Registration failed: ${error.message}`, 'error');
+        stats.errors++;
+        updateStats();
+      }
+    });
+
+    // Register multiple actors
+    registerMultipleBtn.addEventListener('click', async () => {
+      for (let i = 0; i < 3; i++) {
+        await new Promise(resolve => setTimeout(resolve, 200));
+        registerActorBtn.click();
+      }
+    });
+
+    // Send test message
+    sendTestBtn.addEventListener('click', async () => {
+      if (actors.size === 0) return;
+
+      const fromAddr = Array.from(actors.keys())[0];
+      const toAddr = '@(local/test-receiver)';
+
+      try {
+        addLog(`Sending test message from ${fromAddr}...`, 'info');
+        await client.send(fromAddr, toAddr, 'app:test', {
+          timestamp: Date.now(),
+          random: Math.random()
+        });
+
+        addMessageFlow(`→ app:test to ${toAddr}`, 'sent');
+        stats.sent++;
+        updateStats();
+      } catch (error) {
+        addLog(`Send failed: ${error.message}`, 'error');
+        addMessageFlow(`✗ Failed to send: ${error.message}`, 'error');
+        stats.errors++;
+        updateStats();
+      }
+    });
+
+    // Broadcast to all
+    sendBroadcastBtn.addEventListener('click', async () => {
+      if (actors.size === 0) return;
+
+      const fromAddr = Array.from(actors.keys())[0];
+
+      for (const toAddr of actors.keys()) {
+        if (toAddr === fromAddr) continue;
+
+        try {
+          await client.send(fromAddr, toAddr, 'app:broadcast', {
+            message: 'Hello from broadcast!',
+            timestamp: Date.now()
+          });
+
+          addMessageFlow(`→ broadcast to ${toAddr}`, 'sent');
+          stats.sent++;
+        } catch (error) {
+          addLog(`Broadcast failed: ${error.message}`, 'error');
+          stats.errors++;
+        }
+      }
+
+      updateStats();
+    });
+
+    // Clear buttons
+    clearFlowBtn.addEventListener('click', () => {
+      messageFlow.innerHTML = '<em style="color: #999;">No messages yet</em>';
+    });
+
+    clearLogBtn.addEventListener('click', () => {
+      log.innerHTML = '';
+    });
+
+    // Update uptime every second
+    setInterval(updateUptime, 1000);
+
+    // Initial log
+    addLog('Advanced demo initialized. Click Connect to start.', 'info');
+  </script>
+</body>
+</html>
