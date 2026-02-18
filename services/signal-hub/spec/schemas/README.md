@@ -2,105 +2,70 @@
 
 Core JSON Schema definitions used across all Signal Hub domains.
 
-## Schema Index
+## Schema Files
 
-### Core Schemas
+### `shared-message.schema.json`
+The universal message envelope for all Signal Hub communication. Every message sent through the hub uses this format.
 
-| Schema | Description | Used By |
-|--------|-------------|---------|
-| [shared-message.schema.json](./shared-message.schema.json) | Universal message envelope for all communication | All domains |
-| [canonical-address.schema.json](./canonical-address.schema.json) | Actor addressing format (`runtime/actor-id`) | All domains |
-| [error-response.schema.json](./error-response.schema.json) | Standard error message format | All domains |
+**Key Properties:**
+- `type` - Message type identifier (e.g., `hub:connect`, `hub:send`)
+- `from` - Sender's canonical address
+- `to` - Recipient's canonical address
+- `payload` - Message-specific payload
+- `pattern` - Optional routing pattern (`request`, `notify`, `response`)
+- `timestamp` - Epoch milliseconds
+- `correlationId` - For request-response correlation
+- `ttl` - Time-to-live in milliseconds
 
-## Schema Relationships
+### `canonical-address.schema.json`
+Actor addressing format across all runtimes.
 
-```
-SharedMessage (envelope)
-    ├─→ from: CanonicalAddress
-    ├─→ to: CanonicalAddress
-    └─→ payload: <domain-specific>
+**Format:** `<runtime>/<actor-id>`
 
-ErrorResponse (extends SharedMessage)
-    ├─→ type: "hub:error"
-    └─→ payload: { code, message, details }
+**Pattern:** `^[a-z0-9-]+/[a-z0-9-]+$`
+
+**Examples:**
+- `browser/client-ui` - Browser-based UI actor
+- `seag/agent-1` - SEAG inference agent
+- `cloudflare/signal-hub` - Signal Hub itself
+
+### `error-response.schema.json`
+Standard error response format for all `hub:error` messages.
+
+**Error Codes:**
+- `version_mismatch` - Protocol version incompatible
+- `unauthorized` - JWT invalid or missing
+- `rate_limited` - Exceeded 100 msg/min
+- `unknown_actor` - Target actor not registered
+- `message_too_large` - Message exceeds 512KB
+- `message_expired` - TTL exceeded
+- `timeout` - Operation timed out
+- `internal_error` - Server-side error
+
+## Usage
+
+These schemas are referenced by domain-specific schemas and protocol definitions using JSON Schema `$ref`:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "actorAddress": {
+      "$ref": "../../schemas/canonical-address.schema.json#/definitions/CanonicalAddress"
+    }
+  }
+}
 ```
 
 ## Validation
 
-All schemas follow JSON Schema Draft 07 specification.
-
-### Validate with AJV (Node.js)
+Validate JSON against these schemas using any JSON Schema validator:
 
 ```bash
-npm install -g ajv-cli
-ajv validate -s shared-message.schema.json -d example-message.json
+# Using ajv-cli
+npx ajv validate -s shared-message.schema.json -d example-message.json
 ```
 
-### Validate with Python
+## Source
 
-```bash
-pip install jsonschema
-python -c "
-import json
-from jsonschema import validate, Draft7Validator
-
-with open('shared-message.schema.json') as f:
-    schema = json.load(f)
-
-with open('example-message.json') as f:
-    data = json.load(f)
-
-validate(instance=data, schema=schema)
-print('✓ Valid')
-"
-```
-
-## Usage in Code
-
-### TypeScript
-
-```typescript
-import Ajv from 'ajv';
-import sharedMessageSchema from './schemas/shared-message.schema.json';
-
-const ajv = new Ajv();
-const validate = ajv.compile(sharedMessageSchema);
-
-const message = {
-  type: 'hub:connect',
-  from: 'browser/client-ui',
-  to: 'cloudflare/signal-hub',
-  payload: { version: '1.0' }
-};
-
-if (validate(message)) {
-  console.log('✓ Valid message');
-} else {
-  console.error('✗ Invalid:', validate.errors);
-}
-```
-
-### Python
-
-```python
-import json
-from jsonschema import validate
-
-with open('schemas/shared-message.schema.json') as f:
-    schema = json.load(f)
-
-message = {
-    "type": "hub:connect",
-    "from": "browser/client-ui",
-    "to": "cloudflare/signal-hub",
-    "payload": {"version": "1.0"}
-}
-
-validate(instance=message, schema=schema)  # Raises exception if invalid
-```
-
-## Cross-References
-
-- Domain-specific schemas in `../*/schemas/` directories
-- Protocol definitions in `../*/protocol.json` files
-- Full specifications in `../*/README.md` files
+These schemas are derived from `@agentic-primer/protocols/shared-message` to ensure cross-runtime compatibility between Browser ↔ Cloudflare ↔ SEAG.

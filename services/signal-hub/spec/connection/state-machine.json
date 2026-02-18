@@ -1,59 +1,57 @@
 {
-  "$schema": "https://json-schema.org/draft-07/schema#",
   "name": "ConnectionLifecycle",
-  "description": "WebSocket connection lifecycle state machine for Signal Hub",
+  "description": "Connection state machine tracking WebSocket lifecycle from connect to disconnect",
   "version": "1.0",
   "initial": "connecting",
   "states": {
     "connecting": {
-      "description": "WebSocket accepted, session created, awaiting hub:connect",
-      "type": "state",
+      "description": "WebSocket accepted, awaiting hub:connect handshake",
+      "characteristics": [
+        "No authentication yet",
+        "Cannot send messages except hub:connect",
+        "Rate limiting disabled for hub:connect",
+        "Session created in memory"
+      ],
       "on": {
         "hub:connect_success": {
           "target": "connected",
-          "guard": {
-            "all": [
-              "validJWT",
-              "versionMatch"
-            ]
-          },
+          "guard": "validJWT && versionMatch",
           "actions": [
             "storeSession",
             "setActorIdentity",
-            "enableRateLimiting",
-            "sendConnectedResponse"
+            "enableAuthentication",
+            "sendConnected"
           ]
         },
         "hub:connect_fail": {
           "target": "disconnected",
+          "guard": "invalidJWT || versionMismatch",
           "actions": [
-            "sendErrorResponse",
+            "sendError",
             "closeWebSocket",
-            "removeSession"
+            "cleanupSession"
           ]
         },
         "websocket_close": {
           "target": "disconnected",
-          "description": "Client disconnects before completing hub:connect",
+          "description": "Client disconnected before completing handshake",
           "actions": [
-            "removeSession"
+            "cleanupSession"
           ]
         }
-      },
-      "characteristics": {
-        "authentication": "not authenticated",
-        "messageTypes": ["hub:connect"],
-        "rateLimiting": "disabled for hub:connect",
-        "heartbeat": "not expected"
       }
     },
     "connected": {
-      "description": "Fully authenticated, operational connection",
-      "type": "state",
+      "description": "Fully authenticated and operational",
+      "characteristics": [
+        "Fully authenticated (if AUTH_ENABLED=true)",
+        "Can send/receive all message types",
+        "Rate limiting active (100 msg/min)",
+        "Heartbeat expected every 60 seconds"
+      ],
       "on": {
         "hub:disconnect": {
           "target": "disconnecting",
-          "description": "Graceful disconnect initiated by client",
           "actions": [
             "unregisterActor",
             "cleanupSubscriptions",
@@ -62,106 +60,84 @@
         },
         "websocket_close": {
           "target": "disconnected",
-          "description": "Abnormal disconnect (network failure, crash)",
+          "description": "Abnormal disconnect without graceful shutdown",
           "actions": [
             "emergencyCleanup"
           ]
         },
         "heartbeat_timeout": {
           "target": "disconnected",
-          "description": "No heartbeat for 60 seconds",
-          "guard": {
-            "expression": "Date.now() - session.lastHeartbeat > 60000"
-          },
+          "guard": "noHeartbeatFor60s",
           "actions": [
-            "logTimeout",
             "closeWebSocket",
-            "emergencyCleanup"
+            "cleanupSession"
           ]
         }
-      },
-      "characteristics": {
-        "authentication": "authenticated (if AUTH_ENABLED=true)",
-        "messageTypes": "all types allowed",
-        "rateLimiting": "100 messages/minute",
-        "heartbeat": "expected every 60 seconds"
       }
     },
     "disconnecting": {
-      "description": "Cleanup in progress, awaiting WebSocket close",
-      "type": "state",
+      "description": "Graceful shutdown in progress",
+      "characteristics": [
+        "Session cleanup in progress",
+        "hub:disconnect_ack sent",
+        "Registry cleanup (unregister actor)",
+        "Topic cleanup (remove subscriptions)"
+      ],
       "on": {
         "websocket_close": {
           "target": "disconnected",
-          "description": "Normal progression after cleanup",
+          "description": "Cleanup complete, connection closed",
           "actions": [
-            "transitionToDisconnected",
             "removeSession"
           ]
         },
         "cleanup_timeout": {
           "target": "disconnected",
-          "description": "Cleanup took longer than 30 seconds",
-          "guard": {
-            "expression": "Date.now() - session.disconnectedAt > 30000"
-          },
+          "guard": "cleanupTookTooLong",
+          "description": "Force close after 30s timeout",
           "actions": [
             "forceCloseWebSocket",
             "removeSession"
           ]
         }
-      },
-      "entry": [
-        "setDisconnectingState",
-        "recordDisconnectTimestamp"
-      ],
-      "characteristics": {
-        "messageProcessing": "hub:disconnect_ack sent, other messages ignored",
-        "cleanup": "unregister actor, remove subscriptions"
       }
     },
     "disconnected": {
-      "description": "Terminal state, session removed from memory",
       "type": "final",
-      "characteristics": {
-        "sessionState": "removed from memory",
-        "messageProcessing": "none",
-        "cleanup": "complete"
-      }
+      "description": "Terminal state - connection completely closed",
+      "characteristics": [
+        "Session removed from memory",
+        "No further message processing",
+        "Cleanup complete"
+      ]
     }
   },
   "guards": {
-    "validJWT": {
-      "description": "JWT is valid and not expired (only if AUTH_ENABLED=true)",
-      "implementation": "validateJWT(msg.payload.jwt, env.JWT_SECRET)"
-    },
-    "versionMatch": {
-      "description": "Protocol version matches server version",
-      "implementation": "msg.payload.version === env.PROTOCOL_VERSION"
-    }
+    "validJWT": "JWT signature valid and not expired",
+    "versionMatch": "Protocol version matches server version",
+    "invalidJWT": "JWT missing, malformed, or expired",
+    "versionMismatch": "Client protocol version != server version",
+    "noHeartbeatFor60s": "Current time - lastHeartbeat > 60000ms",
+    "cleanupTookTooLong": "Time in disconnecting state > 30000ms"
   },
   "actions": {
-    "storeSession": "Store session in sessions Map with WebSocket key",
-    "setActorIdentity": "Set session.actorIdentity from JWT payload",
-    "enableRateLimiting": "Initialize token bucket for rate limiting",
-    "sendConnectedResponse": "Send hub:connected message with session details",
-    "sendErrorResponse": "Send hub:error message with error code and details",
-    "closeWebSocket": "Close WebSocket with code 1000",
+    "storeSession": "Create and store session in sessions Map",
+    "setActorIdentity": "Set session.actorIdentity from JWT",
+    "enableAuthentication": "Set session.authenticated = true",
+    "sendConnected": "Send hub:connected response to client",
+    "sendError": "Send hub:error with appropriate error code",
+    "closeWebSocket": "Close WebSocket with code 1000 (Normal)",
+    "cleanupSession": "Remove session from all maps, cleanup subscriptions",
+    "unregisterActor": "Remove actor from registry",
+    "cleanupSubscriptions": "Remove actor from all topic subscriptions",
+    "sendDisconnectAck": "Send hub:disconnect_ack BEFORE closing WebSocket",
+    "emergencyCleanup": "Cleanup without sending ack (connection already closed)",
     "removeSession": "Delete session from sessions and connections maps",
-    "unregisterActor": "Remove actor from registry if registered",
-    "cleanupSubscriptions": "Remove all topic subscriptions for this actor",
-    "sendDisconnectAck": "Send hub:disconnect_ack before closing socket",
-    "emergencyCleanup": "Cleanup without acknowledgment (abnormal close)",
-    "logTimeout": "Log heartbeat timeout event",
-    "transitionToDisconnected": "Set connectionState to 'disconnected'",
-    "forceCloseWebSocket": "Force close WebSocket if cleanup timeout",
-    "setDisconnectingState": "Set connectionState to 'disconnecting'",
-    "recordDisconnectTimestamp": "Set session.disconnectedAt to Date.now()"
+    "forceCloseWebSocket": "Force close WebSocket after timeout"
   },
   "metadata": {
-    "format": "XState-compatible JSON",
-    "compatibleWith": ["XState v4", "XState v5"],
+    "format": "XState-compatible",
     "source": "STATE_MACHINE.spec.md",
-    "domain": "connection"
+    "compatible_with": ["XState", "Robot", "state-machine libraries"]
   }
 }

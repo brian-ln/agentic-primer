@@ -1,41 +1,23 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "canonical-address.schema.json",
-  "title": "CanonicalAddress",
-  "description": "Actor addressing format across all runtimes (Browser, Cloudflare, SEAG)",
-  "type": "string",
-  "pattern": "^[a-z0-9-]+/[a-z0-9-]+$",
-  "examples": [
-    "browser/client-ui",
-    "cloudflare/signal-hub",
-    "seag/agent-1",
-    "seag/inference-worker"
-  ],
-  "additionalProperties": false,
-  "_documentation": {
-    "format": "<runtime>/<actor-id>",
-    "parts": {
-      "runtime": "Execution environment identifier (lowercase alphanumeric with hyphens)",
-      "actor-id": "Specific actor instance identifier (lowercase alphanumeric with hyphens)"
-    },
-    "validation": {
-      "pattern": "/^[a-z0-9-]+\\/[a-z0-9-]+$/",
-      "minLength": 3,
-      "description": "Must contain exactly one forward slash separating runtime and actor-id"
-    },
-    "examples": {
-      "valid": [
+  "title": "Canonical Address",
+  "description": "Actor addressing format across all runtimes: runtime/actor-id",
+  "definitions": {
+    "CanonicalAddress": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+/[a-z0-9-]+$",
+      "description": "Format: <runtime>/<actor-id>",
+      "examples": [
         "browser/client-ui",
         "seag/agent-1",
         "cloudflare/signal-hub"
-      ],
-      "invalid": [
-        "browser",
-        "browser/",
-        "/client-ui",
-        "Browser/Client-UI",
-        "browser/client_ui"
       ]
     }
-  }
+  },
+  "allOf": [
+    {
+      "$ref": "#/definitions/CanonicalAddress"
+    }
+  ]
 }

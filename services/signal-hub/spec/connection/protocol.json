@@ -1,12 +1,11 @@
 {
-  "$schema": "https://json-schema.org/draft-07/schema#",
   "domain": "connection",
-  "description": "WebSocket connection lifecycle protocol messages",
+  "description": "Connection lifecycle management - WebSocket establishment, authentication, and disconnection",
   "version": "1.0",
   "messages": {
     "hub:connect": {
       "direction": "client-to-server",
-      "pattern": "ask",
+      "pattern": "request",
       "description": "Establish WebSocket connection and authenticate",
       "payload": {
         "type": "object",
@@ -14,20 +13,16 @@
         "properties": {
           "version": {
             "type": "string",
-            "description": "Protocol version (must match server)",
-            "examples": ["1.0"]
+            "description": "Protocol version (e.g., '1.0')"
           },
           "jwt": {
             "type": "string",
-            "description": "JWT authentication token (optional if AUTH_ENABLED=false)",
-            "pattern": "^[A-Za-z0-9-_=]+\\.[A-Za-z0-9-_=]+\\.[A-Za-z0-9-_.+/=]*$"
+            "description": "JWT authentication token (required if AUTH_ENABLED=true)"
           }
         }
       },
-      "response": {
-        "success": "hub:connected",
-        "errors": ["version_mismatch", "unauthorized"]
-      }
+      "response": "hub:connected",
+      "errors": ["version_mismatch", "unauthorized"]
     },
     "hub:connected": {
       "direction": "server-to-client",
@@ -39,32 +34,27 @@
         "properties": {
           "sessionId": {
             "type": "string",
-            "description": "Unique session identifier",
-            "pattern": "^sess_[a-zA-Z0-9]+$"
+            "description": "Unique session identifier"
           },
           "actorIdentity": {
-            "type": "string",
-            "description": "Verified actor canonical address from JWT (null if no auth)",
-            "oneOf": [
-              { "$ref": "../../schemas/canonical-address.schema.json" },
-              { "type": "null" }
-            ]
+            "$ref": "../schemas/canonical-address.schema.json#/definitions/CanonicalAddress",
+            "description": "Verified actor identity from JWT"
           },
           "capabilities": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {"type": "string"},
             "description": "Permitted actions from JWT"
           },
           "serverTime": {
             "type": "integer",
-            "description": "Server timestamp in epoch milliseconds"
+            "description": "Server timestamp (epoch ms)"
           }
         }
       }
     },
     "hub:heartbeat": {
       "direction": "client-to-server",
-      "pattern": "ask",
+      "pattern": "request",
       "description": "Keep-alive message to detect dead connections",
       "payload": {
         "type": "object",
@@ -72,18 +62,16 @@
         "properties": {
           "timestamp": {
             "type": "integer",
-            "description": "Client timestamp in epoch milliseconds"
+            "description": "Client timestamp (epoch ms)"
           }
         }
       },
-      "response": {
-        "success": "hub:heartbeat_ack"
-      },
-      "configuration": {
-        "clientInterval": 30000,
-        "serverTimeout": 60000,
-        "description": "Client sends every 30s, server expects within 60s"
-      }
+      "response": "hub:heartbeat_ack",
+      "notes": [
+        "Client sends every 30 seconds",
+        "Server expects within 60 seconds",
+        "ANY message updates lastHeartbeat timestamp"
+      ]
     },
     "hub:heartbeat_ack": {
       "direction": "server-to-client",
@@ -95,69 +83,65 @@
         "properties": {
           "serverTime": {
             "type": "integer",
-            "description": "Server timestamp in epoch milliseconds"
+            "description": "Server timestamp (epoch ms)"
           }
         }
       }
     },
     "hub:disconnect": {
       "direction": "client-to-server",
-      "pattern": "ask",
+      "pattern": "request",
       "description": "Graceful disconnection with cleanup",
       "payload": {
         "type": "object",
         "properties": {
           "reason": {
             "type": "string",
-            "description": "Human-readable disconnect reason",
-            "examples": ["User logout", "Application closing"]
+            "description": "Human-readable disconnect reason"
           }
         }
       },
-      "response": {
-        "success": "hub:disconnect_ack"
-      },
-      "critical": "Server MUST send hub:disconnect_ack BEFORE closing WebSocket"
+      "response": "hub:disconnect_ack",
+      "notes": [
+        "Server MUST send ack BEFORE closing WebSocket",
+        "Cleanup includes: unregister actor, remove subscriptions, delete session"
+      ]
     },
     "hub:disconnect_ack": {
       "direction": "server-to-client",
       "pattern": "response",
-      "description": "Disconnect acknowledgment confirming cleanup",
+      "description": "Disconnect acknowledged, cleanup complete",
       "payload": {
         "type": "object",
         "required": ["sessionId", "cleanedUp"],
         "properties": {
           "sessionId": {
             "type": "string",
-            "description": "Session identifier being closed"
+            "description": "Session that was cleaned up"
           },
           "cleanedUp": {
             "type": "boolean",
-            "description": "Cleanup completed successfully"
+            "description": "Whether cleanup completed successfully"
           }
         }
       }
     }
   },
-  "errorCodes": {
-    "version_mismatch": {
-      "description": "Protocol version incompatible",
-      "triggeredBy": ["hub:connect"],
-      "details": {
-        "expected": "Server protocol version",
-        "received": "Client protocol version"
-      }
+  "configuration": {
+    "HEARTBEAT_INTERVAL": {
+      "value": 30000,
+      "unit": "milliseconds",
+      "description": "Client sends heartbeat every 30s"
     },
-    "unauthorized": {
-      "description": "JWT invalid, expired, or missing when AUTH_ENABLED=true",
-      "triggeredBy": ["hub:connect"],
-      "details": {
-        "reason": "Specific authentication failure"
-      }
+    "HEARTBEAT_TIMEOUT": {
+      "value": 60000,
+      "unit": "milliseconds",
+      "description": "Server expects heartbeat within 60s"
+    },
+    "DISCONNECT_TIMEOUT": {
+      "value": 30000,
+      "unit": "milliseconds",
+      "description": "Max time for cleanup in disconnecting state"
     }
-  },
-  "stateTransitions": {
-    "reference": "state-machine.json",
-    "description": "See state-machine.json for complete state transition rules"
   }
 }

@@ -84,7 +84,7 @@ export class SignalHubClient {
     this.maxReconnectAttempts = options.maxReconnectAttempts ?? Infinity;
     this.reconnectDelay = options.reconnectDelay ?? 1000;
     this.maxReconnectDelay = options.maxReconnectDelay ?? 30000;
-    this.heartbeatInterval = options.heartbeatInterval ?? 25000; // 25s (< 30s Cloudflare hibernation)
+    this.heartbeatInterval = options.heartbeatInterval ?? 60000; // 60s for dead connection detection
     this.protocolVersion = options.protocolVersion ?? '0.1.0';
 
     // Generate unique temporary identity for this client instance

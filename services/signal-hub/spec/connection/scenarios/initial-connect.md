@@ -1,51 +1,20 @@
 # Scenario: Initial Connection
 
-Successful first-time connection to Signal Hub with authentication.
-
 ## Setup
 
-- WebSocket connection established to `wss://signal-hub.example.com`
+- WebSocket connection established (HTTP 101 Upgrade complete)
 - Client has valid JWT token
-- Client protocol version matches server (`1.0`)
-- `AUTH_ENABLED=true`
+- Protocol version matches server (both 1.0)
+- Server state: empty sessions map
 
 ## Flow
 
-```mermaid
-sequenceDiagram
-    participant Client
-    participant Hub as Signal Hub
+1. **WebSocket Accept**
+   - Server creates session with `connectionState: 'connecting'`
+   - Session stored in `sessions` map (key: WebSocket object)
+   - `lastHeartbeat` initialized to current timestamp
 
-    Client->>Hub: WebSocket upgrade request
-    Hub->>Client: 101 Switching Protocols
-    Note over Hub: State: connecting
-
-    Client->>Hub: hub:connect {version:"1.0", jwt:"..."}
-    Note over Hub: Validate JWT
-    Note over Hub: Check version
-    Hub->>Client: hub:connected {sessionId, actorIdentity, capabilities}
-    Note over Hub: State: connected
-
-    Note over Client: Start heartbeat timer (30s interval)
-    Note over Hub: Start heartbeat timeout monitor (60s)
-
-    Client->>Hub: hub:heartbeat {timestamp}
-    Hub->>Client: hub:heartbeat_ack {serverTime}
-```
-
-## Step-by-Step
-
-1. **Client initiates WebSocket**
-   ```
-   WebSocket upgrade: wss://signal-hub.example.com
-   ```
-
-2. **Server accepts connection**
-   - Creates session with state `connecting`
-   - Generates `sessionId`
-   - Initializes rate limit bucket (100 msg/min)
-
-3. **Client sends hub:connect**
+2. **Client → Server: hub:connect**
    ```json
    {
      "type": "hub:connect",
@@ -53,18 +22,24 @@ sequenceDiagram
      "to": "cloudflare/signal-hub",
      "payload": {
        "version": "1.0",
-       "jwt": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+       "jwt": "eyJhbGc..."
      }
    }
    ```
 
-4. **Server validates**
-   - Protocol version: `1.0` matches server version ✓
-   - JWT signature: Valid ✓
-   - JWT expiration: Not expired ✓
-   - Extracts `actorId` and `capabilities` from JWT
+3. **Server validates JWT**
+   - Signature verification succeeds
+   - Token not expired
+   - Extract `actorId: "browser/client-ui"`
+   - Extract `capabilities: ["send", "receive", "discover"]`
 
-5. **Server responds with hub:connected**
+4. **Server updates session**
+   - `session.actorIdentity = "browser/client-ui"`
+   - `session.capabilities = ["send", "receive", "discover"]`
+   - `session.authenticated = true`
+   - `session.connectionState = 'connected'`
+
+5. **Server → Client: hub:connected**
    ```json
    {
      "type": "hub:connected",
@@ -79,83 +54,31 @@ sequenceDiagram
    }
    ```
 
-6. **State transition**
-   - Session state: `connecting` → `connected`
-   - Session stored in `connections` map (sessionId → WebSocket)
-
-7. **Client starts heartbeat**
-   - Interval: Every 30 seconds
-   - First heartbeat sent immediately
-
-8. **Server monitors heartbeat**
-   - Timeout: 60 seconds
-   - Any message updates `session.lastHeartbeat`
+6. **Client starts heartbeat timer**
+   - Interval: 30 seconds
+   - Sends `hub:heartbeat` periodically
 
 ## Expected Outcome
 
-- ✅ Connection state: `connected`
-- ✅ Session registered with valid `sessionId`
-- ✅ Actor identity extracted from JWT
-- ✅ Capabilities available for authorization checks
-- ✅ Rate limiting active (100 msg/min)
-- ✅ Heartbeat mechanism operational
-- ✅ Ready to send `hub:register` for actor discovery
+- Session state: `connected`
+- Client can send all message types
+- Rate limiting active (100 msg/min)
+- Heartbeat mechanism active
+- Session stored in both `sessions` and `connections` maps
+
+## Verification
+
+```typescript
+// Server state after connection
+sessions.has(ws) === true
+sessions.get(ws).connectionState === 'connected'
+sessions.get(ws).authenticated === true
+sessions.get(ws).actorIdentity === 'browser/client-ui'
+connections.has(sessionId) === true
+```
 
 ## Error Paths
 
-### Version Mismatch
-
-**Trigger:** Client sends `version: "0.9"` but server expects `"1.0"`
-
-```json
-{
-  "type": "hub:error",
-  "from": "cloudflare/signal-hub",
-  "to": "browser/client-ui",
-  "payload": {
-    "code": "version_mismatch",
-    "message": "Protocol version 1.0 required, got 0.9",
-    "details": {
-      "expected": "1.0",
-      "received": "0.9"
-    }
-  }
-}
-```
-
-**Result:** Connection closed, client must upgrade
-
-### Invalid JWT
-
-**Trigger:** JWT expired, invalid signature, or missing when `AUTH_ENABLED=true`
-
-```json
-{
-  "type": "hub:error",
-  "from": "cloudflare/signal-hub",
-  "to": "browser/client-ui",
-  "payload": {
-    "code": "unauthorized",
-    "message": "Invalid JWT: Token expired",
-    "details": {
-      "reason": "Token expired"
-    }
-  }
-}
-```
-
-**Result:** Connection closed, client must re-authenticate
-
-## Metrics
-
-- **Time to connect:** < 100ms (local network)
-- **Time to hub:connected:** < 200ms (including JWT validation)
-- **Heartbeat latency:** Typically 50-100ms round-trip
-- **Connection state:** Immediately transitions to `connected` on success
-
-## See Also
-
-- [reconnect.md](./reconnect.md) - Reconnection after disconnect
-- [auth-failure.md](./auth-failure.md) - Authentication error handling
-- [../protocol.json](../protocol.json) - Full protocol definition
-- [../state-machine.json](../state-machine.json) - State machine specification
+This scenario assumes success. See other scenarios for error handling:
+- [Auth Failure](./auth-failure.md) - Invalid JWT
+- [Version Mismatch](./version-mismatch.md) - Protocol version incompatible
