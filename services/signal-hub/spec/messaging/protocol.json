@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "domain": "messaging",
+  "description": "Point-to-point and broadcast message delivery protocol",
+  "version": "1.0",
+  "messages": {
+    "hub:send": {
+      "direction": "client-to-server",
+      "pattern": "ask",
+      "description": "Send point-to-point message to registered actor",
+      "payload": {
+        "type": "object",
+        "required": ["to", "type", "data"],
+        "properties": {
+          "to": {
+            "$ref": "../../schemas/canonical-address.schema.json",
+            "description": "Target actor address"
+          },
+          "type": {
+            "type": "string",
+            "description": "Application message type (forwarded to recipient)"
+          },
+          "data": {
+            "description": "Application message payload (any JSON value)"
+          }
+        }
+      },
+      "response": {
+        "success": "hub:delivery_ack",
+        "errors": ["hub:unknown_actor", "hub:error"]
+      }
+    },
+    "hub:delivery_ack": {
+      "direction": "server-to-client",
+      "pattern": "response",
+      "description": "Message delivery acknowledgment",
+      "payload": {
+        "type": "object",
+        "required": ["delivered", "timestamp"],
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "description": "ID of the original message"
+          },
+          "delivered": {
+            "type": "boolean",
+            "description": "Whether message was delivered to WebSocket"
+          },
+          "timestamp": {
+            "type": "integer",
+            "description": "Delivery timestamp (epoch ms)"
+          },
+          "subscriberCount": {
+            "type": "integer",
+            "description": "(For broadcast/publish) Number of recipients",
+            "minimum": 0
+          },
+          "topic": {
+            "type": "string",
+            "description": "(For publish) Topic message was published to"
+          }
+        }
+      }
+    },
+    "hub:broadcast": {
+      "direction": "client-to-server",
+      "pattern": "ask",
+      "description": "Broadcast message to all connected actors",
+      "payload": {
+        "type": "object",
+        "required": ["type", "data"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Application message type (forwarded to all)"
+          },
+          "data": {
+            "description": "Application message payload (any JSON value)"
+          }
+        }
+      },
+      "response": {
+        "success": "hub:delivery_ack"
+      }
+    },
+    "hub:unknown_actor": {
+      "direction": "server-to-client",
+      "pattern": "response",
+      "description": "Target actor not found or registration expired",
+      "payload": {
+        "type": "object",
+        "required": ["actorAddress", "message"],
+        "properties": {
+          "actorAddress": {
+            "$ref": "../../schemas/canonical-address.schema.json",
+            "description": "Address of the missing actor"
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable error message"
+          }
+        }
+      }
+    }
+  },
+  "forwardedMessage": {
+    "description": "Application message forwarded to recipient (NOT a hub: message)",
+    "structure": {
+      "type": "<payload.type from hub:send>",
+      "from": "<original sender address>",
+      "to": "<target address>",
+      "payload": "<payload.data from hub:send>",
+      "metadata": {
+        "forwarded": true,
+        "via": "@(cloudflare/signal-hub)",
+        "originalMessageId": "<message ID>"
+      }
+    }
+  },
+  "errorCodes": {
+    "unknown_actor": {
+      "description": "Target actor not registered or expired",
+      "triggeredBy": ["hub:send"],
+      "details": {
+        "actorAddress": "Canonical address of missing actor",
+        "message": "Reason (not registered, expired, etc.)"
+      }
+    },
+    "internal_error": {
+      "description": "Server-side error (connection not found, etc.)",
+      "triggeredBy": ["hub:send"],
+      "details": {
+        "code": "internal_error",
+        "message": "Error description",
+        "retryable": false
+      }
+    },
+    "message_too_large": {
+      "description": "Message exceeds 1MB size limit",
+      "triggeredBy": ["hub:send", "hub:broadcast"],
+      "details": {
+        "size": "Actual message size in bytes",
+        "limit": 1048576
+      }
+    }
+  },
+  "metadata": {
+    "messageSizeLimit": {
+      "value": 1048576,
+      "units": "bytes",
+      "note": "1 MB limit, checked before JSON.parse"
+    },
+    "deliveryGuarantees": {
+      "ordering": "None (no sequence numbers)",
+      "persistence": "None (in-memory only)",
+      "reliability": "At-most-once",
+      "acknowledgment": "Delivery to WebSocket, not client receipt"
+    },
+    "patterns": {
+      "ask": "Request acknowledgment (hub:delivery_ack or error)",
+      "tell": "Fire-and-forget (no acknowledgment)"
+    }
+  }
+}

@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "domain": "pubsub",
+  "description": "Topic-based publish-subscribe messaging protocol",
+  "version": "1.0",
+  "messages": {
+    "hub:subscribe": {
+      "direction": "client-to-server",
+      "pattern": "ask",
+      "description": "Subscribe to a topic for message delivery",
+      "payload": {
+        "type": "object",
+        "required": ["topic"],
+        "properties": {
+          "topic": {
+            "$ref": "./schemas/topic.schema.json",
+            "description": "Topic to subscribe to (hierarchical path)"
+          },
+          "durable": {
+            "type": "boolean",
+            "description": "Future use: persist subscription across reconnections",
+            "default": false
+          }
+        }
+      },
+      "response": {
+        "success": "hub:subscribed",
+        "errors": ["hub:error"]
+      }
+    },
+    "hub:subscribed": {
+      "direction": "server-to-client",
+      "pattern": "response",
+      "description": "Subscription successful confirmation",
+      "payload": {
+        "type": "object",
+        "required": ["topic", "subscriptionId"],
+        "properties": {
+          "topic": {
+            "$ref": "./schemas/topic.schema.json",
+            "description": "Subscribed topic"
+          },
+          "subscriptionId": {
+            "type": "string",
+            "description": "Unique subscription ID (UUID)",
+            "pattern": "^sub-[0-9a-f-]+$"
+          }
+        }
+      }
+    },
+    "hub:publish": {
+      "direction": "client-to-server",
+      "pattern": "ask",
+      "description": "Publish message to all topic subscribers",
+      "payload": {
+        "type": "object",
+        "required": ["topic", "type", "data"],
+        "properties": {
+          "topic": {
+            "$ref": "./schemas/topic.schema.json",
+            "description": "Topic to publish to"
+          },
+          "type": {
+            "type": "string",
+            "description": "Application message type (forwarded to subscribers)"
+          },
+          "data": {
+            "description": "Application message payload (any JSON value)"
+          }
+        }
+      },
+      "response": {
+        "success": "hub:delivery_ack",
+        "errors": ["hub:error"]
+      }
+    },
+    "hub:unsubscribe": {
+      "direction": "client-to-server",
+      "pattern": "ask",
+      "description": "Unsubscribe from a topic",
+      "payload": {
+        "type": "object",
+        "required": ["topic"],
+        "properties": {
+          "topic": {
+            "$ref": "./schemas/topic.schema.json",
+            "description": "Topic to unsubscribe from"
+          }
+        }
+      },
+      "response": {
+        "success": "hub:unsubscribed",
+        "errors": ["hub:error"]
+      }
+    },
+    "hub:unsubscribed": {
+      "direction": "server-to-client",
+      "pattern": "response",
+      "description": "Unsubscription confirmation",
+      "payload": {
+        "type": "object",
+        "required": ["topic", "unsubscribedAt"],
+        "properties": {
+          "topic": {
+            "$ref": "./schemas/topic.schema.json",
+            "description": "Unsubscribed topic"
+          },
+          "unsubscribedAt": {
+            "type": "integer",
+            "description": "Timestamp of unsubscription (epoch ms)"
+          }
+        }
+      }
+    }
+  },
+  "forwardedMessage": {
+    "description": "Application message forwarded to subscribers (NOT a hub: message)",
+    "structure": {
+      "type": "<payload.type from hub:publish>",
+      "from": "<publisher address>",
+      "to": "<subscriber address>",
+      "payload": "<payload.data from hub:publish>",
+      "metadata": {
+        "forwarded": true,
+        "via": "@(cloudflare/signal-hub)",
+        "topic": "<original topic>"
+      }
+    }
+  },
+  "errorCodes": {
+    "internal_error": {
+      "description": "Topic validation failure or server error",
+      "triggeredBy": ["hub:subscribe", "hub:publish", "hub:unsubscribe"],
+      "details": {
+        "code": "internal_error",
+        "message": "Error description (e.g., 'topic is required', 'payload.type is required')"
+      }
+    }
+  },
+  "metadata": {
+    "topicMatching": {
+      "current": "Exact match only (no wildcards)",
+      "future": "Wildcard support (e.g., 'system/*', 'user/+/notifications')"
+    },
+    "deliveryGuarantees": {
+      "ordering": "None (no sequence numbers per topic)",
+      "persistence": "None (in-memory only, no message history)",
+      "reliability": "At-most-once per subscriber",
+      "acknowledgment": "Delivery to WebSocket, not client receipt"
+    },
+    "cleanup": {
+      "automatic": [
+        "On hub:unsubscribe",
+        "On actor unregister",
+        "On connection close"
+      ],
+      "emptyTopics": "Topics with zero subscribers are removed from Map"
+    },
+    "limits": {
+      "maxSubscribersPerTopic": "No enforced limit (in-memory constraint)",
+      "maxTopicsPerActor": "No enforced limit (cleanup on disconnect)",
+      "recommendedMaxSubscribers": 1000
+    }
+  }
+}
