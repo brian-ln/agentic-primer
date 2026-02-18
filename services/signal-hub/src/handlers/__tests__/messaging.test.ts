@@ -508,5 +508,99 @@ describe('Messaging Handlers', () => {
         'payload.type is required'
       );
     });
+
+    // @spec: resource-protection/RESOURCE_PROTECTION.spec.md#broadcast-limit
+    // @requirement: Broadcast to >1000 recipients returns hub:error with BROADCAST_LIMIT_EXCEEDED
+    it('should return hub:error when recipient count exceeds 1000', () => {
+      // @spec: WS1.2 broadcast subscriber limit
+      const senderAddress = toCanonicalAddress('browser/client');
+
+      // Register 1001 actors
+      for (let i = 0; i < 1001; i++) {
+        const actorAddress = toCanonicalAddress(`browser/widget-${i}`);
+        const connId = `conn-${i}`;
+        const actorWs = {
+          send: () => {},
+          _sentMessages: [] as string[],
+        } as unknown as WebSocket;
+        (actorWs as any).send = (data: string) => {
+          (actorWs as any)._sentMessages.push(data);
+        };
+        registry.set(actorAddress, createMockRegistration({
+          actorAddress,
+          capabilities: ['render'],
+          connectionId: connId,
+        }));
+        connections.set(connId, actorWs);
+      }
+
+      const broadcastMsg: SharedMessage = {
+        id: 'msg-broadcast-limit',
+        from: senderAddress,
+        to: toCanonicalAddress('cloudflare/signal-hub'),
+        type: 'hub:broadcast',
+        pattern: 'ask',
+        correlationId: null,
+        timestamp: Date.now(),
+        payload: {
+          type: 'system:update',
+          data: { version: '2.0' },
+        },
+        metadata: {},
+        ttl: 5000,
+        signature: null,
+      };
+
+      const response = handleBroadcast(broadcastMsg, registry, connections, mockEnv, mockSendMessage);
+
+      expect(response).not.toBeNull();
+      expect(response.type).toBe('hub:error');
+      expect(response.payload).toHaveProperty('code', 'BROADCAST_LIMIT_EXCEEDED');
+      expect(response.payload).toHaveProperty('message');
+      expect((response.payload as any).message).toContain('1001');
+    });
+
+    it('should allow broadcast to exactly 1000 recipients', () => {
+      // @spec: WS1.2 broadcast subscriber limit — boundary condition
+      const senderAddress = toCanonicalAddress('browser/client');
+
+      // Register exactly 1000 actors
+      for (let i = 0; i < 1000; i++) {
+        const actorAddress = toCanonicalAddress(`browser/actor-${i}`);
+        const connId = `conn-exact-${i}`;
+        const actorWs = {
+          send: () => {},
+        } as unknown as WebSocket;
+        registry.set(actorAddress, createMockRegistration({
+          actorAddress,
+          capabilities: ['render'],
+          connectionId: connId,
+        }));
+        connections.set(connId, actorWs);
+      }
+
+      const broadcastMsg: SharedMessage = {
+        id: 'msg-broadcast-ok',
+        from: senderAddress,
+        to: toCanonicalAddress('cloudflare/signal-hub'),
+        type: 'hub:broadcast',
+        pattern: 'ask',
+        correlationId: null,
+        timestamp: Date.now(),
+        payload: {
+          type: 'system:ping',
+          data: {},
+        },
+        metadata: {},
+        ttl: 5000,
+        signature: null,
+      };
+
+      const response = handleBroadcast(broadcastMsg, registry, connections, mockEnv, mockSendMessage);
+
+      // Should succeed with broadcast_ack, not error
+      expect(response.type).toBe('hub:broadcast_ack');
+      expect((response.payload as any).deliveredCount).toBe(1000);
+    });
   });
 });

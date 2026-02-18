@@ -11,9 +11,12 @@ import type {
   Env,
 } from '../types';
 import { HubError } from '../types';
-import { createReply, createMessage, toCanonicalAddress, isExpired } from '../utils';
+import { createReply, createMessage, toCanonicalAddress, isExpired, log } from '../utils';
 
 const SIGNAL_HUB_ADDRESS = toCanonicalAddress('cloudflare/signal-hub');
+
+// Resource protection: maximum broadcast recipient count
+const MAX_BROADCAST_RECIPIENTS = 1000;
 
 /**
  * Handle hub:send message - point-to-point delivery
@@ -50,8 +53,6 @@ export function handleSend(
     data: unknown;
   };
 
-  console.log('[handleSend] Received hub:send from', msg.from, 'payload:', JSON.stringify(payload).substring(0, 200));
-
   // Validate payload structure
   if (!payload || typeof payload !== 'object') {
     throw new HubError('internal_error', 'payload must be an object');
@@ -66,11 +67,16 @@ export function handleSend(
 
   // CRITICAL: Target address is in payload.to, NOT msg.to!
   const targetAddress = (payload.to as CanonicalAddress) || msg.to;
-  console.log('[handleSend] Looking up target actor:', targetAddress);
-  console.log('[handleSend] Registry has', registry.size, 'actors:', Array.from(registry.keys()));
+
+  log(env, 'handle_send', {
+    from: msg.from,
+    targetAddress,
+    payloadType: payload.type,
+    registrySize: registry.size,
+    connectionsSize: connections.size,
+  });
 
   const targetActor = registry.get(targetAddress);
-  console.log('[handleSend] Target actor found:', !!targetActor);
 
   if (!targetActor) {
     // Actor not registered
@@ -110,9 +116,6 @@ export function handleSend(
   }
 
   // Get WebSocket connection
-  console.log('[handleSend] Looking up WebSocket for connection:', targetActor.connectionId);
-  console.log('[handleSend] Connections map has', connections.size, 'connections:', Array.from(connections.keys()));
-
   const ws = connections.get(targetActor.connectionId);
   if (!ws) {
     console.error('[handleSend] WebSocket not found for connection:', targetActor.connectionId);
@@ -131,8 +134,6 @@ export function handleSend(
     }
     return null;
   }
-
-  console.log('[handleSend] WebSocket found, creating forwarded message');
 
   // Create forwarded message with flat structure
   // Extract type and data from payload, NOT nested!
@@ -156,12 +157,9 @@ export function handleSend(
     forwardedMessage.ttl = msg.ttl;
   }
 
-  console.log('[handleSend] Forwarded message:', forwardedMessage.type, 'to', targetAddress);
-
   // Send to target
   try {
     sendMessage(ws, forwardedMessage);
-    console.log('[handleSend] Successfully sent', payload.type, 'to', targetAddress);
 
     // Send delivery acknowledgment if requested
     if (msg.pattern === 'ask') {
@@ -224,8 +222,6 @@ export function handleBroadcast(
     excludeSelf?: boolean;
   };
 
-  console.log('[handleBroadcast] Received from', msg.from, 'type:', payload?.type);
-
   // Validate payload
   if (!payload || typeof payload !== 'object') {
     throw new HubError('internal_error', 'payload must be an object');
@@ -274,6 +270,8 @@ export function handleBroadcast(
     );
   }
 
+  log(env, 'handle_broadcast', { from: msg.from, payloadType: payload.type, targetCount: targets.length });
+
   let deliveredCount = 0;
   let failedCount = 0;
 
@@ -297,12 +295,9 @@ export function handleBroadcast(
   };
 
   // Send to all targets
-  console.log('[handleBroadcast] Broadcasting to', targets.length, 'actors');
-
   for (const target of targets) {
     const ws = connections.get(target.connectionId);
     if (!ws) {
-      console.log('[handleBroadcast] No WebSocket for', target.actorAddress);
       failedCount++;
       continue;
     }
@@ -316,17 +311,12 @@ export function handleBroadcast(
       };
 
       sendMessage(ws, recipientMessage);
-      console.log('[handleBroadcast] Sent to', target.actorAddress);
       deliveredCount++;
     } catch (err) {
       console.error('[handleBroadcast] Failed to broadcast to', target.actorAddress, ':', err);
       failedCount++;
     }
   }
-
-  console.log(
-    `[handleBroadcast] Broadcast ${payload.type}: delivered=${deliveredCount}, failed=${failedCount}`
-  );
 
   // Send broadcast acknowledgment
   const ackPayload = {

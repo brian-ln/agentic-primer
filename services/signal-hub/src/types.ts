@@ -27,6 +27,7 @@ export interface Env {
   BROADCAST_SYNC_THRESHOLD: string;
   JWT_SECRET?: string;
   AUTH_ENABLED: string;
+  DEBUG?: string;
 }
 
 // ===========================
@@ -137,6 +138,27 @@ export interface QueueStats {
   processed: number;
   failed: number;
   paused: boolean;
+}
+
+// ===========================
+// Metrics
+// ===========================
+
+/**
+ * Per-minute metrics counters.
+ * Counters are cumulative since last reset (alarm tick).
+ * Call resetMetrics() to start a new window.
+ */
+export interface HubMetrics {
+  messages_received: number;
+  messages_sent: number;
+  errors: number;
+  connections_opened: number;
+  connections_closed: number;
+  /** Epoch ms when this metrics window started */
+  windowStart: number;
+  /** Epoch ms when getMetrics() was called */
+  timestamp: number;
 }
 
 // ===========================

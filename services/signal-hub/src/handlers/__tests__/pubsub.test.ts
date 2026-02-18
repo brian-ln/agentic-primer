@@ -28,12 +28,6 @@ const mockSendMessage = (ws: WebSocket, message: SharedMessage) => {
 };
 
 describe('Pub/Sub Handlers', () => {
-
-// Mock sendMessage function
-const mockSendMessage = (ws: WebSocket, message: SharedMessage) => {
-  ws.send(JSON.stringify(message));
-};
-
   let subscriptions: Map<string, Set<CanonicalAddress>>;
   let registry: Map<string, ActorRegistration>;
   let connections: Map<string, WebSocket>;

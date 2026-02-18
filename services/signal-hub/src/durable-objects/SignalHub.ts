@@ -44,6 +44,10 @@ import { handleQueueStats } from '../handlers/flowcontrol';
 
 const SIGNAL_HUB_ADDRESS = toCanonicalAddress('cloudflare/signal-hub');
 
+// Resource protection constants
+const TTL_CHECK_INTERVAL_MS = 60_000; // 1 minute
+const MAX_MESSAGE_SIZE_BYTES = 65_536; // 64KB hard limit
+
 /**
  * SignalHub Durable Object Class
  *
@@ -219,14 +223,29 @@ export class SignalHub implements DurableObject {
     try {
       // Check raw message size BEFORE parsing (DoS protection)
       const rawSize = typeof message === 'string' ? message.length : message.byteLength;
-      const maxSize = parseInt(this.env.MAX_MESSAGE_SIZE, 10);
+      const envMaxSize = parseInt(this.env.MAX_MESSAGE_SIZE, 10);
+      // Use the stricter of the env limit or the hard-coded 64KB constant
+      const maxSize = isNaN(envMaxSize) ? MAX_MESSAGE_SIZE_BYTES : Math.min(envMaxSize, MAX_MESSAGE_SIZE_BYTES);
 
       if (rawSize > maxSize) {
-        throw new HubError(
-          'message_too_large',
-          `Message size (${rawSize} bytes) exceeds limit (${maxSize} bytes) before parsing`,
-          { actualSize: rawSize, maxSize }
-        );
+        // Send error response directly and return early — do NOT attempt JSON.parse on oversized input
+        ws.send(JSON.stringify({
+          id: crypto.randomUUID(),
+          type: 'hub:error',
+          from: SIGNAL_HUB_ADDRESS,
+          to: null,
+          payload: {
+            code: 'MESSAGE_TOO_LARGE',
+            message: 'Message exceeds 64KB limit',
+          },
+          pattern: 'tell',
+          correlationId: null,
+          timestamp: Date.now(),
+          metadata: {},
+          ttl: null,
+          signature: null,
+        }));
+        return;
       }
 
       // Parse message
@@ -411,6 +430,9 @@ export class SignalHub implements DurableObject {
 
       // Register the actor
       const response = handleRegister(msg, this.registry, session.sessionId, this.env);
+
+      // Schedule TTL cleanup alarm on first registration (if not already scheduled)
+      this.scheduleAlarmIfNeeded();
 
       return response;
     }
@@ -666,18 +688,64 @@ export class SignalHub implements DurableObject {
   }
 
   /**
-   * Alarm handler (for future use - scheduled cleanup, etc.)
+   * Schedule TTL cleanup alarm if not already scheduled
+   * Called on first registration to start periodic cleanup cycle
+   */
+  private async scheduleAlarmIfNeeded(): Promise<void> {
+    try {
+      const existingAlarm = await this.ctx.storage.getAlarm();
+      if (existingAlarm === null) {
+        await this.ctx.storage.setAlarm(Date.now() + TTL_CHECK_INTERVAL_MS);
+        console.log(JSON.stringify({
+          event: 'ttl_alarm_scheduled',
+          nextFireAt: Date.now() + TTL_CHECK_INTERVAL_MS,
+          timestamp: Date.now(),
+        }));
+      }
+    } catch (err) {
+      // Non-fatal: alarm scheduling failure should not block registration
+      console.error('[SignalHub] Failed to schedule TTL alarm:', err);
+    }
+  }
+
+  /**
+   * Alarm handler - periodic TTL cleanup for expired actor registrations
+   * Reschedules itself to continue periodic cleanup
    */
   async alarm(): Promise<void> {
-    console.log('SignalHub alarm triggered');
+    const now = Date.now();
+    let expiredCount = 0;
+
+    console.log(JSON.stringify({
+      event: 'ttl_alarm_fired',
+      registrySize: this.registry.size,
+      timestamp: now,
+    }));
 
     // Cleanup expired registrations
-    const now = Date.now();
     for (const [address, registration] of this.registry.entries()) {
       if (now >= registration.expiresAt) {
         this.registry.delete(address);
-        console.log(`Expired actor registration: ${address}`);
+        expiredCount++;
+        console.log(JSON.stringify({
+          event: 'ttl_expired_actor_removed',
+          actorAddress: address,
+          expiredAt: registration.expiresAt,
+          timestamp: now,
+        }));
       }
+    }
+
+    console.log(JSON.stringify({
+      event: 'ttl_alarm_complete',
+      expiredCount,
+      remainingRegistrations: this.registry.size,
+      timestamp: now,
+    }));
+
+    // Reschedule alarm for next cleanup cycle (only if there are still registrations)
+    if (this.registry.size > 0) {
+      await this.ctx.storage.setAlarm(Date.now() + TTL_CHECK_INTERVAL_MS);
     }
   }
 }

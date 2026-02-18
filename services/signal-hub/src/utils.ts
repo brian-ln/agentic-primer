@@ -2,7 +2,25 @@
  * Signal Hub Utilities
  */
 
-import type { CanonicalAddress, SharedMessage, TokenBucket } from './types';
+import type { CanonicalAddress, Env, SharedMessage, TokenBucket } from './types';
+
+/**
+ * Conditional debug logger.
+ *
+ * Emits a structured JSON log line to console.log only when env.DEBUG === 'true'.
+ * In production (DEBUG unset or falsy) this is a no-op, keeping hot paths quiet.
+ *
+ * Usage:
+ *   log(env, 'event_name', { key: 'value' });
+ */
+export function log(
+  env: Env,
+  event: string,
+  data?: Record<string, unknown>
+): void {
+  if (env.DEBUG !== 'true') return;
+  console.log(JSON.stringify({ event, ...data, timestamp: Date.now() }));
+}
 
 /**
  * Generate a canonical address from a path
