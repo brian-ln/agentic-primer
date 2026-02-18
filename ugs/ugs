@@ -10,10 +10,12 @@ import { ProviderManager } from './src/entities/provider.ts';
 import { ModelManager } from './src/entities/model.ts';
 import { InformationManager } from './src/entities/information.ts';
 import { HumanManager, HumanState } from './src/entities/human.ts';
-import { TaskManager, TaskState, TaskPriority } from './src/entities/task.ts';
+import { TaskManager, TaskState, TaskPriority, TaskEventEntry, ExportFilter } from './src/entities/task.ts';
 import { SessionManager, SessionState } from './src/entities/session.ts';
 import { AgentManager, AgentState } from './src/entities/agent.ts';
 import { EmbeddingManager } from './src/entities/embedding.ts';
+import { EpicManager, EpicLifecycle } from './src/entities/epic.ts';
+import { ProjectManager, ProjectStatus } from './src/entities/project.ts';
 import { createContextFromEnv, runWithContextAsync } from './src/context.ts';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
@@ -43,6 +45,8 @@ class UGSCLI {
   private sessionManager: SessionManager;
   private agentManager: AgentManager;
   private embeddingManager: EmbeddingManager;
+  private epicManager: EpicManager;
+  private projectManager: ProjectManager;
   private commands: Map<string, any> = new Map();
   private helpTopics: Map<string, HelpTopic> = new Map();
   private dataDir: string;
@@ -60,6 +64,8 @@ class UGSCLI {
     this.sessionManager = new SessionManager(this.store, this.modelManager, this.dataDir);
     this.agentManager = new AgentManager(this.store, this.taskManager, this.modelManager);
     this.embeddingManager = new EmbeddingManager(this.store);
+    this.epicManager = new EpicManager(this.store);
+    this.projectManager = new ProjectManager(this.store);
 
     // Determine actor type and output format
     this.outputFormat = this.determineOutputFormat();
@@ -1297,7 +1303,7 @@ class UGSCLI {
 
     // Task command
     this.commands.set('task', {
-      description: 'Manage tasks: task <create|get|assign|start|complete|fail|list> [args...]',
+      description: 'Manage tasks: task <create|get|assign|start|complete|fail|list|dep|ready|blocked|close|stats|patch|apply> [args...]',
       handler: async (args: string[]) => {
         if (args.length === 0) {
           this.showTaskHelp();
@@ -1328,6 +1334,48 @@ class UGSCLI {
             break;
           case 'list':
             await this.handleTaskList(subArgs);
+            break;
+          case 'dep':
+            await this.handleTaskDep(subArgs);
+            break;
+          case 'ready':
+            await this.handleTaskReady(subArgs);
+            break;
+          case 'blocked':
+            await this.handleTaskBlocked(subArgs);
+            break;
+          case 'close':
+            await this.handleTaskClose(subArgs);
+            break;
+          case 'stats':
+            await this.handleTaskStats(subArgs);
+            break;
+          case 'patch':
+            await this.handleTaskPatch(subArgs);
+            break;
+          case 'apply':
+            await this.handleTaskApply(subArgs);
+            break;
+          case 'export':
+            await this.handleTaskExport(subArgs);
+            break;
+          case 'note':
+            await this.handleTaskNote(subArgs);
+            break;
+          case 'decide':
+            await this.handleTaskDecide(subArgs);
+            break;
+          case 'link':
+            await this.handleTaskLink(subArgs);
+            break;
+          case 'log':
+            await this.handleTaskLog(subArgs);
+            break;
+          case 'decisions':
+            await this.handleTaskDecisions(subArgs);
+            break;
+          case 'prime':
+            await this.handleTaskPrime(subArgs);
             break;
           default:
             this.error(`Unknown task subcommand: ${subcommand}. Use 'task' for help.`);
@@ -1427,6 +1475,9 @@ class UGSCLI {
           case 'list':
             await this.handleSessionList(subArgs);
             break;
+          case 'prime':
+            await this.handleSessionPrime(subArgs);
+            break;
           default:
             this.error(`Unknown session subcommand: ${subcommand}. Use 'session' for help.`);
         }
@@ -1454,6 +1505,104 @@ class UGSCLI {
       description: 'Show embedding statistics',
       handler: async () => {
         await this.handleEmbedStats();
+      }
+    });
+
+    // Epic command
+    this.commands.set('epic', {
+      description: 'Manage epics: epic <create|get|list|activate|complete|cancel|task|tasks|stats|update> [args...]',
+      handler: async (args: string[]) => {
+        if (args.length === 0) {
+          this.showEpicHelp();
+          return;
+        }
+
+        const subcommand = args[0];
+        const subArgs = args.slice(1);
+
+        switch (subcommand) {
+          case 'create':
+            await this.handleEpicCreate(subArgs);
+            break;
+          case 'get':
+            await this.handleEpicGet(subArgs);
+            break;
+          case 'list':
+            await this.handleEpicList(subArgs);
+            break;
+          case 'activate':
+            await this.handleEpicActivate(subArgs);
+            break;
+          case 'complete':
+            await this.handleEpicComplete(subArgs);
+            break;
+          case 'cancel':
+            await this.handleEpicCancel(subArgs);
+            break;
+          case 'update':
+            await this.handleEpicUpdate(subArgs);
+            break;
+          case 'task':
+            await this.handleEpicTask(subArgs);
+            break;
+          case 'tasks':
+            await this.handleEpicTasks(subArgs);
+            break;
+          case 'stats':
+            await this.handleEpicStats(subArgs);
+            break;
+          default:
+            this.error(`Unknown epic subcommand: ${subcommand}. Use 'epic' for help.`);
+        }
+      }
+    });
+
+    // Project command (overrides the old scope-based project command)
+    this.commands.set('project', {
+      description: 'Manage projects: project <create|get|list|activate|complete|archive|epic|epics|stats|update> [args...]',
+      handler: async (args: string[]) => {
+        if (args.length === 0) {
+          this.showProjectHelp();
+          return;
+        }
+
+        const subcommand = args[0];
+        const subArgs = args.slice(1);
+
+        switch (subcommand) {
+          case 'create':
+            await this.handleProjectCreate(subArgs);
+            break;
+          case 'get':
+            await this.handleProjectGet(subArgs);
+            break;
+          case 'list':
+            await this.handleProjectList(subArgs);
+            break;
+          case 'activate':
+            await this.handleProjectActivate(subArgs);
+            break;
+          case 'complete':
+            await this.handleProjectComplete(subArgs);
+            break;
+          case 'archive':
+            await this.handleProjectArchive(subArgs);
+            break;
+          case 'update':
+            await this.handleProjectUpdate(subArgs);
+            break;
+          case 'epic':
+            await this.handleProjectEpic(subArgs);
+            break;
+          case 'epics':
+            await this.handleProjectEpics(subArgs);
+            break;
+          case 'stats':
+            await this.handleProjectStats(subArgs);
+            break;
+          default:
+            this.error(`Unknown project subcommand: ${subcommand}. Use 'project' for help.`);
+        }
       }
     });
   }
@@ -3103,6 +3252,591 @@ class UGSCLI {
     }
   }
 
+  // === TASK DEP / READY / BLOCKED / CLOSE / STATS / PATCH / APPLY HANDLERS ===
+
+  private async handleTaskDep(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: task dep <add|remove|show> [args...]');
+    }
+
+    const subcommand = args[0];
+    const subArgs = args.slice(1);
+
+    switch (subcommand) {
+      case 'add': {
+        if (subArgs.length < 2) {
+          this.error('Usage: task dep add <id> <depends-on-id>');
+        }
+        const id = subArgs[0];
+        const dependsOnId = subArgs[1];
+        try {
+          await this.taskManager.addDependency(id, dependsOnId);
+          this.success(`Added dependency: ${id} depends on ${dependsOnId}`, {
+            operation: 'task-dep-add',
+            id,
+            dependsOnId
+          });
+        } catch (error: any) {
+          this.error(error.message);
+        }
+        break;
+      }
+
+      case 'remove': {
+        if (subArgs.length < 2) {
+          this.error('Usage: task dep remove <id> <depends-on-id>');
+        }
+        const id = subArgs[0];
+        const dependsOnId = subArgs[1];
+        try {
+          await this.taskManager.removeDependency(id, dependsOnId);
+          this.success(`Removed dependency: ${id} no longer depends on ${dependsOnId}`, {
+            operation: 'task-dep-remove',
+            id,
+            dependsOnId
+          });
+        } catch (error: any) {
+          this.error(error.message);
+        }
+        break;
+      }
+
+      case 'show': {
+        if (subArgs.length === 0) {
+          this.error('Usage: task dep show <id>');
+        }
+        const id = subArgs[0];
+        const task = this.taskManager.getTask(id);
+        if (!task) {
+          this.error(`Task not found: ${id}`);
+          return;
+        }
+        const { dependsOn, blockers } = this.taskManager.getDependencies(id);
+        if (this.outputFormat.isAgent) {
+          this.output({
+            operation: 'task-dep-show',
+            id,
+            dependsOn: dependsOn.map(t => ({ id: t.id, title: t.data.title, state: t.state })),
+            blockers: blockers.map(t => ({ id: t.id, title: t.data.title, state: t.state }))
+          });
+        } else {
+          console.log(`Dependencies for task: ${id}\n`);
+          if (dependsOn.length === 0) {
+            console.log('  No dependencies.');
+          } else {
+            console.log('Depends on:');
+            for (const dep of dependsOn) {
+              const blocking = blockers.some(b => b.id === dep.id) ? ' [BLOCKING]' : ' [done]';
+              console.log(`  ${dep.id} (${dep.state}): ${dep.data.title}${blocking}`);
+            }
+          }
+          console.log(`\nBlockers: ${blockers.length}`);
+        }
+        break;
+      }
+
+      default:
+        this.error(`Unknown dep subcommand: ${subcommand}. Use add, remove, or show.`);
+    }
+  }
+
+  private async handleTaskReady(_args: string[]): Promise<void> {
+    const tasks = this.taskManager.listReady();
+    if (this.outputFormat.isAgent) {
+      this.output({
+        operation: 'task-ready',
+        tasks: tasks.map(t => ({
+          id: t.id,
+          title: t.data.title,
+          state: t.state,
+          priority: t.data.priority,
+          assignee: t.data.assignee
+        })),
+        count: tasks.length
+      });
+    } else {
+      console.log(`Ready tasks (${tasks.length}):\n`);
+      for (const task of tasks) {
+        const priority = task.data.priority ? `[${task.data.priority}]` : '';
+        console.log(`  ${task.id} ${priority}: ${task.data.title}`);
+      }
+    }
+  }
+
+  private async handleTaskBlocked(_args: string[]): Promise<void> {
+    const tasks = this.taskManager.listBlocked();
+    if (this.outputFormat.isAgent) {
+      this.output({
+        operation: 'task-blocked',
+        tasks: tasks.map(t => {
+          const { blockers } = this.taskManager.getDependencies(t.id);
+          return {
+            id: t.id,
+            title: t.data.title,
+            state: t.state,
+            priority: t.data.priority,
+            blockers: blockers.map(b => b.id)
+          };
+        }),
+        count: tasks.length
+      });
+    } else {
+      console.log(`Blocked tasks (${tasks.length}):\n`);
+      for (const task of tasks) {
+        const { blockers } = this.taskManager.getDependencies(task.id);
+        const blockerIds = blockers.map(b => b.id).join(', ');
+        const priority = task.data.priority ? `[${task.data.priority}]` : '';
+        console.log(`  ${task.id} ${priority}: ${task.data.title}  (waiting on: ${blockerIds})`);
+      }
+    }
+  }
+
+  private async handleTaskClose(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: task close <id> [id2 id3...]');
+    }
+
+    const ids = args;
+    const results: Array<{ id: string; success: boolean; error?: string }> = [];
+
+    for (const id of ids) {
+      try {
+        const task = this.taskManager.getTask(id);
+        if (!task) {
+          results.push({ id, success: false, error: `Task not found: ${id}` });
+          continue;
+        }
+
+        // Transition task to completed via appropriate path
+        let currentTask = task;
+
+        if (currentTask.lifecycle === 'pending') {
+          // Assign then start then complete
+          currentTask = await this.taskManager.assignTask(id, 'system');
+          currentTask = await this.taskManager.startTask(id);
+        } else if (currentTask.lifecycle === 'assigned') {
+          currentTask = await this.taskManager.startTask(id);
+        }
+
+        if (currentTask.lifecycle === 'in_progress') {
+          currentTask = await this.taskManager.completeTask(id);
+        } else if (currentTask.lifecycle === 'completed') {
+          // Already done
+        } else {
+          results.push({ id, success: false, error: `Cannot close task in ${currentTask.lifecycle} lifecycle` });
+          continue;
+        }
+
+        results.push({ id, success: true });
+      } catch (error: any) {
+        results.push({ id, success: false, error: error.message });
+      }
+    }
+
+    const succeeded = results.filter(r => r.success).map(r => r.id);
+    const failed = results.filter(r => !r.success);
+
+    if (this.outputFormat.isAgent) {
+      this.output({
+        operation: 'task-close',
+        completed: succeeded,
+        errors: failed.map(f => ({ id: f.id, error: f.error })),
+        count: succeeded.length
+      });
+    } else {
+      console.log(`Closed ${succeeded.length} task(s): ${succeeded.join(', ')}`);
+      if (failed.length > 0) {
+        console.log(`\nFailed (${failed.length}):`);
+        for (const f of failed) {
+          console.log(`  ${f.id}: ${f.error}`);
+        }
+      }
+    }
+  }
+
+  private async handleTaskStats(_args: string[]): Promise<void> {
+    const allTasks = this.taskManager.listTasks();
+    const counts: Record<string, number> = {
+      pending: 0,
+      assigned: 0,
+      in_progress: 0,
+      completed: 0,
+      failed: 0
+    };
+
+    for (const task of allTasks) {
+      counts[task.lifecycle] = (counts[task.lifecycle] || 0) + 1;
+    }
+
+    const blocked = this.taskManager.listBlocked().length;
+    const ready = this.taskManager.listReady().length;
+
+    if (this.outputFormat.isAgent) {
+      this.output({
+        operation: 'task-stats',
+        total: allTasks.length,
+        lifecycle: counts,
+        blocked,
+        ready
+      });
+    } else {
+      console.log(`Tasks: ${allTasks.length} total`);
+      console.log(`  pending:     ${counts.pending}`);
+      console.log(`  assigned:    ${counts.assigned}`);
+      console.log(`  in_progress: ${counts.in_progress}`);
+      console.log(`  completed:   ${counts.completed}`);
+      console.log(`  failed:      ${counts.failed}`);
+      console.log(`  blocked:     ${blocked}  (of pending)`);
+      console.log(`  ready:       ${ready}  (of pending)`);
+    }
+  }
+
+  private async handleTaskPatch(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0) {
+      this.error('Usage: task patch <id> [--title "..."] [--priority P0-P4] [--assignee "..."] [--description "..."] [--lifecycle pending] [--seq 3]');
+    }
+
+    const id = positional[0];
+
+    const changes: any = {};
+    if (named.title !== undefined) changes.title = named.title;
+    if (named.priority !== undefined) changes.priority = named.priority;
+    if (named.assignee !== undefined) changes.assignee = named.assignee;
+    if (named.description !== undefined) changes.description = named.description;
+    if (named.lifecycle !== undefined) changes.lifecycle = named.lifecycle;
+
+    const seq = named.seq !== undefined ? parseInt(named.seq, 10) : undefined;
+
+    if (Object.keys(changes).length === 0) {
+      this.error('No changes specified. Use --title, --priority, --assignee, --description, or --lifecycle.');
+    }
+
+    try {
+      const task = await this.taskManager.patchTask(id, changes, seq);
+      this.success(`Patched task: ${task.id}`, {
+        operation: 'task-patch',
+        id: task.id,
+        title: task.data.title,
+        state: task.state,
+        priority: task.data.priority,
+        version: task.version
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleTaskApply(args: string[]): Promise<void> {
+    // Read JSONL from file or stdin
+    let input: string;
+
+    const fileArg = args[0];
+    if (fileArg && fileArg !== '-') {
+      try {
+        const { readFile } = await import('node:fs/promises');
+        input = await readFile(fileArg, 'utf-8');
+      } catch (error: any) {
+        this.error(`Cannot read file: ${fileArg}: ${error.message}`);
+        return;
+      }
+    } else {
+      // Read from stdin
+      const chunks: Buffer[] = [];
+      for await (const chunk of process.stdin) {
+        chunks.push(chunk);
+      }
+      input = Buffer.concat(chunks).toString('utf-8');
+    }
+
+    const lines = input.trim().split('\n').filter(l => l.trim());
+    if (lines.length === 0) {
+      this.error('No input records found.');
+      return;
+    }
+
+    // Parse JSONL
+    const records: any[] = [];
+    const parseErrors: Array<{ line: number; error: string }> = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      try {
+        const obj = JSON.parse(lines[i]);
+        // Support both 'depends-on' (CLI style) and 'dependsOn' (camelCase)
+        const record: any = {
+          id: obj.id,
+          title: obj.title,
+          priority: obj.priority,
+          lifecycle: obj.lifecycle,
+          assignee: obj.assignee,
+          description: obj.description,
+          dependsOn: obj.dependsOn || obj['depends-on'],
+          seq: obj.seq
+        };
+        records.push(record);
+      } catch (e: any) {
+        parseErrors.push({ line: i + 1, error: e.message });
+      }
+    }
+
+    const result = await this.taskManager.applyBatch(records);
+
+    const createdItems = result.applied.filter(item => item.action === 'created');
+    const updatedItems = result.applied.filter(item => item.action === 'updated');
+
+    const totalApplied = result.applied.length;
+    const totalConflicts = result.conflicts.length;
+    const totalErrors = result.errors.length + parseErrors.length;
+
+    if (this.outputFormat.isAgent) {
+      this.output({
+        operation: 'task-apply',
+        applied: result.applied,
+        conflicts: result.conflicts,
+        errors: [...result.errors, ...parseErrors.map(e => ({ id: `line-${e.line}`, error: e.error }))],
+        summary: {
+          applied: totalApplied,
+          conflicts: totalConflicts,
+          errors: totalErrors
+        }
+      });
+    } else {
+      console.log(`${createdItems.length} created, ${updatedItems.length} updated, ${totalConflicts} conflict${totalConflicts !== 1 ? 's' : ''}, ${totalErrors} error${totalErrors !== 1 ? 's' : ''}`);
+      if (result.conflicts.length > 0) {
+        console.log('\nConflicts:');
+        for (const c of result.conflicts) {
+          console.log(`  ${c.id}: ${c.reason}`);
+        }
+      }
+      if (result.errors.length > 0 || parseErrors.length > 0) {
+        console.log('\nErrors:');
+        for (const e of result.errors) {
+          console.log(`  ${e.id}: ${e.error}`);
+        }
+        for (const e of parseErrors) {
+          console.log(`  line ${e.line}: ${e.error}`);
+        }
+      }
+    }
+  }
+
+  private async handleTaskExport(args: string[]): Promise<void> {
+    const { named } = this.parseNamedArgs(args);
+
+    // --filter: all (default) | open | completed | failed
+    const filterRaw = named.filter || 'all';
+    if (!['all', 'open', 'completed', 'failed'].includes(filterRaw)) {
+      this.error(`Invalid filter: ${filterRaw}. Use: all, open, completed, or failed`);
+      return;
+    }
+    const filter = filterRaw as ExportFilter;
+
+    // --prefix: only include tasks whose ID starts with this string
+    const prefix = named.prefix || undefined;
+
+    // --file: write output to file instead of stdout
+    const filePath = named.file || undefined;
+
+    const records = this.taskManager.exportTasks(filter, prefix);
+
+    // Serialize to JSONL
+    const lines = records.map(r => JSON.stringify(r));
+    const output = lines.join('\n');
+
+    if (filePath) {
+      try {
+        const { writeFile } = await import('node:fs/promises');
+        await writeFile(filePath, output.length > 0 ? output + '\n' : '', 'utf-8');
+        if (this.outputFormat.isAgent) {
+          this.output({
+            operation: 'task-export',
+            filter,
+            prefix: prefix || null,
+            file: filePath,
+            count: records.length
+          });
+        } else {
+          console.log(`Exported ${records.length} tasks to ${filePath}`);
+        }
+      } catch (error: any) {
+        this.error(`Cannot write file: ${filePath}: ${error.message}`);
+      }
+    } else {
+      // Write to stdout
+      if (output.length > 0) {
+        process.stdout.write(output + '\n');
+      }
+      if (this.outputFormat.isAgent && !filePath) {
+        // For agent mode writing to stdout, the JSONL IS the output.
+        // But also log metadata to stderr so callers can parse.
+        process.stderr.write(JSON.stringify({
+          operation: 'task-export',
+          filter,
+          prefix: prefix || null,
+          count: records.length
+        }) + '\n');
+      }
+    }
+  }
+
+  // === TASK CONTENT (APPEND-ONLY) HANDLERS ===
+
+  private async handleTaskNote(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length < 2) {
+      this.error('Usage: task note <id> <text> [--author "..."]');
+    }
+
+    const id = positional[0];
+    const text = positional[1];
+    const author = named.author;
+
+    try {
+      const entry = await this.taskManager.appendNote(id, text, author);
+      if (this.outputFormat.isAgent) {
+        this.output({ operation: 'task-note', taskId: id, seq: entry.seq, entry });
+      } else {
+        console.log(`noted (seq:${entry.seq})`);
+      }
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleTaskDecide(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length < 2) {
+      this.error('Usage: task decide <id> <decision> [--context "..."] [--rationale "..."] [--author "..."]');
+    }
+
+    const id = positional[0];
+    const decision = positional[1];
+
+    try {
+      const entry = await this.taskManager.recordDecision(id, decision, {
+        context: named.context,
+        rationale: named.rationale,
+        author: named.author,
+      });
+      if (this.outputFormat.isAgent) {
+        this.output({ operation: 'task-decide', taskId: id, seq: entry.seq, entry });
+      } else {
+        console.log(`decided (seq:${entry.seq})`);
+      }
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleTaskLink(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length < 2 || !named.kind) {
+      this.error('Usage: task link <id> <artifact> --kind file|commit|url|issue [--author "..."]');
+    }
+
+    const id = positional[0];
+    const artifact = positional[1];
+    const kind = named.kind as 'file' | 'commit' | 'url' | 'issue';
+
+    if (!['file', 'commit', 'url', 'issue'].includes(kind)) {
+      this.error(`Invalid kind: ${kind}. Must be one of: file, commit, url, issue`);
+    }
+
+    try {
+      const entry = await this.taskManager.linkArtifact(id, artifact, kind, named.author);
+      if (this.outputFormat.isAgent) {
+        this.output({ operation: 'task-link', taskId: id, seq: entry.seq, entry });
+      } else {
+        console.log(`linked (seq:${entry.seq})`);
+      }
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleTaskLog(args: string[]): Promise<void> {
+    const { positional } = this.parseNamedArgs(args);
+
+    if (positional.length === 0) {
+      this.error('Usage: task log <id>');
+    }
+
+    const id = positional[0];
+
+    try {
+      const events = this.taskManager.getEventLog(id);
+
+      if (this.outputFormat.isAgent) {
+        this.output({ operation: 'task-log', taskId: id, events });
+      } else {
+        if (events.length === 0) {
+          console.log('(no events)');
+        } else {
+          for (const evt of events) {
+            let line = `[${evt.seq}] ${evt.kind.padEnd(7)} ${evt.timestamp}  ${evt.text}`;
+            if (evt.kind === 'link' && evt.linkKind) {
+              line = `[${evt.seq}] ${'link'.padEnd(7)} ${evt.timestamp}  ${evt.linkKind}: ${evt.text}`;
+            }
+            console.log(line);
+          }
+        }
+      }
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleTaskDecisions(args: string[]): Promise<void> {
+    const { positional } = this.parseNamedArgs(args);
+
+    if (positional.length === 0) {
+      this.error('Usage: task decisions <id>');
+    }
+
+    const id = positional[0];
+
+    try {
+      const decisions = this.taskManager.getDecisions(id);
+
+      if (this.outputFormat.isAgent) {
+        this.output({ operation: 'task-decisions', taskId: id, decisions });
+      } else {
+        if (decisions.length === 0) {
+          console.log('(no decisions)');
+        } else {
+          for (const d of decisions) {
+            console.log(`[${d.seq}] ${d.text}`);
+            if (d.context) console.log(`    context: ${d.context}`);
+            if (d.rationale) console.log(`    rationale: ${d.rationale}`);
+          }
+        }
+      }
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleTaskPrime(args: string[]): Promise<void> {
+    const { positional } = this.parseNamedArgs(args);
+
+    if (positional.length === 0) {
+      this.error('Usage: task prime <id>');
+    }
+
+    const id = positional[0];
+
+    try {
+      const result = this.taskManager.primeTask(id);
+      this.output(result);
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
   // === AGENT HANDLERS ===
 
   private showAgentHelp(): void {
@@ -3469,7 +4203,8 @@ class UGSCLI {
           pause: 'Pause an active session: session pause <id>',
           resume: 'Resume a paused session: session resume <id>',
           complete: 'Complete a session: session complete <id>',
-          list: 'List sessions: session list [--state created|active|paused|completed]'
+          list: 'List sessions: session list [--state created|active|paused|completed]',
+          prime: 'Inject workflow context: session prime [--mcp] [--no-git] [--no-ctx]'
         },
         lifecycle: 'created -> active (first message) -> paused | completed; paused -> active (resumed)'
       });
@@ -3716,6 +4451,188 @@ class UGSCLI {
         const owner = session.data.owner ? ` owner: ${session.data.owner}` : '';
         console.log(`  ${session.id} (${session.state}, v${session.version}): model ${session.data.defaultModel}${owner}`);
       }
+    }
+  }
+
+  // === SESSION PRIME HANDLER ===
+
+  private async handleSessionPrime(args: string[]): Promise<void> {
+    try {
+      const { named } = this.parseNamedArgs(args);
+      const mcpEnv = process.env.UGS_MCP === '1';
+      const mcpFlag = named.mcp === 'true';
+      const isMcp = mcpEnv || mcpFlag;
+      const noGit = named['no-git'] === 'true';
+      const noCtx = named['no-ctx'] === 'true';
+
+      // MCP brief mode (~50 tokens)
+      if (isMcp) {
+        process.stdout.write('UGS workflow: ugs task ready|start|complete|close|apply. Export: ugs task export > .ugs/tasks.jsonl. Protocol: /wg\n');
+        process.exit(0);
+      }
+
+      const { execSync } = await import('node:child_process');
+
+      // Check for .ugs/PRIME.md at git root (customization hook)
+      try {
+        let gitRoot: string | null = null;
+        try {
+          gitRoot = execSync('git rev-parse --show-toplevel', { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+        } catch {
+          // Not a git repo, skip PRIME.md check
+        }
+        if (gitRoot) {
+          const primePath = join(gitRoot, '.ugs', 'PRIME.md');
+          if (existsSync(primePath)) {
+            const { readFileSync } = await import('node:fs');
+            const content = readFileSync(primePath, 'utf8');
+            process.stdout.write(content);
+            process.exit(0);
+          }
+        }
+      } catch {
+        // Ignore errors in git root detection or file reading
+      }
+
+      // === GIT STATUS ===
+      let gitSection = '';
+      if (!noGit) {
+        try {
+          const isGitRepo = (() => {
+            try { execSync('git rev-parse --is-inside-work-tree', { stdio: 'pipe' }); return true; }
+            catch { return false; }
+          })();
+          if (isGitRepo) {
+            let branch: string;
+            try {
+              branch = execSync('git branch --show-current', { encoding: 'utf8', stdio: 'pipe' }).trim();
+              if (!branch) branch = execSync('git rev-parse --short HEAD', { encoding: 'utf8', stdio: 'pipe' }).trim();
+            } catch { branch = '(detached)'; }
+
+            let syncStatus = '';
+            try {
+              const upstream = execSync('git rev-parse --abbrev-ref "@{upstream}"', { encoding: 'utf8', stdio: 'pipe' }).trim();
+              const ahead = parseInt(execSync('git rev-list --count "@{upstream}..HEAD"', { encoding: 'utf8', stdio: 'pipe' }).trim()) || 0;
+              const behind = parseInt(execSync('git rev-list --count "HEAD..@{upstream}"', { encoding: 'utf8', stdio: 'pipe' }).trim()) || 0;
+              if (ahead === 0 && behind === 0) syncStatus = `up to date with ${upstream}`;
+              else if (ahead > 0 && behind === 0) syncStatus = `${ahead} ahead of ${upstream} — push needed`;
+              else if (ahead === 0 && behind > 0) syncStatus = `${behind} BEHIND ${upstream} — pull needed`;
+              else syncStatus = `${ahead} ahead, ${behind} behind ${upstream} — diverged`;
+            } catch { syncStatus = 'no upstream'; }
+
+            let treeStatus: string;
+            try {
+              const dirty = execSync('git status --porcelain', { encoding: 'utf8', stdio: 'pipe' }).trim();
+              if (!dirty) {
+                treeStatus = 'clean';
+              } else {
+                const lines = dirty.split('\n').filter(Boolean);
+                const modified = lines.filter(l => !l.startsWith('??')).length;
+                const untracked = lines.filter(l => l.startsWith('??')).length;
+                const parts: string[] = [];
+                if (modified > 0) parts.push(`${modified} modified`);
+                if (untracked > 0) parts.push(`${untracked} untracked`);
+                treeStatus = `DIRTY — ${parts.join(', ')}`;
+              }
+            } catch { treeStatus = 'unknown'; }
+
+            gitSection = `## Git\nBranch: ${branch} (${syncStatus})\nWorking tree: ${treeStatus}\n`;
+          }
+        } catch { /* Non-fatal */ }
+      }
+
+      // === CTX FACTS ===
+      let ctxSection = '';
+      if (!noCtx) {
+        try {
+          execSync('which ctx', { stdio: 'pipe' });
+          const keepPrefixes = ['finding:', 'decision:', 'eval:', 'project:', 'task:', 'obs:', 'note:'];
+          try {
+            const ctxOutput = execSync(
+              'ctx query --limit=50 2>/dev/null',
+              { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], shell: true }
+            ).trim();
+            if (ctxOutput) {
+              const lines = ctxOutput.split('\n').filter(line =>
+                keepPrefixes.some(prefix => line.includes(prefix))
+              );
+              if (lines.length > 0) {
+                ctxSection = `## Ctx Facts\n${lines.join('\n')}\n`;
+              }
+            }
+          } catch { /* ctx query failed or no facts */ }
+        } catch { /* ctx not in PATH */ }
+      }
+
+      // === READY TASKS ===
+      const readyTasks = this.taskManager.listReady();
+      let taskSection: string;
+      if (readyTasks.length === 0) {
+        taskSection = 'No unblocked tasks.';
+      } else {
+        const limit = 10;
+        const shown = readyTasks.slice(0, limit);
+        const lines = shown.map(t => {
+          const priority = t.config.priority ? `[${t.config.priority}] ` : '';
+          return `- ${priority}${t.id}: ${t.config.title}`;
+        });
+        if (readyTasks.length > limit) {
+          lines.push(`... and ${readyTasks.length - limit} more`);
+        }
+        taskSection = lines.join('\n');
+      }
+
+      const output = `# UGS Session Context
+
+> Run \`ugs session prime\` after compaction or new session to restore context.
+
+${gitSection ? gitSection + '\n' : ''}${ctxSection ? ctxSection + '\n' : ''}## Ready Tasks
+
+${taskSection}
+
+## Core Rules
+
+- Use \`ugs task\` for ALL task tracking. Do NOT use TodoWrite or markdown files.
+- Create a task BEFORE writing code. Start it when beginning, close it when done.
+- Use \`ugs task apply\` for bulk creates (pipe JSONL). Use \`ugs task patch\` for updates.
+- Full protocol: invoke \`/wg\` skill for detailed reference.
+
+## Essential Commands
+
+### Finding Work
+- \`ugs task ready\`              — unblocked tasks (what to work on next)
+- \`ugs task blocked\`            — blocked tasks and why
+- \`ugs task list\`               — all tasks
+- \`ugs task get <id>\`           — task detail
+
+### Creating & Updating
+- \`ugs task create <id> --title "..." --priority P2\`   — new task
+- \`ugs task start <id>\`         — mark in_progress
+- \`ugs task complete <id>\`      — mark done
+- \`ugs task close <id> [id2..]\` — close multiple at once
+- \`ugs task patch <id> --title "..."\`  — update fields
+- \`ugs task apply < tasks.jsonl\`       — bulk create/update
+
+### Dependencies
+- \`ugs task dep add <id> <dep>\` — add dependency
+- \`ugs task dep show <id>\`      — show dependencies
+
+### Project Health
+- \`ugs task stats\`              — counts by state
+- \`ugs task export\`             — export to JSONL (for backup/commit)
+
+## Session Close Protocol
+
+Before ending a session:
+- [ ] \`ugs task export > .ugs/tasks.jsonl\`  (if .ugs/ exists in this project)
+- [ ] \`git add .ugs/tasks.jsonl && git commit -m "chore: sync task graph"\`
+`;
+
+      process.stdout.write(output);
+      process.exit(0);
+    } catch {
+      // Always exit 0 — safe for hooks
+      process.exit(0);
     }
   }
 
@@ -4088,6 +5005,673 @@ class UGSCLI {
       nodesCreated: 8,
       edgesCreated: 8
     });
+  }
+
+  // === EPIC HANDLERS ===
+
+  private showEpicHelp(): void {
+    if (this.outputFormat.isAgent) {
+      this.output({
+        command: 'epic',
+        description: 'Group related tasks into a meaningful unit of work',
+        subcommands: {
+          create: 'Create an epic: epic create <id> --title "..." [--description "..."] [--owner "..."]',
+          get: 'Get epic details: epic get <id>',
+          list: 'List epics: epic list [--lifecycle planning|active|completed|cancelled]',
+          activate: 'Activate an epic: epic activate <id>',
+          complete: 'Complete an epic: epic complete <id>',
+          cancel: 'Cancel an epic: epic cancel <id>',
+          update: 'Update an epic: epic update <id> [--title "..."] [--description "..."] [--owner "..."]',
+          'task add': 'Add task to epic: epic task add <epic-id> <task-id>',
+          'task remove': 'Remove task from epic: epic task remove <epic-id> <task-id>',
+          tasks: 'List tasks in epic: epic tasks <epic-id>',
+          stats: 'Show epic stats: epic stats <epic-id>',
+        },
+        lifecycle: 'planning -> active -> completed | cancelled',
+      });
+    } else {
+      console.log('Epic Management Commands\n');
+      console.log('Lifecycle: planning -> active -> completed | cancelled\n');
+      console.log('Subcommands:');
+      console.log('  create <id> --title "..."          Create a new epic');
+      console.log('  get <id>                           Get epic details');
+      console.log('  list [--lifecycle ...]             List epics');
+      console.log('  activate <id>                      Activate an epic');
+      console.log('  complete <id>                      Mark epic as completed');
+      console.log('  cancel <id>                        Cancel an epic');
+      console.log('  update <id> [--title ...]          Update epic fields');
+      console.log('  task add <epic-id> <task-id>       Add a task to an epic');
+      console.log('  task remove <epic-id> <task-id>    Remove a task from an epic');
+      console.log('  tasks <epic-id>                    List tasks in an epic');
+      console.log('  stats <epic-id>                    Show completion stats');
+    }
+  }
+
+  private async handleEpicCreate(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0 || !named.title) {
+      this.error('Usage: epic create <id> --title "..." [--description "..."] [--owner "..."]');
+    }
+
+    const id = positional[0];
+    const config = {
+      title: named.title,
+      description: named.description,
+      owner: named.owner,
+    };
+
+    try {
+      const epic = await this.epicManager.createEpic(id, config);
+      this.success(`Created epic: ${epic.id} (${epic.lifecycle})`, {
+        operation: 'epic-create',
+        id: epic.id,
+        title: epic.config.title,
+        lifecycle: epic.lifecycle,
+        owner: epic.config.owner,
+        version: epic.version,
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleEpicGet(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: epic get <id>');
+    }
+
+    const id = args[0];
+    const epic = this.epicManager.getEpic(id);
+
+    if (epic) {
+      this.output({
+        id: epic.id,
+        lifecycle: epic.lifecycle,
+        config: epic.config,
+        seq: epic.seq,
+        version: epic.version,
+        created: epic.created,
+        modified: epic.modified,
+      }, `Epic: ${epic.config.title} (${epic.lifecycle})`);
+    } else {
+      if (this.outputFormat.isAgent) {
+        this.output({ found: false, id });
+      } else {
+        console.log(`Epic not found: ${id}`);
+      }
+    }
+  }
+
+  private async handleEpicList(args: string[]): Promise<void> {
+    const { named } = this.parseNamedArgs(args);
+    const lifecycle = named.lifecycle as EpicLifecycle | undefined;
+
+    if (lifecycle && !['planning', 'active', 'completed', 'cancelled'].includes(lifecycle)) {
+      this.error('Invalid lifecycle. Use: planning, active, completed, or cancelled');
+    }
+
+    const epics = this.epicManager.listEpics(lifecycle ? { lifecycle } : undefined);
+
+    if (this.outputFormat.isAgent) {
+      this.output({
+        operation: 'epic-list',
+        filter: lifecycle || 'all',
+        epics: epics.map(e => ({
+          id: e.id,
+          title: e.config.title,
+          lifecycle: e.lifecycle,
+          owner: e.config.owner,
+          version: e.version,
+        })),
+        count: epics.length,
+      });
+    } else {
+      const filterDesc = lifecycle ? ` (${lifecycle})` : '';
+      console.log(`Found ${epics.length} epics${filterDesc}:\n`);
+      for (const epic of epics) {
+        const owner = epic.config.owner ? ` [${epic.config.owner}]` : '';
+        console.log(`  ${epic.id} (${epic.lifecycle})${owner}: ${epic.config.title}`);
+      }
+    }
+  }
+
+  private async handleEpicActivate(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: epic activate <id>');
+    }
+
+    const id = args[0];
+
+    try {
+      const epic = await this.epicManager.activateEpic(id);
+      this.success(`Activated epic: ${epic.id}`, {
+        operation: 'epic-activate',
+        id: epic.id,
+        lifecycle: epic.lifecycle,
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleEpicComplete(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: epic complete <id>');
+    }
+
+    const id = args[0];
+
+    try {
+      const epic = await this.epicManager.completeEpic(id);
+      this.success(`Completed epic: ${epic.id}`, {
+        operation: 'epic-complete',
+        id: epic.id,
+        lifecycle: epic.lifecycle,
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleEpicCancel(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: epic cancel <id>');
+    }
+
+    const id = args[0];
+
+    try {
+      const epic = await this.epicManager.cancelEpic(id);
+      this.success(`Cancelled epic: ${epic.id}`, {
+        operation: 'epic-cancel',
+        id: epic.id,
+        lifecycle: epic.lifecycle,
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleEpicUpdate(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0) {
+      this.error('Usage: epic update <id> [--title "..."] [--description "..."] [--owner "..."]');
+    }
+
+    const id = positional[0];
+    const changes: any = {};
+    if (named.title !== undefined) changes.title = named.title;
+    if (named.description !== undefined) changes.description = named.description;
+    if (named.owner !== undefined) changes.owner = named.owner;
+
+    try {
+      const epic = await this.epicManager.updateEpic(id, changes);
+      this.success(`Updated epic: ${epic.id}`, {
+        operation: 'epic-update',
+        id: epic.id,
+        version: epic.version,
+        config: epic.config,
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleEpicTask(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: epic task <add|remove> <epic-id> <task-id>');
+    }
+
+    const subcommand = args[0];
+    const subArgs = args.slice(1);
+
+    switch (subcommand) {
+      case 'add': {
+        if (subArgs.length < 2) {
+          this.error('Usage: epic task add <epic-id> <task-id>');
+        }
+        const epicId = subArgs[0];
+        const taskId = subArgs[1];
+        try {
+          await this.epicManager.addTaskToEpic(epicId, taskId);
+          this.success(`Added task ${taskId} to epic ${epicId}`, {
+            operation: 'epic-task-add',
+            epicId,
+            taskId,
+          });
+        } catch (error: any) {
+          this.error(error.message);
+        }
+        break;
+      }
+
+      case 'remove': {
+        if (subArgs.length < 2) {
+          this.error('Usage: epic task remove <epic-id> <task-id>');
+        }
+        const epicId = subArgs[0];
+        const taskId = subArgs[1];
+        try {
+          await this.epicManager.removeTaskFromEpic(epicId, taskId);
+          this.success(`Removed task ${taskId} from epic ${epicId}`, {
+            operation: 'epic-task-remove',
+            epicId,
+            taskId,
+          });
+        } catch (error: any) {
+          this.error(error.message);
+        }
+        break;
+      }
+
+      default:
+        this.error(`Unknown epic task subcommand: ${subcommand}. Use add or remove.`);
+    }
+  }
+
+  private async handleEpicTasks(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: epic tasks <epic-id>');
+    }
+
+    const epicId = args[0];
+    const epic = this.epicManager.getEpic(epicId);
+
+    if (!epic) {
+      this.error(`Epic not found: ${epicId}`);
+      return;
+    }
+
+    const tasks = this.epicManager.getEpicTasks(epicId);
+
+    if (this.outputFormat.isAgent) {
+      this.output({
+        operation: 'epic-tasks',
+        epicId,
+        tasks: tasks.map(t => ({
+          id: t.id,
+          title: t.title,
+          lifecycle: t.lifecycle,
+        })),
+        count: tasks.length,
+      });
+    } else {
+      console.log(`Tasks in epic ${epicId} (${tasks.length}):\n`);
+      for (const task of tasks) {
+        console.log(`  ${task.id} (${task.lifecycle}): ${task.title}`);
+      }
+    }
+  }
+
+  private async handleEpicStats(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: epic stats <epic-id>');
+    }
+
+    const epicId = args[0];
+    const epic = this.epicManager.getEpic(epicId);
+
+    if (!epic) {
+      this.error(`Epic not found: ${epicId}`);
+      return;
+    }
+
+    const stats = this.epicManager.getEpicStats(epicId);
+
+    if (this.outputFormat.isAgent) {
+      this.output({
+        operation: 'epic-stats',
+        epicId,
+        title: epic.config.title,
+        lifecycle: epic.lifecycle,
+        stats,
+      });
+    } else {
+      console.log(`Stats for epic: ${epic.config.title} (${epic.lifecycle})\n`);
+      console.log(`  total:       ${stats.total}`);
+      console.log(`  completed:   ${stats.completed}`);
+      console.log(`  in_progress: ${stats.in_progress}`);
+      console.log(`  pending:     ${stats.pending}`);
+      if (stats.total > 0) {
+        const pct = Math.round((stats.completed / stats.total) * 100);
+        console.log(`\n  progress:    ${pct}%`);
+      }
+    }
+  }
+
+  // === PROJECT HANDLERS ===
+
+  private showProjectHelp(): void {
+    if (this.outputFormat.isAgent) {
+      this.output({
+        command: 'project',
+        description: 'Group epics into a top-level container',
+        subcommands: {
+          create: 'Create a project: project create <id> --title "..." [--description "..."] [--owner "..."]',
+          get: 'Get project details: project get <id>',
+          list: 'List projects: project list [--status draft|active|completed|archived]',
+          activate: 'Activate a project: project activate <id>',
+          complete: 'Complete a project: project complete <id>',
+          archive: 'Archive a project: project archive <id>',
+          update: 'Update a project: project update <id> [--title "..."] [--description "..."] [--owner "..."]',
+          'epic add': 'Add epic to project: project epic add <project-id> <epic-id>',
+          'epic remove': 'Remove epic from project: project epic remove <project-id> <epic-id>',
+          epics: 'List epics in project: project epics <project-id>',
+          stats: 'Show rolled-up stats: project stats <project-id>',
+        },
+        status: 'draft -> active -> completed | archived',
+      });
+    } else {
+      console.log('Project Management Commands\n');
+      console.log('Status: draft -> active -> completed | archived\n');
+      console.log('Subcommands:');
+      console.log('  create <id> --title "..."           Create a new project');
+      console.log('  get <id>                            Get project details');
+      console.log('  list [--status ...]                 List projects');
+      console.log('  activate <id>                       Activate a project');
+      console.log('  complete <id>                       Mark project as completed');
+      console.log('  archive <id>                        Archive a project');
+      console.log('  update <id> [--title ...]           Update project fields');
+      console.log('  epic add <project-id> <epic-id>     Add an epic to a project');
+      console.log('  epic remove <project-id> <epic-id>  Remove an epic from a project');
+      console.log('  epics <project-id>                  List epics in a project');
+      console.log('  stats <project-id>                  Show rolled-up stats');
+    }
+  }
+
+  private async handleProjectCreate(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0 || !named.title) {
+      this.error('Usage: project create <id> --title "..." [--description "..."] [--owner "..."]');
+    }
+
+    const id = positional[0];
+    const config = {
+      title: named.title,
+      description: named.description,
+      owner: named.owner,
+    };
+
+    try {
+      const project = await this.projectManager.createProject(id, config);
+      this.success(`Created project: ${project.id} (${project.status})`, {
+        operation: 'project-create',
+        id: project.id,
+        title: project.config.title,
+        status: project.status,
+        owner: project.config.owner,
+        version: project.version,
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleProjectGet(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: project get <id>');
+    }
+
+    const id = args[0];
+    const project = this.projectManager.getProject(id);
+
+    if (project) {
+      this.output({
+        id: project.id,
+        status: project.status,
+        config: project.config,
+        seq: project.seq,
+        version: project.version,
+        created: project.created,
+        modified: project.modified,
+      }, `Project: ${project.config.title} (${project.status})`);
+    } else {
+      if (this.outputFormat.isAgent) {
+        this.output({ found: false, id });
+      } else {
+        console.log(`Project not found: ${id}`);
+      }
+    }
+  }
+
+  private async handleProjectList(args: string[]): Promise<void> {
+    const { named } = this.parseNamedArgs(args);
+    const status = named.status as ProjectStatus | undefined;
+
+    if (status && !['draft', 'active', 'completed', 'archived'].includes(status)) {
+      this.error('Invalid status. Use: draft, active, completed, or archived');
+    }
+
+    const projects = this.projectManager.listProjects(status ? { status } : undefined);
+
+    if (this.outputFormat.isAgent) {
+      this.output({
+        operation: 'project-list',
+        filter: status || 'all',
+        projects: projects.map(p => ({
+          id: p.id,
+          title: p.config.title,
+          status: p.status,
+          owner: p.config.owner,
+          version: p.version,
+        })),
+        count: projects.length,
+      });
+    } else {
+      const filterDesc = status ? ` (${status})` : '';
+      console.log(`Found ${projects.length} projects${filterDesc}:\n`);
+      for (const project of projects) {
+        const owner = project.config.owner ? ` [${project.config.owner}]` : '';
+        console.log(`  ${project.id} (${project.status})${owner}: ${project.config.title}`);
+      }
+    }
+  }
+
+  private async handleProjectActivate(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: project activate <id>');
+    }
+
+    const id = args[0];
+
+    try {
+      const project = await this.projectManager.activateProject(id);
+      this.success(`Activated project: ${project.id}`, {
+        operation: 'project-activate',
+        id: project.id,
+        status: project.status,
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleProjectComplete(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: project complete <id>');
+    }
+
+    const id = args[0];
+
+    try {
+      const project = await this.projectManager.completeProject(id);
+      this.success(`Completed project: ${project.id}`, {
+        operation: 'project-complete',
+        id: project.id,
+        status: project.status,
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleProjectArchive(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: project archive <id>');
+    }
+
+    const id = args[0];
+
+    try {
+      const project = await this.projectManager.archiveProject(id);
+      this.success(`Archived project: ${project.id}`, {
+        operation: 'project-archive',
+        id: project.id,
+        status: project.status,
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleProjectUpdate(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    if (positional.length === 0) {
+      this.error('Usage: project update <id> [--title "..."] [--description "..."] [--owner "..."]');
+    }
+
+    const id = positional[0];
+    const changes: any = {};
+    if (named.title !== undefined) changes.title = named.title;
+    if (named.description !== undefined) changes.description = named.description;
+    if (named.owner !== undefined) changes.owner = named.owner;
+
+    try {
+      const project = await this.projectManager.updateProject(id, changes);
+      this.success(`Updated project: ${project.id}`, {
+        operation: 'project-update',
+        id: project.id,
+        version: project.version,
+        config: project.config,
+      });
+    } catch (error: any) {
+      this.error(error.message);
+    }
+  }
+
+  private async handleProjectEpic(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: project epic <add|remove> <project-id> <epic-id>');
+    }
+
+    const subcommand = args[0];
+    const subArgs = args.slice(1);
+
+    switch (subcommand) {
+      case 'add': {
+        if (subArgs.length < 2) {
+          this.error('Usage: project epic add <project-id> <epic-id>');
+        }
+        const projectId = subArgs[0];
+        const epicId = subArgs[1];
+        try {
+          await this.projectManager.addEpicToProject(projectId, epicId);
+          this.success(`Added epic ${epicId} to project ${projectId}`, {
+            operation: 'project-epic-add',
+            projectId,
+            epicId,
+          });
+        } catch (error: any) {
+          this.error(error.message);
+        }
+        break;
+      }
+
+      case 'remove': {
+        if (subArgs.length < 2) {
+          this.error('Usage: project epic remove <project-id> <epic-id>');
+        }
+        const projectId = subArgs[0];
+        const epicId = subArgs[1];
+        try {
+          await this.projectManager.removeEpicFromProject(projectId, epicId);
+          this.success(`Removed epic ${epicId} from project ${projectId}`, {
+            operation: 'project-epic-remove',
+            projectId,
+            epicId,
+          });
+        } catch (error: any) {
+          this.error(error.message);
+        }
+        break;
+      }
+
+      default:
+        this.error(`Unknown project epic subcommand: ${subcommand}. Use add or remove.`);
+    }
+  }
+
+  private async handleProjectEpics(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: project epics <project-id>');
+    }
+
+    const projectId = args[0];
+    const project = this.projectManager.getProject(projectId);
+
+    if (!project) {
+      this.error(`Project not found: ${projectId}`);
+      return;
+    }
+
+    const epics = this.projectManager.getProjectEpics(projectId);
+
+    if (this.outputFormat.isAgent) {
+      this.output({
+        operation: 'project-epics',
+        projectId,
+        epics: epics.map(e => ({
+          id: e.id,
+          title: e.title,
+          lifecycle: e.lifecycle,
+        })),
+        count: epics.length,
+      });
+    } else {
+      console.log(`Epics in project ${projectId} (${epics.length}):\n`);
+      for (const epic of epics) {
+        console.log(`  ${epic.id} (${epic.lifecycle}): ${epic.title}`);
+      }
+    }
+  }
+
+  private async handleProjectStats(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: project stats <project-id>');
+    }
+
+    const projectId = args[0];
+    const project = this.projectManager.getProject(projectId);
+
+    if (!project) {
+      this.error(`Project not found: ${projectId}`);
+      return;
+    }
+
+    const stats = this.projectManager.getProjectStats(projectId);
+
+    if (this.outputFormat.isAgent) {
+      this.output({
+        operation: 'project-stats',
+        projectId,
+        title: project.config.title,
+        status: project.status,
+        stats,
+      });
+    } else {
+      console.log(`Stats for project: ${project.config.title} (${project.status})\n`);
+      console.log(`  epics:     ${stats.epics}`);
+      console.log(`  tasks:     ${stats.tasks}`);
+      console.log(`  completed: ${stats.completed}`);
+      if (stats.tasks > 0) {
+        const pct = Math.round((stats.completed / stats.tasks) * 100);
+        console.log(`\n  progress:  ${pct}%`);
+      }
+    }
   }
 
   public async run(): Promise<void> {
