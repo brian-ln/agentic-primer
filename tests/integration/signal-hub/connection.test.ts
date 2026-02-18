@@ -37,6 +37,9 @@ describe('Signal Hub - Connection Lifecycle', () => {
     });
 
     it('should connect and receive hub:connected with session info', async () => {
+      // @spec: connection/CONNECTION.spec.md#L38-L53
+      // @requirement: Connection handshake must result in hub:connected with sessionId
+      // @requirement: State transition from connecting to connected on successful hub:connect
       seagActor = await createSeagActor({
         url: env.hub.url,
         jwt: env.seagJwt,
@@ -49,6 +52,10 @@ describe('Signal Hub - Connection Lifecycle', () => {
     });
 
     it('should authenticate via JWT', async () => {
+      // @spec: connection/CONNECTION.spec.md#L109-L128
+      // @requirement: Client includes JWT in hub:connect payload
+      // @requirement: Server validates JWT signature and expiration
+      // @requirement: Session marked as authenticated=true
       seagActor = await createSeagActor({
         url: env.hub.url,
         jwt: env.seagJwt,
@@ -60,6 +67,11 @@ describe('Signal Hub - Connection Lifecycle', () => {
     });
 
     it('should disconnect gracefully', async () => {
+      // @spec: connection/CONNECTION.spec.md#L73-L87
+      // @spec: connection/CONNECTION.spec.md#L178-L186
+      // @requirement: Server MUST send hub:disconnect_ack BEFORE closing WebSocket
+      // @requirement: Transition to disconnecting state on hub:disconnect
+      // @requirement: Cleanup completes and transitions to disconnected state
       seagActor = await createSeagActor({
         url: env.hub.url,
         jwt: env.seagJwt,
@@ -201,6 +213,10 @@ describe('Signal Hub - Connection Lifecycle', () => {
     });
 
     it('should maintain connection with heartbeat', async () => {
+      // @spec: connection/CONNECTION.spec.md#L55-L72
+      // @requirement: Client interval 30 seconds
+      // @requirement: Server timeout 60 seconds
+      // @requirement: Detect dead connections that can't wake
       seagActor = await createSeagActor({
         url: env.hub.url,
         jwt: env.seagJwt,

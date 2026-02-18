@@ -53,6 +53,11 @@ describe('Signal Hub - Cross-Runtime Messaging', () => {
 
   describe('SEAG → Browser Messaging', () => {
     it('should send message from SEAG to browser (tell pattern)', async () => {
+      // @spec: messaging/MESSAGING.spec.md#L28-L41
+      // @spec: messaging/MESSAGING.spec.md#L291-L304
+      // @requirement: Point-to-point message delivery via hub:send
+      // @requirement: Tell pattern (fire-and-forget) message delivery
+      // @requirement: Flat payload structure for application messages
       const messagePromise = browserActor.waitForMessage(
         msg => msg.type === 'test:ping',
         5000
@@ -70,6 +75,9 @@ describe('Signal Hub - Cross-Runtime Messaging', () => {
     });
 
     it('should send message from SEAG to browser (ask pattern with ack)', async () => {
+      // @spec: messaging/MESSAGING.spec.md#L277-L290
+      // @requirement: Ask pattern (request-response) with hub:delivery_ack
+      // @requirement: Delivery acknowledgment confirms message delivery
       const messagePromise = browserActor.waitForMessage(
         msg => msg.type === 'test:request',
         5000
@@ -93,6 +101,9 @@ describe('Signal Hub - Cross-Runtime Messaging', () => {
     });
 
     it('should preserve payload integrity', async () => {
+      // @spec: messaging/MESSAGING.spec.md#L165-L199
+      // @requirement: Flat payload structure must be preserved end-to-end
+      // @requirement: Complex nested payloads maintain integrity
       const complexPayload = {
         string: 'test',
         number: 42,

@@ -35,6 +35,10 @@ describe('Registration Handlers', () => {
 
   describe('handleRegister', () => {
     it('should register a new actor', () => {
+      // @spec: registration/REGISTRATION.spec.md#L28-L41
+      // @requirement: Registration flow stores actor in registry
+      // @requirement: Generate renewal token on registration
+      // @requirement: Response includes actorAddress, renewalToken, and version
       const registerMsg: SharedMessage = {
         id: 'msg-1',
         from: toCanonicalAddress('browser/widget-123'),
@@ -64,6 +68,9 @@ describe('Registration Handlers', () => {
     });
 
     it('should increment version on re-registration', () => {
+      // @spec: registration/REGISTRATION.spec.md#L222-L240
+      // @requirement: Duplicate registration updates existing entry
+      // @requirement: Version increments on each re-registration
       const address = toCanonicalAddress('browser/widget-123');
 
       // First registration

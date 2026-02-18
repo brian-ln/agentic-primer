@@ -54,6 +54,11 @@ describe('Signal Hub - Pub/Sub', () => {
     });
 
     it('should subscribe to topic and receive published messages', async () => {
+      // @spec: pubsub/PUBSUB.spec.md#L29-L42
+      // @spec: pubsub/PUBSUB.spec.md#L67-L79
+      // @requirement: Subscribe to topic with hub:subscribe
+      // @requirement: Publish to topic with hub:publish forwards to all subscribers
+      // @requirement: Flat payload structure for published messages
       // Subscribe to topic
       await subscriberBrowser.subscribe('test-topic');
 
@@ -73,6 +78,9 @@ describe('Signal Hub - Pub/Sub', () => {
     });
 
     it('should not receive messages from unsubscribed topics', async () => {
+      // @spec: pubsub/PUBSUB.spec.md#L201-L210
+      // @requirement: Topic matching must be exact (no wildcard in basic impl)
+      // @requirement: Only subscribed topics receive published messages
       // Subscribe to one topic
       await subscriberBrowser.subscribe('topic-a');
 
@@ -134,6 +142,9 @@ describe('Signal Hub - Pub/Sub', () => {
     });
 
     it('should deliver topic messages to all subscribers', async () => {
+      // @spec: pubsub/PUBSUB.spec.md#L67-L79
+      // @requirement: Forward published message to each subscriber
+      // @requirement: Many-to-many communication pattern
       // Create publisher and 3 subscribers
       const publisherJwt = await generateSeagActorJWT('@(local/publisher)' as CanonicalAddress, ['compute']);
       const sub1Jwt = await generateBrowserActorJWT('@(browser/sub-1)' as CanonicalAddress, ['ui']);
