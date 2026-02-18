@@ -7,7 +7,33 @@ import { handleSubscribe, handlePublish, handleUnsubscribe, cleanupSubscriptions
 import type { SharedMessage, ActorRegistration, CanonicalAddress } from '../../types';
 import { toCanonicalAddress } from '../../utils';
 
+// Helper to create mock actor registration
+function createMockRegistration(overrides: Partial<ActorRegistration> = {}): ActorRegistration {
+  return {
+    actorAddress: toCanonicalAddress("browser/test"),
+    capabilities: [],
+    metadata: {},
+    connectionId: "conn-test",
+    registeredAt: Date.now(),
+    expiresAt: Date.now() + 300000,
+    version: 1,
+    renewalToken: "renewal-test",
+    ...overrides,
+  };
+}
+
+// Mock sendMessage function
+const mockSendMessage = (ws: WebSocket, message: SharedMessage) => {
+  ws.send(JSON.stringify(message));
+};
+
 describe('Pub/Sub Handlers', () => {
+
+// Mock sendMessage function
+const mockSendMessage = (ws: WebSocket, message: SharedMessage) => {
+  ws.send(JSON.stringify(message));
+};
+
   let subscriptions: Map<string, Set<CanonicalAddress>>;
   let registry: Map<string, ActorRegistration>;
   let connections: Map<string, WebSocket>;
@@ -136,24 +162,22 @@ describe('Pub/Sub Handlers', () => {
       };
 
       // Register subscribers
-      registry.set(subscriber1, {
+      registry.set(subscriber1, createMockRegistration({
         actorAddress: subscriber1,
         capabilities: ['render'],
-        version: 1,
         connectionId: 'conn-1',
         registeredAt: Date.now(),
         expiresAt: Date.now() + 300000,
-      });
+      }));
       connections.set('conn-1', mockWs1);
 
-      registry.set(subscriber2, {
+      registry.set(subscriber2, createMockRegistration({
         actorAddress: subscriber2,
         capabilities: ['render'],
-        version: 1,
         connectionId: 'conn-2',
         registeredAt: Date.now(),
         expiresAt: Date.now() + 300000,
-      });
+      }));
       connections.set('conn-2', mockWs2);
 
       // Add subscriptions
@@ -180,7 +204,7 @@ describe('Pub/Sub Handlers', () => {
         signature: null,
       };
 
-      const response = handlePublish(publishMsg, subscriptions, registry, connections);
+      const response = handlePublish(publishMsg, subscriptions, registry, connections, mockSendMessage);
 
       expect(response.type).toBe('hub:published');
       expect(response.payload).toHaveProperty('topic', 'events');
@@ -220,7 +244,7 @@ describe('Pub/Sub Handlers', () => {
         signature: null,
       };
 
-      const response = handlePublish(publishMsg, subscriptions, registry, connections);
+      const response = handlePublish(publishMsg, subscriptions, registry, connections, mockSendMessage);
 
       expect(response.type).toBe('hub:published');
       expect(response.payload).toHaveProperty('subscriberCount', 0);
@@ -240,25 +264,23 @@ describe('Pub/Sub Handlers', () => {
       };
 
       // Register active subscriber
-      registry.set(subscriber1, {
+      registry.set(subscriber1, createMockRegistration({
         actorAddress: subscriber1,
         capabilities: ['render'],
-        version: 1,
         connectionId: 'conn-1',
         registeredAt: Date.now(),
         expiresAt: Date.now() + 300000,
-      });
+      }));
       connections.set('conn-1', mockWs1);
 
       // Register expired subscriber
-      registry.set(subscriber2, {
+      registry.set(subscriber2, createMockRegistration({
         actorAddress: subscriber2,
         capabilities: ['render'],
-        version: 1,
         connectionId: 'conn-2',
         registeredAt: Date.now() - 400000,
         expiresAt: Date.now() - 100000, // Expired
-      });
+      }));
 
       // Add subscriptions
       const subscribers = new Set<CanonicalAddress>();
@@ -284,7 +306,7 @@ describe('Pub/Sub Handlers', () => {
         signature: null,
       };
 
-      const response = handlePublish(publishMsg, subscriptions, registry, connections);
+      const response = handlePublish(publishMsg, subscriptions, registry, connections, mockSendMessage);
 
       // Only active subscriber should receive message
       expect(response.payload).toHaveProperty('subscriberCount', 1);
@@ -316,7 +338,7 @@ describe('Pub/Sub Handlers', () => {
         signature: null,
       };
 
-      expect(() => handlePublish(publishMsg, subscriptions, registry, connections)).toThrow(
+      expect(() => handlePublish(publishMsg, subscriptions, registry, connections, mockSendMessage)).toThrow(
         'topic is required'
       );
     });
@@ -342,7 +364,7 @@ describe('Pub/Sub Handlers', () => {
         signature: null,
       };
 
-      expect(() => handlePublish(publishMsg, subscriptions, registry, connections)).toThrow(
+      expect(() => handlePublish(publishMsg, subscriptions, registry, connections, mockSendMessage)).toThrow(
         'payload.type is required'
       );
     });

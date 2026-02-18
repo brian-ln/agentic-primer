@@ -7,6 +7,26 @@ import { handleSend, handleBroadcast } from '../messaging';
 import type { SharedMessage, ActorRegistration, Env } from '../../types';
 import { toCanonicalAddress } from '../../utils';
 
+// Helper to create mock actor registration
+function createMockRegistration(overrides: Partial<ActorRegistration> = {}): ActorRegistration {
+  return {
+    actorAddress: toCanonicalAddress('browser/test'),
+    capabilities: [],
+    metadata: {},
+    connectionId: 'conn-test',
+    registeredAt: Date.now(),
+    expiresAt: Date.now() + 300000,
+    version: 1,
+    renewalToken: 'renewal-test',
+    ...overrides,
+  };
+}
+
+// Mock sendMessage function
+const mockSendMessage = (ws: WebSocket, message: SharedMessage) => {
+  ws.send(JSON.stringify(message));
+};
+
 describe('Messaging Handlers', () => {
   let mockEnv: Env;
   let registry: Map<string, ActorRegistration>;
@@ -52,14 +72,11 @@ describe('Messaging Handlers', () => {
       const senderAddress = toCanonicalAddress('browser/client');
 
       // Register target actor
-      registry.set(targetAddress, {
+      registry.set(targetAddress, createMockRegistration({
         actorAddress: targetAddress,
         capabilities: ['render'],
-        version: 1,
         connectionId: 'conn-123',
-        registeredAt: Date.now(),
-        expiresAt: Date.now() + 300000,
-      });
+      }));
       connections.set('conn-123', mockWs);
 
       const sendMsg: SharedMessage = {
@@ -80,7 +97,7 @@ describe('Messaging Handlers', () => {
         signature: null,
       };
 
-      const response = handleSend(sendMsg, registry, connections, mockEnv);
+      const response = handleSend(sendMsg, registry, connections, mockEnv, mockSendMessage);
 
       // Should return delivery acknowledgment
       expect(response).not.toBeNull();
@@ -122,7 +139,7 @@ describe('Messaging Handlers', () => {
         signature: null,
       };
 
-      const response = handleSend(sendMsg, registry, connections, mockEnv);
+      const response = handleSend(sendMsg, registry, connections, mockEnv, mockSendMessage);
 
       expect(response).not.toBeNull();
       expect(response?.type).toBe('hub:unknown_actor');
@@ -151,7 +168,7 @@ describe('Messaging Handlers', () => {
         signature: null,
       };
 
-      const response = handleSend(sendMsg, registry, connections, mockEnv);
+      const response = handleSend(sendMsg, registry, connections, mockEnv, mockSendMessage);
 
       expect(response).toBeNull();
     });
@@ -171,7 +188,7 @@ describe('Messaging Handlers', () => {
         signature: null,
       };
 
-      expect(() => handleSend(sendMsg, registry, connections, mockEnv)).toThrow(
+      expect(() => handleSend(sendMsg, registry, connections, mockEnv, mockSendMessage)).toThrow(
         'payload must be an object'
       );
     });
@@ -195,7 +212,7 @@ describe('Messaging Handlers', () => {
         signature: null,
       };
 
-      expect(() => handleSend(sendMsg, registry, connections, mockEnv)).toThrow(
+      expect(() => handleSend(sendMsg, registry, connections, mockEnv, mockSendMessage)).toThrow(
         'payload.type is required'
       );
     });
@@ -205,14 +222,13 @@ describe('Messaging Handlers', () => {
       const senderAddress = toCanonicalAddress('browser/client');
 
       // Register target actor with past expiration
-      registry.set(targetAddress, {
+      registry.set(targetAddress, createMockRegistration({
         actorAddress: targetAddress,
         capabilities: ['render'],
-        version: 1,
         connectionId: 'conn-123',
         registeredAt: Date.now() - 400000,
         expiresAt: Date.now() - 100000, // Expired
-      });
+      }));
       connections.set('conn-123', mockWs);
 
       const sendMsg: SharedMessage = {
@@ -233,7 +249,7 @@ describe('Messaging Handlers', () => {
         signature: null,
       };
 
-      const response = handleSend(sendMsg, registry, connections, mockEnv);
+      const response = handleSend(sendMsg, registry, connections, mockEnv, mockSendMessage);
 
       expect(response?.type).toBe('hub:unknown_actor');
       expect(response?.payload).toHaveProperty('message', 'Actor registration expired');
@@ -266,24 +282,20 @@ describe('Messaging Handlers', () => {
       };
 
       // Register two actors
-      registry.set(actor1, {
+      registry.set(actor1, createMockRegistration({
         actorAddress: actor1,
         capabilities: ['render'],
-        version: 1,
         connectionId: 'conn-1',
         registeredAt: Date.now(),
         expiresAt: Date.now() + 300000,
-      });
+      }));
       connections.set('conn-1', mockWs1);
 
-      registry.set(actor2, {
+      registry.set(actor2, createMockRegistration({
         actorAddress: actor2,
         capabilities: ['render'],
-        version: 1,
         connectionId: 'conn-2',
-        registeredAt: Date.now(),
-        expiresAt: Date.now() + 300000,
-      });
+      }));
       connections.set('conn-2', mockWs2);
 
       const broadcastMsg: SharedMessage = {
@@ -303,7 +315,7 @@ describe('Messaging Handlers', () => {
         signature: null,
       };
 
-      const response = handleBroadcast(broadcastMsg, registry, connections, mockEnv);
+      const response = handleBroadcast(broadcastMsg, registry, connections, mockEnv, mockSendMessage);
 
       // Should return broadcast acknowledgment
       expect(response.type).toBe('hub:broadcast_ack');
@@ -341,24 +353,22 @@ describe('Messaging Handlers', () => {
       };
 
       // Register sender and another actor
-      registry.set(senderAddress, {
+      registry.set(senderAddress, createMockRegistration({
         actorAddress: senderAddress,
         capabilities: ['render'],
-        version: 1,
         connectionId: 'conn-sender',
         registeredAt: Date.now(),
         expiresAt: Date.now() + 300000,
-      });
+      }));
       connections.set('conn-sender', mockWsSender);
 
-      registry.set(actor1, {
+      registry.set(actor1, createMockRegistration({
         actorAddress: actor1,
         capabilities: ['render'],
-        version: 1,
         connectionId: 'conn-1',
         registeredAt: Date.now(),
         expiresAt: Date.now() + 300000,
-      });
+      }));
       connections.set('conn-1', mockWs1);
 
       const broadcastMsg: SharedMessage = {
@@ -379,7 +389,7 @@ describe('Messaging Handlers', () => {
         signature: null,
       };
 
-      const response = handleBroadcast(broadcastMsg, registry, connections, mockEnv);
+      const response = handleBroadcast(broadcastMsg, registry, connections, mockEnv, mockSendMessage);
 
       expect(response.payload).toHaveProperty('deliveredCount', 1);
 
@@ -412,24 +422,20 @@ describe('Messaging Handlers', () => {
       };
 
       // Register two actors with different capabilities
-      registry.set(actor1, {
+      registry.set(actor1, createMockRegistration({
         actorAddress: actor1,
         capabilities: ['render', 'compute'],
-        version: 1,
         connectionId: 'conn-1',
         registeredAt: Date.now(),
         expiresAt: Date.now() + 300000,
-      });
+      }));
       connections.set('conn-1', mockWs1);
 
-      registry.set(actor2, {
+      registry.set(actor2, createMockRegistration({
         actorAddress: actor2,
         capabilities: ['render'], // No 'compute'
-        version: 1,
         connectionId: 'conn-2',
-        registeredAt: Date.now(),
-        expiresAt: Date.now() + 300000,
-      });
+      }));
       connections.set('conn-2', mockWs2);
 
       const broadcastMsg: SharedMessage = {
@@ -451,7 +457,7 @@ describe('Messaging Handlers', () => {
         signature: null,
       };
 
-      const response = handleBroadcast(broadcastMsg, registry, connections, mockEnv);
+      const response = handleBroadcast(broadcastMsg, registry, connections, mockEnv, mockSendMessage);
 
       // Only actor1 has 'compute' capability
       expect(response.payload).toHaveProperty('deliveredCount', 1);
@@ -475,7 +481,7 @@ describe('Messaging Handlers', () => {
         signature: null,
       };
 
-      expect(() => handleBroadcast(broadcastMsg, registry, connections, mockEnv)).toThrow(
+      expect(() => handleBroadcast(broadcastMsg, registry, connections, mockEnv, mockSendMessage)).toThrow(
         'payload must be an object'
       );
     });
@@ -498,7 +504,7 @@ describe('Messaging Handlers', () => {
         signature: null,
       };
 
-      expect(() => handleBroadcast(broadcastMsg, registry, connections, mockEnv)).toThrow(
+      expect(() => handleBroadcast(broadcastMsg, registry, connections, mockEnv, mockSendMessage)).toThrow(
         'payload.type is required'
       );
     });

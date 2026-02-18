@@ -24,8 +24,8 @@
     },
     "pattern": {
       "type": "string",
-      "enum": ["request", "notify", "response"],
-      "description": "Routing pattern for the message"
+      "enum": ["tell", "ask"],
+      "description": "Routing pattern for the message (tell=fire-and-forget, ask=request-response)"
     },
     "timestamp": {
       "type": "integer",
@@ -33,14 +33,18 @@
       "minimum": 0
     },
     "correlationId": {
-      "type": "string",
-      "description": "UUID for correlating request-response pairs",
-      "format": "uuid"
+      "oneOf": [
+        { "type": "string", "format": "uuid" },
+        { "type": "null" }
+      ],
+      "description": "UUID for correlating request-response pairs"
     },
     "ttl": {
-      "type": "integer",
-      "description": "Time-to-live in milliseconds",
-      "minimum": 0
+      "oneOf": [
+        { "type": "integer", "minimum": 0 },
+        { "type": "null" }
+      ],
+      "description": "Time-to-live in milliseconds"
     },
     "metadata": {
       "type": "object",
@@ -48,5 +52,5 @@
       "additionalProperties": true
     }
   },
-  "additionalProperties": false
+  "additionalProperties": true
 }

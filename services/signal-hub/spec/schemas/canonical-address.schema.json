@@ -6,12 +6,12 @@
   "definitions": {
     "CanonicalAddress": {
       "type": "string",
-      "pattern": "^[a-z0-9-]+/[a-z0-9-]+$",
-      "description": "Format: <runtime>/<actor-id>",
+      "pattern": "^@\\([a-z0-9-]+/[a-z0-9-]+\\)$",
+      "description": "Format: @(<runtime>/<actor-id>)",
       "examples": [
-        "browser/client-ui",
-        "seag/agent-1",
-        "cloudflare/signal-hub"
+        "@(browser/client-ui)",
+        "@(seag/agent-1)",
+        "@(cloudflare/signal-hub)"
       ]
     }
   },

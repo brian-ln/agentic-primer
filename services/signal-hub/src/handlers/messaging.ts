@@ -41,7 +41,8 @@ export function handleSend(
   msg: SharedMessage,
   registry: Map<string, ActorRegistration>,
   connections: Map<string, WebSocket>,
-  env: Env
+  env: Env,
+  sendMessage: (ws: WebSocket, message: SharedMessage) => void
 ): SharedMessage | null {
   const payload = msg.payload as {
     to?: string;
@@ -159,7 +160,7 @@ export function handleSend(
 
   // Send to target
   try {
-    ws.send(JSON.stringify(forwardedMessage));
+    sendMessage(ws, forwardedMessage);
     console.log('[handleSend] Successfully sent', payload.type, 'to', targetAddress);
 
     // Send delivery acknowledgment if requested
@@ -214,7 +215,8 @@ export function handleBroadcast(
   msg: SharedMessage,
   registry: Map<string, ActorRegistration>,
   connections: Map<string, WebSocket>,
-  env: Env
+  env: Env,
+  sendMessage: (ws: WebSocket, message: SharedMessage) => void
 ): SharedMessage {
   const payload = msg.payload as {
     type: string;
@@ -313,7 +315,7 @@ export function handleBroadcast(
         to: target.actorAddress,
       };
 
-      ws.send(JSON.stringify(recipientMessage));
+      sendMessage(ws, recipientMessage);
       console.log('[handleBroadcast] Sent to', target.actorAddress);
       deliveredCount++;
     } catch (err) {

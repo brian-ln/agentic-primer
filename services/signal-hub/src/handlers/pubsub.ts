@@ -82,7 +82,8 @@ export function handlePublish(
   msg: SharedMessage,
   subscriptions: Map<string, Set<CanonicalAddress>>,
   registry: Map<string, ActorRegistration>,
-  connections: Map<string, WebSocket>
+  connections: Map<string, WebSocket>,
+  sendMessage: (ws: WebSocket, message: SharedMessage) => void
 ): SharedMessage {
   const payload = msg.payload as {
     topic: string;
@@ -177,7 +178,7 @@ export function handlePublish(
         to: subscriberAddress,
       };
 
-      ws.send(JSON.stringify(recipientMessage));
+      sendMessage(ws, recipientMessage);
       deliveredCount++;
 
       // ASSERTION LOG: Message delivered to subscriber

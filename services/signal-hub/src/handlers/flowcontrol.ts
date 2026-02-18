@@ -34,7 +34,11 @@ export function handleQueueStats(
 /**
  * Send hub:pause to client (backpressure signal)
  */
-export function sendPause(ws: WebSocket, reason: string): void {
+export function sendPause(
+  ws: WebSocket,
+  reason: string,
+  sendMessage: (ws: WebSocket, message: SharedMessage) => void
+): void {
   const pauseMessage: SharedMessage = {
     id: crypto.randomUUID(),
     from: SIGNAL_HUB_ADDRESS,
@@ -49,14 +53,17 @@ export function sendPause(ws: WebSocket, reason: string): void {
     signature: null,
   };
 
-  ws.send(JSON.stringify(pauseMessage));
+  sendMessage(ws, pauseMessage);
   console.log(`Sent hub:pause to client: ${reason}`);
 }
 
 /**
  * Send hub:resume to client (backpressure released)
  */
-export function sendResume(ws: WebSocket): void {
+export function sendResume(
+  ws: WebSocket,
+  sendMessage: (ws: WebSocket, message: SharedMessage) => void
+): void {
   const resumeMessage: SharedMessage = {
     id: crypto.randomUUID(),
     from: SIGNAL_HUB_ADDRESS,
@@ -71,7 +78,7 @@ export function sendResume(ws: WebSocket): void {
     signature: null,
   };
 
-  ws.send(JSON.stringify(resumeMessage));
+  sendMessage(ws, resumeMessage);
   console.log('Sent hub:resume to client');
 }
 

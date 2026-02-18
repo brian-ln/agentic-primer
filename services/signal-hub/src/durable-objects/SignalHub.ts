@@ -21,6 +21,7 @@ import {
   createTokenBucket,
   consumeToken,
 } from '../utils';
+import { getValidator } from '../validation/schema-validator';
 
 // Handlers
 import { handleConnect, handleHeartbeat, handleDisconnect } from '../handlers/connection';
@@ -83,7 +84,15 @@ export class SignalHub implements DurableObject {
       )
     );
 
-    console.log('SignalHub Durable Object initialized');
+    // Log validation mode on startup
+    const validator = getValidator();
+    const mode = validator.getMode();
+    console.log(JSON.stringify({
+      event: 'signalhub_initialized',
+      validationMode: mode.mode,
+      validationFailOnError: mode.failOnError,
+      timestamp: Date.now(),
+    }));
   }
 
   /**
@@ -107,6 +116,22 @@ export class SignalHub implements DurableObject {
       status: 101,
       webSocket: client,
     });
+  }
+
+  /**
+   * Send message through WebSocket with schema validation
+   *
+   * Validates outgoing message before sending:
+   * - Test mode: throws on schema violation
+   * - Production: logs warning but sends anyway
+   */
+  private sendMessage(ws: WebSocket, message: SharedMessage): void {
+    // SCHEMA VALIDATION: Outgoing message
+    const validator = getValidator();
+    validator.validateMessage(message, 'outgoing');
+
+    // Send message
+    ws.send(JSON.stringify(message));
   }
 
   /**
@@ -169,12 +194,18 @@ export class SignalHub implements DurableObject {
         typeof message === 'string' ? message : new TextDecoder().decode(message);
       const parsedMessage = JSON.parse(rawMessage);
 
-      // Validate SharedMessage structure
+      // Validate SharedMessage structure (basic runtime check)
       if (!validateSharedMessage(parsedMessage)) {
         throw new HubError('internal_error', 'Invalid SharedMessage structure');
       }
 
       const msg = parsedMessage as SharedMessage;
+
+      // SCHEMA VALIDATION: Incoming message
+      // In test mode: throws on violation
+      // In production: logs warning only
+      const validator = getValidator();
+      validator.validateMessage(msg, 'incoming');
 
       // Update heartbeat timestamp
       session.lastHeartbeat = Date.now();
@@ -184,7 +215,7 @@ export class SignalHub implements DurableObject {
 
       // Send response if returned
       if (response) {
-        ws.send(JSON.stringify(response));
+        this.sendMessage(ws, response);
       }
 
       // Update stats
@@ -206,7 +237,7 @@ export class SignalHub implements DurableObject {
           err instanceof HubError ? err.details : undefined
         );
 
-        ws.send(JSON.stringify(errorMessage));
+        this.sendMessage(ws, errorMessage);
       } catch {
         // Failed to send error - close connection
         ws.close(1011, 'Internal error');
@@ -294,7 +325,7 @@ export class SignalHub implements DurableObject {
           sessionId: session.sessionId,
           timestamp: Date.now(),
         }));
-        ws.send(JSON.stringify(response));
+        this.sendMessage(ws, response);
       }
 
       this.cleanupConnection(ws, session);
@@ -348,11 +379,11 @@ export class SignalHub implements DurableObject {
 
     // Messaging
     if (messageType === 'hub:send') {
-      return handleSend(msg, this.registry, this.connections, this.env);
+      return handleSend(msg, this.registry, this.connections, this.env, this.sendMessage.bind(this));
     }
 
     if (messageType === 'hub:broadcast') {
-      return handleBroadcast(msg, this.registry, this.connections, this.env);
+      return handleBroadcast(msg, this.registry, this.connections, this.env, this.sendMessage.bind(this));
     }
 
     // Pub/sub
@@ -364,7 +395,7 @@ export class SignalHub implements DurableObject {
     }
 
     if (messageType === 'hub:publish') {
-      return handlePublish(msg, this.subscriptions, this.registry, this.connections);
+      return handlePublish(msg, this.subscriptions, this.registry, this.connections, this.sendMessage.bind(this));
     }
 
     if (messageType === 'hub:unsubscribe') {
@@ -463,7 +494,7 @@ export class SignalHub implements DurableObject {
 
         // Send disconnect notification to old session
         try {
-          const disconnectMsg = {
+          const disconnectMsg: SharedMessage = {
             id: crypto.randomUUID(),
             type: 'hub:disconnect',
             from: toCanonicalAddress('cloudflare/signal-hub'),
@@ -472,8 +503,12 @@ export class SignalHub implements DurableObject {
               reason: 'duplicate_connection',
               message: 'New connection established for this actor',
             },
+            pattern: 'tell',
+            correlationId: null,
             timestamp: Date.now(),
             metadata: {},
+            ttl: null,
+            signature: null,
           };
 
           console.log(JSON.stringify({
@@ -482,7 +517,7 @@ export class SignalHub implements DurableObject {
             timestamp: Date.now(),
           }));
 
-          ws.send(JSON.stringify(disconnectMsg));
+          this.sendMessage(ws, disconnectMsg);
         } catch (err) {
           console.error('Failed to send disconnect to old session:', err);
         }

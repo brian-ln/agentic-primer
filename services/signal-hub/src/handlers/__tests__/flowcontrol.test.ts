@@ -7,6 +7,11 @@ import { handleQueueStats, sendPause, sendResume, updatePauseState } from '../fl
 import type { SharedMessage, Session, QueueStats } from '../../types';
 import { toCanonicalAddress } from '../../utils';
 
+// Mock sendMessage function
+const mockSendMessage = (ws: WebSocket, message: SharedMessage) => {
+  ws.send(JSON.stringify(message));
+};
+
 describe('Flow Control Handlers', () => {
   let queueStats: QueueStats;
   let session: Session;
@@ -91,7 +96,7 @@ describe('Flow Control Handlers', () => {
         },
       } as unknown as WebSocket;
 
-      sendPause(mockWs, 'Queue overload');
+      sendPause(mockWs, 'Queue overload', mockSendMessage);
 
       expect(sentMessages.length).toBe(1);
 
@@ -111,7 +116,7 @@ describe('Flow Control Handlers', () => {
         },
       } as unknown as WebSocket;
 
-      sendResume(mockWs);
+      sendResume(mockWs, mockSendMessage);
 
       expect(sentMessages.length).toBe(1);
 
