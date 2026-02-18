@@ -80,7 +80,12 @@ export async function handleConnect(
     sessionId: session.sessionId,
     serverVersion,
     maxMessageSize: parseInt(env.MAX_MESSAGE_SIZE, 10),
-    heartbeatInterval: parseInt(env.HEARTBEAT_INTERVAL, 10),
+    // HB_INTERVAL_SECONDS is canonical (seconds); fall back to HEARTBEAT_INTERVAL (ms).
+    // Default: 300 000 ms (5 min). CF infrastructure handles TCP-level keepalive
+    // natively — this interval is for application-level session state verification only.
+    heartbeatInterval: env.HB_INTERVAL_SECONDS
+      ? parseInt(env.HB_INTERVAL_SECONDS, 10) * 1000
+      : parseInt(env.HEARTBEAT_INTERVAL || '300000', 10),
     capabilities: {
       maxActorsPerInstance: parseInt(env.ACTOR_REGISTRY_LIMIT, 10),
       supportsBackpressure: true,

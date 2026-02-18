@@ -68,9 +68,10 @@
       },
       "response": "hub:heartbeat_ack",
       "notes": [
-        "Client sends every 30 seconds",
-        "Server expects within 60 seconds",
-        "ANY message updates lastHeartbeat timestamp"
+        "Client sends every 300 seconds (5 min) by default — configurable via HB_INTERVAL_SECONDS env var",
+        "Cloudflare handles TCP-level connection health natively via its hibernatable WebSocket API (ping/pong at infrastructure layer)",
+        "App-level heartbeat is for application-layer session state verification, NOT for keepalive",
+        "ANY message (not just hub:heartbeat) updates lastHeartbeat timestamp"
       ]
     },
     "hub:heartbeat_ack": {
@@ -128,15 +129,20 @@
     }
   },
   "configuration": {
+    "HB_INTERVAL_SECONDS": {
+      "value": 300,
+      "unit": "seconds",
+      "description": "App-level heartbeat interval (default 300s / 5 min). Set via HB_INTERVAL_SECONDS env var. Cloudflare handles TCP-level keepalive natively."
+    },
     "HEARTBEAT_INTERVAL": {
-      "value": 30000,
+      "value": 300000,
       "unit": "milliseconds",
-      "description": "Client sends heartbeat every 30s"
+      "description": "Legacy env var (ms). Superseded by HB_INTERVAL_SECONDS. Kept for backward compatibility."
     },
     "HEARTBEAT_TIMEOUT": {
-      "value": 60000,
+      "value": 600000,
       "unit": "milliseconds",
-      "description": "Server expects heartbeat within 60s"
+      "description": "Server considers connection stale after 600s (2 × heartbeat interval)"
     },
     "DISCONNECT_TIMEOUT": {
       "value": 30000,

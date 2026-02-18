@@ -21,6 +21,13 @@ export interface Env {
   PROTOCOL_VERSION: string;
   MAX_MESSAGE_SIZE: string;
   HEARTBEAT_INTERVAL: string;
+  /**
+   * Application-level heartbeat interval in seconds.
+   * Defaults to 300 (5 min). Cloudflare handles TCP-level keepalive natively
+   * via the hibernatable WebSocket API; this interval is for application-layer
+   * session state verification only.
+   */
+  HB_INTERVAL_SECONDS?: string;
   ACTOR_REGISTRY_LIMIT: string;
   DEFAULT_ACTOR_TTL: string;
   MAX_ACTOR_TTL: string;
