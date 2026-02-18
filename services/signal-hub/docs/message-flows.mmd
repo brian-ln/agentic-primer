@@ -1,0 +1,350 @@
+%% Signal Hub Message Flow Diagrams
+%% Generated: 2026-02-18T00:28:30Z
+
+%% ============================================================================
+%% Flow 1: Connection and Registration
+%% ============================================================================
+
+sequenceDiagram
+    participant Client
+    participant SignalHub
+    participant Registry
+
+    Note over Client,Registry: Connection Flow
+
+    Client->>SignalHub: WebSocket Upgrade (HTTP)
+    SignalHub->>Client: 101 Switching Protocols
+
+    Note over SignalHub: Create Session<br/>(connectionState: connecting)
+
+    Client->>SignalHub: hub:connect<br/>{version, jwt}
+    SignalHub->>SignalHub: Validate JWT<br/>Check version
+
+    alt Success
+        SignalHub->>Client: hub:connected<br/>{sessionId, actorIdentity}
+        Note over SignalHub: connectionState = connected
+        Note over Client: Start heartbeat timer
+    else Version Mismatch
+        SignalHub->>Client: hub:error<br/>{code: version_mismatch}
+        SignalHub->>Client: WebSocket close
+    else Auth Failed
+        SignalHub->>Client: hub:error<br/>{code: unauthorized}
+        SignalHub->>Client: WebSocket close
+    end
+
+    Note over Client,Registry: Registration Flow
+
+    Client->>SignalHub: hub:register<br/>{actorAddress, capabilities, ttl}
+    SignalHub->>SignalHub: Check duplicate connection
+    SignalHub->>Registry: Store registration<br/>(version, expiresAt, renewalToken)
+    SignalHub->>Client: hub:registered<br/>{renewalToken, expiresAt, version}
+
+    loop Every 30 seconds
+        Client->>SignalHub: hub:heartbeat<br/>{timestamp}
+        SignalHub->>Client: hub:heartbeat_ack<br/>{serverTime}
+    end
+
+%% ============================================================================
+%% Flow 2: Actor Discovery
+%% ============================================================================
+
+sequenceDiagram
+    participant ClientA as Client A
+    participant SignalHub
+    participant Registry
+
+    Note over ClientA,Registry: Discovery Flow
+
+    ClientA->>SignalHub: hub:discover<br/>{capabilities: ["inference"]}
+    SignalHub->>Registry: Query actors<br/>Filter by capabilities
+    Registry-->>SignalHub: Matching actors
+
+    SignalHub->>SignalHub: Check expiration<br/>Lazy cleanup
+
+    SignalHub->>ClientA: hub:discovery_result<br/>{actors: [...], count, hasMore}
+
+    Note over ClientA: Select target actor<br/>from results
+
+%% ============================================================================
+%% Flow 3: Point-to-Point Messaging
+%% ============================================================================
+
+sequenceDiagram
+    participant Sender as Client (Sender)
+    participant SignalHub
+    participant Registry
+    participant Connections as Connection Map
+    participant Recipient as Client (Recipient)
+
+    Note over Sender,Recipient: Send Message Flow
+
+    Sender->>SignalHub: hub:send<br/>{to: "seag/agent-1", payload: {...}}
+
+    SignalHub->>Registry: Lookup recipient<br/>"seag/agent-1"
+    Registry-->>SignalHub: Registration found<br/>{connectionId, expiresAt}
+
+    SignalHub->>SignalHub: Check expiration
+
+    alt Not Expired
+        SignalHub->>Connections: Get WebSocket<br/>by connectionId
+        Connections-->>SignalHub: WebSocket found
+
+        SignalHub->>Recipient: Forward message<br/>{from: "browser/client", to: "seag/agent-1"}
+
+        Note over Sender: No acknowledgment<br/>(fire-and-forget)
+    else Actor Not Found
+        SignalHub->>Sender: hub:error<br/>{code: unknown_actor}
+    else Registration Expired
+        SignalHub->>Registry: Delete stale entry
+        SignalHub->>Sender: hub:error<br/>{code: unknown_actor}
+    end
+
+%% ============================================================================
+%% Flow 4: Broadcast Messaging
+%% ============================================================================
+
+sequenceDiagram
+    participant Sender as Client (Sender)
+    participant SignalHub
+    participant Registry
+    participant R1 as Recipient 1
+    participant R2 as Recipient 2
+    participant RN as Recipient N
+
+    Note over Sender,RN: Broadcast Flow
+
+    Sender->>SignalHub: hub:broadcast<br/>{payload: {...}}
+
+    SignalHub->>Registry: Get all actors
+    Registry-->>SignalHub: Actor list (N actors)
+
+    Note over SignalHub: Batch send (100 at a time)
+
+    par Batch 1
+        SignalHub->>R1: Message (to: @(broadcast))
+        SignalHub->>R2: Message (to: @(broadcast))
+    end
+
+    par Batch N
+        SignalHub->>RN: Message (to: @(broadcast))
+    end
+
+    Note over SignalHub: Track success/failure counts
+
+    SignalHub->>Sender: hub:broadcast_ack<br/>{recipientCount, successCount, failureCount}
+
+%% ============================================================================
+%% Flow 5: Pub/Sub Topics
+%% ============================================================================
+
+sequenceDiagram
+    participant Sub1 as Subscriber 1
+    participant Sub2 as Subscriber 2
+    participant SignalHub
+    participant Subscriptions as Topic Map
+    participant Pub as Publisher
+
+    Note over Sub1,Pub: Subscribe Flow
+
+    Sub1->>SignalHub: hub:subscribe<br/>{topic: "system/events"}
+    SignalHub->>Subscriptions: Add subscriber<br/>to topic set
+    SignalHub->>Sub1: hub:subscribed<br/>{topic, subscribedAt}
+
+    Sub2->>SignalHub: hub:subscribe<br/>{topic: "system/events"}
+    SignalHub->>Subscriptions: Add subscriber<br/>to topic set
+    SignalHub->>Sub2: hub:subscribed<br/>{topic, subscribedAt}
+
+    Note over Sub1,Pub: Publish Flow
+
+    Pub->>SignalHub: hub:publish<br/>{topic: "system/events", message: {...}}
+
+    SignalHub->>Subscriptions: Get subscribers<br/>for topic
+    Subscriptions-->>SignalHub: Set of subscriber addresses
+
+    SignalHub->>SignalHub: Lookup each subscriber<br/>in registry + connections
+
+    par Deliver to Subscribers
+        SignalHub->>Sub1: hub:topic_message<br/>{topic, message}
+        SignalHub->>Sub2: hub:topic_message<br/>{topic, message}
+    end
+
+    SignalHub->>Pub: hub:delivery_ack<br/>{topic, subscriberCount, deliveredCount}
+
+%% ============================================================================
+%% Flow 6: Graceful Disconnect
+%% ============================================================================
+
+sequenceDiagram
+    participant Client
+    participant SignalHub
+    participant Registry
+    participant Subscriptions as Topic Subscriptions
+
+    Note over Client,Subscriptions: Graceful Disconnect Flow
+
+    Client->>SignalHub: hub:disconnect<br/>{reason: "User logout"}
+
+    Note over SignalHub: connectionState = disconnecting
+
+    SignalHub->>Registry: Unregister actor<br/>Delete from registry
+    SignalHub->>Subscriptions: Remove all subscriptions<br/>for this actor
+
+    Note over SignalHub: Cleanup complete
+
+    SignalHub->>Client: hub:disconnect_ack<br/>{sessionId, cleanedUp: true}
+
+    Note over SignalHub: CRITICAL: Send ack BEFORE close
+
+    SignalHub->>Client: WebSocket close(1000, "Normal closure")
+
+    Note over SignalHub: Remove session<br/>from sessions map
+
+    Note over SignalHub: connectionState = disconnected
+
+%% ============================================================================
+%% Flow 7: Abnormal Disconnect (Connection Drop)
+%% ============================================================================
+
+sequenceDiagram
+    participant Client
+    participant SignalHub
+    participant Registry
+    participant Subscriptions
+
+    Note over Client,Subscriptions: Abnormal Disconnect Flow
+
+    Client-xSignalHub: Connection lost<br/>(network failure)
+
+    Note over SignalHub: webSocketClose() handler
+
+    SignalHub->>Registry: Emergency cleanup<br/>Unregister actor
+    SignalHub->>Subscriptions: Remove subscriptions
+
+    Note over SignalHub: connectionState = disconnected<br/>No ack possible
+
+    Note over Client: onclose handler fires<br/>connectionState = reconnecting
+
+    loop Exponential backoff
+        Note over Client: Wait delay (with jitter)
+        Client->>SignalHub: Reconnect attempt<br/>WebSocket Upgrade
+        SignalHub->>Client: 101 Switching Protocols
+        Client->>SignalHub: hub:connect
+        SignalHub->>Client: hub:connected
+    end
+
+    Note over Client: Auto-reregister
+
+    Client->>SignalHub: hub:register
+    SignalHub->>Client: hub:registered
+
+    Note over Client: Auto-resubscribe to topics
+
+    loop For each topic
+        Client->>SignalHub: hub:subscribe<br/>{topic}
+        SignalHub->>Client: hub:subscribed
+    end
+
+%% ============================================================================
+%% Flow 8: Duplicate Connection Detection
+%% ============================================================================
+
+sequenceDiagram
+    participant OldClient as Old Client
+    participant SignalHub
+    participant NewClient as New Client
+
+    Note over OldClient,NewClient: Duplicate Connection Flow
+
+    Note over OldClient: Already connected<br/>actorIdentity: "browser/ui"
+
+    NewClient->>SignalHub: WebSocket Upgrade
+    SignalHub->>NewClient: 101 Switching Protocols
+    NewClient->>SignalHub: hub:connect
+    SignalHub->>NewClient: hub:connected
+
+    NewClient->>SignalHub: hub:register<br/>{actorAddress: "browser/ui"}
+
+    Note over SignalHub: Detect duplicate!<br/>Same actorAddress,<br/>different sessionId
+
+    SignalHub->>OldClient: hub:disconnect<br/>{reason: "duplicate_connection"}
+
+    Note over OldClient: Disable auto-reconnect<br/>emit('superseded')
+
+    SignalHub->>SignalHub: Cleanup old session<br/>(unregister, unsubscribe)
+
+    SignalHub->>OldClient: WebSocket close(1000)
+
+    SignalHub->>SignalHub: Register new session
+
+    SignalHub->>NewClient: hub:registered<br/>{renewalToken, version: N+1}
+
+    Note over NewClient: New connection active<br/>Old connection terminated
+
+%% ============================================================================
+%% Flow 9: Rate Limiting
+%% ============================================================================
+
+sequenceDiagram
+    participant Client
+    participant SignalHub
+
+    Note over Client,SignalHub: Rate Limiting Flow (100 msg/min)
+
+    loop Burst of messages
+        Client->>SignalHub: Message 1
+        Note over SignalHub: Token bucket: 99/100
+        SignalHub->>Client: Response
+
+        Client->>SignalHub: Message 2
+        Note over SignalHub: Token bucket: 98/100
+        SignalHub->>Client: Response
+
+        Note over Client: ... (98 more messages)
+
+        Client->>SignalHub: Message 100
+        Note over SignalHub: Token bucket: 0/100
+        SignalHub->>Client: Response
+
+        Client->>SignalHub: Message 101 (exceeds limit)
+        Note over SignalHub: Token bucket: 0/100<br/>No tokens available
+        SignalHub->>Client: hub:error<br/>{code: rate_limited, retryAfter: 30}
+    end
+
+    Note over Client: Wait retryAfter seconds
+
+    rect rgb(200, 220, 240)
+        Note over Client: Tokens refill over time<br/>(100 tokens / 60 seconds)
+    end
+
+    Client->>SignalHub: Message 102 (after delay)
+    Note over SignalHub: Token bucket: 50/100<br/>(refilled during wait)
+    SignalHub->>Client: Response
+
+%% ============================================================================
+%% Flow 10: Registration Renewal
+%% ============================================================================
+
+sequenceDiagram
+    participant Client
+    participant SignalHub
+    participant Registry
+
+    Note over Client,Registry: Registration Renewal Flow
+
+    Note over Client: Registration TTL = 5 minutes<br/>expiresAt approaching
+
+    Client->>SignalHub: hub:renew<br/>{actorAddress, renewalToken, ttl: 300000}
+
+    SignalHub->>Registry: Lookup registration
+    Registry-->>SignalHub: Current registration
+
+    alt Valid renewal token
+        SignalHub->>Registry: Update registration<br/>(expiresAt, new renewalToken)
+        SignalHub->>Client: hub:renewed<br/>{expiresAt, newRenewalToken}
+        Note over Client: Store new renewalToken
+    else Invalid token
+        SignalHub->>Client: hub:error<br/>{code: unauthorized, hint: "Re-register"}
+        Note over Client: Re-register from scratch
+        Client->>SignalHub: hub:register
+        SignalHub->>Client: hub:registered
+    end

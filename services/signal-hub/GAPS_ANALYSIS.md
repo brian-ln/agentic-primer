@@ -161,7 +161,7 @@
   - **Answer:** On WebSocket close (unless manual disconnect), exponential backoff
 - "What happens to messages during disconnect?"
   - **Answer:** Queued in client.messageQueue, flushed on reconnect
-- "How does heartbeat prevent hibernation?"
+- "How does heartbeat detect dead connections? (Note: Heartbeat does NOT prevent hibernation - Cloudflare automatically wakes DOs when messages arrive)"
   - **Answer:** Client sends every 25s, hub extends session.lastHeartbeat
 
 **Impact:**

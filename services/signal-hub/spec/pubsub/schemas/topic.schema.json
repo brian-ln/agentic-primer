@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "topic.schema.json",
+  "title": "Topic",
+  "description": "Pub/Sub topic definition and naming conventions",
+  "type": "string",
+  "pattern": "^[a-zA-Z0-9/_-]+$",
+  "minLength": 1,
+  "maxLength": 256,
+  "examples": [
+    "system/events",
+    "user/notifications",
+    "analytics/pageviews",
+    "debug/logs"
+  ],
+  "_namingConventions": {
+    "format": "Hierarchical path notation with forward slashes",
+    "recommendations": [
+      "Use lowercase for consistency",
+      "Use forward slashes (/) for hierarchy",
+      "Use hyphens (-) for multi-word components",
+      "Keep depth to 2-3 levels for simplicity"
+    ],
+    "examples": {
+      "good": [
+        "system/events",
+        "user/notifications",
+        "analytics/pageviews",
+        "debug/error-logs"
+      ],
+      "avoid": [
+        "SystemEvents",
+        "user_notifications",
+        "analytics.pageviews",
+        "debug/errors/critical/network/timeout"
+      ]
+    }
+  },
+  "_topicMatching": {
+    "strategy": "Exact match only (no wildcards in MVP)",
+    "future": "Wildcard support (e.g., 'system/*', 'user/+/notifications')",
+    "caseInsensitive": false
+  },
+  "_subscriberLimits": {
+    "maxSubscribersPerTopic": "No enforced limit (in-memory constraint only)",
+    "maxTopicsPerActor": "No enforced limit (cleanup on disconnect)",
+    "recommendation": "Keep subscriber count < 1000 per topic for performance"
+  }
+}

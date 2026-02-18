@@ -1,0 +1,295 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "domain": "registration",
+  "description": "Actor registry and discovery protocol",
+  "version": "1.0",
+  "messages": {
+    "hub:register": {
+      "direction": "client-to-server",
+      "pattern": "ask",
+      "description": "Register actor in hub registry for discovery",
+      "payload": {
+        "type": "object",
+        "required": ["actorAddress", "capabilities", "metadata", "ttl"],
+        "properties": {
+          "actorAddress": {
+            "$ref": "../../schemas/canonical-address.schema.json"
+          },
+          "capabilities": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Actor capabilities for discovery filtering"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Custom metadata (version, userAgent, model, etc.)"
+          },
+          "ttl": {
+            "type": "integer",
+            "description": "Time-to-live in milliseconds",
+            "minimum": 1000,
+            "maximum": 3600000
+          }
+        }
+      },
+      "response": {
+        "success": "hub:registered",
+        "errors": ["unknown_actor"]
+      }
+    },
+    "hub:registered": {
+      "direction": "server-to-client",
+      "pattern": "response",
+      "description": "Registration successful confirmation",
+      "payload": {
+        "type": "object",
+        "required": ["actorAddress", "renewalToken", "expiresAt", "version"],
+        "properties": {
+          "actorAddress": {
+            "$ref": "../../schemas/canonical-address.schema.json"
+          },
+          "renewalToken": {
+            "type": "string",
+            "description": "Opaque token for hub:renew (UUID)",
+            "pattern": "^[0-9a-f-]+$"
+          },
+          "expiresAt": {
+            "type": "integer",
+            "description": "Expiration timestamp (epoch ms)"
+          },
+          "version": {
+            "type": "integer",
+            "description": "Registration version (for conflict detection)",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "hub:unregister": {
+      "direction": "client-to-server",
+      "pattern": "notify",
+      "description": "Remove actor from registry",
+      "payload": {
+        "type": "object",
+        "required": ["actorAddress"],
+        "properties": {
+          "actorAddress": {
+            "$ref": "../../schemas/canonical-address.schema.json"
+          }
+        }
+      },
+      "response": {
+        "success": "hub:unregistered"
+      }
+    },
+    "hub:unregistered": {
+      "direction": "server-to-client",
+      "pattern": "response",
+      "description": "Unregister confirmation",
+      "payload": {
+        "type": "object",
+        "required": ["actorAddress", "unregisteredAt"],
+        "properties": {
+          "actorAddress": {
+            "$ref": "../../schemas/canonical-address.schema.json"
+          },
+          "unregisteredAt": {
+            "type": "integer",
+            "description": "Timestamp of unregistration (epoch ms)"
+          }
+        }
+      }
+    },
+    "hub:renew": {
+      "direction": "client-to-server",
+      "pattern": "ask",
+      "description": "Extend registration TTL before expiration",
+      "payload": {
+        "type": "object",
+        "required": ["actorAddress", "renewalToken", "ttl"],
+        "properties": {
+          "actorAddress": {
+            "$ref": "../../schemas/canonical-address.schema.json"
+          },
+          "renewalToken": {
+            "type": "string",
+            "description": "Token from previous hub:registered response"
+          },
+          "ttl": {
+            "type": "integer",
+            "description": "New TTL in milliseconds",
+            "minimum": 1000,
+            "maximum": 3600000
+          }
+        }
+      },
+      "response": {
+        "success": "hub:renewed",
+        "errors": ["unknown_actor", "unauthorized"]
+      }
+    },
+    "hub:renewed": {
+      "direction": "server-to-client",
+      "pattern": "response",
+      "description": "TTL renewal confirmation",
+      "payload": {
+        "type": "object",
+        "required": ["actorAddress", "expiresAt", "newRenewalToken"],
+        "properties": {
+          "actorAddress": {
+            "$ref": "../../schemas/canonical-address.schema.json"
+          },
+          "expiresAt": {
+            "type": "integer",
+            "description": "New expiration timestamp (epoch ms)"
+          },
+          "newRenewalToken": {
+            "type": "string",
+            "description": "New renewal token (rotated for security)"
+          }
+        }
+      }
+    },
+    "hub:discover": {
+      "direction": "client-to-server",
+      "pattern": "ask",
+      "description": "Query registry for actors matching criteria",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "description": "Regex pattern on actor address"
+          },
+          "capabilities": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Must have ALL these capabilities"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Filter on metadata fields"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000,
+            "default": 100,
+            "description": "Max results"
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0,
+            "description": "Pagination offset"
+          }
+        }
+      },
+      "response": {
+        "success": "hub:discovery_result"
+      }
+    },
+    "hub:discovery_result": {
+      "direction": "server-to-client",
+      "pattern": "response",
+      "description": "Discovery query results",
+      "payload": {
+        "type": "object",
+        "required": ["actors", "count", "hasMore", "totalMatches"],
+        "properties": {
+          "actors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["actorAddress", "capabilities", "metadata", "registeredAt"],
+              "properties": {
+                "actorAddress": {
+                  "$ref": "../../schemas/canonical-address.schema.json"
+                },
+                "capabilities": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                },
+                "metadata": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "registeredAt": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "count": {
+            "type": "integer",
+            "description": "Number of actors in this response"
+          },
+          "hasMore": {
+            "type": "boolean",
+            "description": "More results available via pagination"
+          },
+          "totalMatches": {
+            "type": "integer",
+            "description": "Total matching actors (before pagination)"
+          }
+        }
+      }
+    },
+    "hub:list_actors": {
+      "direction": "client-to-server",
+      "pattern": "ask",
+      "description": "List all registered actors (no filtering)",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000,
+            "default": 100
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          }
+        }
+      },
+      "response": {
+        "success": "hub:discovery_result"
+      }
+    }
+  },
+  "errorCodes": {
+    "unknown_actor": {
+      "description": "Actor not registered or already exists (context-dependent)",
+      "triggeredBy": ["hub:register", "hub:renew"],
+      "details": {
+        "targetActor": "Canonical address of missing/conflicting actor",
+        "existingVersion": "(On conflict) Version of existing registration"
+      }
+    },
+    "unauthorized": {
+      "description": "Invalid renewal token",
+      "triggeredBy": ["hub:renew"],
+      "details": {
+        "reason": "Invalid renewal token",
+        "hint": "Re-register to obtain new token"
+      }
+    }
+  },
+  "metadata": {
+    "ttlLimits": {
+      "minimum": 1000,
+      "default": 300000,
+      "maximum": 3600000,
+      "units": "milliseconds"
+    },
+    "registryLimits": {
+      "maxActors": 50000,
+      "discoveryLimit": 1000
+    }
+  }
+}

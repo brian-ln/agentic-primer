@@ -27,7 +27,7 @@ Signal Hub is a real-time communication server that enables actors across differ
 ### Components
 
 - **Worker Entry Point** (`src/index.ts`) - Routes requests to Durable Object
-- **SignalHub DO** (`src/durable-objects/SignalHub.ts`) - WebSocket server with hibernation
+- **SignalHub DO** (`src/durable-objects/SignalHub.ts`) - WebSocket server with automatic hibernation (transparent wake on message)
 - **Handlers** - Message routing and business logic
   - `connection.ts` - hub:connect, hub:heartbeat, hub:disconnect
   - `registration.ts` - hub:register, hub:discover, hub:list_actors, hub:renew
@@ -350,7 +350,7 @@ ws.send(JSON.stringify({
 
 **Performance:**
 - Broadcast threshold: 100 actors (sync) / >100 (async queue - Phase 2)
-- Recommended heartbeat: 25s (< 30s hibernation threshold)
+- Recommended heartbeat: 25s (detects dead connections; hibernation wakes automatically on messages)
 
 ## Future Enhancements
 

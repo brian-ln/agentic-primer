@@ -283,7 +283,7 @@ describe('Signal Hub - Cross-Runtime Messaging', () => {
         }
       };
 
-      browserActor.getClient().on('message', handler);
+      browserActor.on('message', handler);
 
       // Send messages in sequence
       for (let i = 0; i < messageCount; i++) {
@@ -306,17 +306,16 @@ describe('Signal Hub - Cross-Runtime Messaging', () => {
         5000
       );
 
-      seagActor.getClient().send({
-        to: env.browserAddress,
-        type: 'test:metadata',
-        payload: { data: 'test' },
-        from: env.seagAddress,
-        metadata: {
+      seagActor.send(
+        env.browserAddress,
+        'test:metadata',
+        { data: 'test' },
+        {
           custom: 'value',
           requestId: 'req-123',
           priority: 'high',
-        },
-      });
+        }
+      );
 
       const receivedMsg = await messagePromise;
       expect(receivedMsg.metadata).toMatchObject({

@@ -64,7 +64,7 @@ describe('Signal Hub - Pub/Sub', () => {
       );
 
       // Publish to topic
-      await publisherSeag.getClient().publish('test-topic', 'test:topic:message', { data: 'topic message' });
+      await publisherSeag.publish('test-topic', 'test:topic:message', { data: 'topic message' });
 
       // Subscriber should receive message
       const received = await messagePromise;
@@ -77,14 +77,14 @@ describe('Signal Hub - Pub/Sub', () => {
       await subscriberBrowser.subscribe('topic-a');
 
       let receivedFromB = false;
-      subscriberBrowser.getClient().on('message', (msg: any) => {
+      subscriberBrowser.on('message', (msg: any) => {
         if (msg.type === 'test:topic:b:message') {
           receivedFromB = true;
         }
       });
 
       // Publish to different topic
-      await publisherSeag.getClient().publish('topic-b', 'test:topic:b:message', { data: 'should not receive' });
+      await publisherSeag.publish('topic-b', 'test:topic:b:message', { data: 'should not receive' });
 
       // Wait to ensure message would have arrived if it was going to
       await sleep(1000);
@@ -95,14 +95,14 @@ describe('Signal Hub - Pub/Sub', () => {
 
     it('should receive messages only after subscription', async () => {
       let messageCount = 0;
-      subscriberBrowser.getClient().on('message', (msg: any) => {
+      subscriberBrowser.on('message', (msg: any) => {
         if (msg.type === 'test:before:after') {
           messageCount++;
         }
       });
 
       // Publish before subscription
-      await publisherSeag.getClient().publish('delayed-topic', 'test:before:after', { when: 'before' });
+      await publisherSeag.publish('delayed-topic', 'test:before:after', { when: 'before' });
       await sleep(500);
 
       // Subscribe
@@ -115,7 +115,7 @@ describe('Signal Hub - Pub/Sub', () => {
         5000
       );
 
-      await publisherSeag.getClient().publish('delayed-topic', 'test:before:after', { when: 'after' });
+      await publisherSeag.publish('delayed-topic', 'test:before:after', { when: 'after' });
 
       const received = await messagePromise;
 
@@ -184,7 +184,7 @@ describe('Signal Hub - Pub/Sub', () => {
       ];
 
       // Publish once
-      await publisher.getClient().publish('shared-topic', 'test:shared:topic', { data: 'shared message' });
+      await publisher.publish('shared-topic', 'test:shared:topic', { data: 'shared message' });
 
       // All subscribers should receive
       const messages = await Promise.all(messagePromises);
@@ -232,8 +232,8 @@ describe('Signal Hub - Pub/Sub', () => {
       const sub2Promise = sub2.waitForMessage(msg => msg.type === 'test:topic:y', 5000);
 
       // Publish to both topics
-      await pub1.getClient().publish('topic-x', 'test:topic:x', { topic: 'x' });
-      await pub1.getClient().publish('topic-y', 'test:topic:y', { topic: 'y' });
+      await pub1.publish('topic-x', 'test:topic:x', { topic: 'x' });
+      await pub1.publish('topic-y', 'test:topic:y', { topic: 'y' });
 
       // Each subscriber should receive only their topic's message
       const [msg1, msg2] = await Promise.all([sub1Promise, sub2Promise]);
@@ -281,7 +281,7 @@ describe('Signal Hub - Pub/Sub', () => {
         5000
       );
 
-      await publisher.getClient().publish('unsub-topic', 'test:unsub:first', { msg: 'first' });
+      await publisher.publish('unsub-topic', 'test:unsub:first', { msg: 'first' });
       await firstPromise;
 
       // Unsubscribe
@@ -290,14 +290,14 @@ describe('Signal Hub - Pub/Sub', () => {
 
       // Track if second message arrives
       let receivedSecond = false;
-      subscriber.getClient().on('message', (msg: any) => {
+      subscriber.on('message', (msg: any) => {
         if (msg.type === 'test:unsub:second') {
           receivedSecond = true;
         }
       });
 
       // Publish second message
-      await publisher.getClient().publish('unsub-topic', 'test:unsub:second', { msg: 'second' });
+      await publisher.publish('unsub-topic', 'test:unsub:second', { msg: 'second' });
       await sleep(1000);
 
       // Should not receive second message
@@ -368,7 +368,7 @@ describe('Signal Hub - Pub/Sub', () => {
         5000
       );
 
-      await seagPublisher.getClient().publish(
+      await seagPublisher.publish(
         'cross-runtime-topic',
         'test:cross:seag:pub',
         { from: 'seag' }

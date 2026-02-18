@@ -86,6 +86,9 @@ export class SignalHubClient {
   private sessionId: string | null = null;
   private connectionInfo: HubConnectionInfo | null = null;
 
+  // Temporary identity for initial connection (unique per client instance)
+  private readonly temporaryIdentity: CanonicalAddress;
+
   // Actor registry (local actors registered with Signal Hub)
   private actors = new Map<CanonicalAddress, ActorRegistration>();
 
@@ -120,6 +123,10 @@ export class SignalHubClient {
       reconnect: { ...DEFAULT_CONFIG.reconnect, ...config.reconnect },
       messageQueue: { ...DEFAULT_CONFIG.messageQueue, ...config.messageQueue },
     } as SignalHubConfig;
+
+    // Generate unique temporary identity for this client instance
+    // Prevents duplicate connection detection during parallel connections
+    this.temporaryIdentity = `@(local/client-${crypto.randomUUID()})` as CanonicalAddress;
 
     // Initialize event listener sets
     const eventTypes: (keyof SignalHubEvents)[] = [
@@ -176,7 +183,7 @@ export class SignalHubClient {
     if (this.ws && this.state === 'connected') {
       const disconnectMsg: SharedMessage = {
         id: crypto.randomUUID(),
-        from: '@(local/signal-hub-client)' as CanonicalAddress,
+        from: this.temporaryIdentity,
         to: '@(cloudflare/signal-hub)' as CanonicalAddress,
         type: 'hub:disconnect',
         payload: null,
@@ -306,7 +313,7 @@ export class SignalHubClient {
   }): void {
     const hubSendMsg: SharedMessage = {
       id: crypto.randomUUID(),
-      from: params.from ?? ('@(local/signal-hub-client)' as CanonicalAddress),
+      from: params.from ?? this.temporaryIdentity,
       to: '@(cloudflare/signal-hub)' as CanonicalAddress,
       type: 'hub:send',
       payload: {
@@ -616,7 +623,7 @@ export class SignalHubClient {
   private async sendHubConnect(): Promise<void> {
     const connectMsg: SharedMessage = {
       id: crypto.randomUUID(),
-      from: '@(local/signal-hub-client)' as CanonicalAddress,
+      from: this.temporaryIdentity,
       to: '@(cloudflare/signal-hub)' as CanonicalAddress,
       type: 'hub:connect',
       payload: null,
@@ -677,7 +684,13 @@ export class SignalHubClient {
         const pending = this.pendingAsks.get(msg.correlationId)!;
         clearTimeout(pending.timeout);
         this.pendingAsks.delete(msg.correlationId);
-        pending.resolve(msg);
+
+        // Reject on error messages
+        if (msg.type === 'hub:unknown_actor' || msg.type === 'hub:error' || msg.type === 'hub:unauthorized') {
+          pending.reject(new Error(`${msg.type}: ${JSON.stringify(msg.payload)}`));
+        } else {
+          pending.resolve(msg);
+        }
         // Fall through to also emit the message for listeners
       }
 
@@ -723,6 +736,13 @@ export class SignalHubClient {
   }
 
   private handleClose(code: number, reason: string): void {
+    // Ignore close events if we're actively connecting/reconnecting
+    // This prevents old WebSocket close handlers from clobbering new connection state
+    if (this.state === 'connecting' || this.state === 'reconnecting') {
+      console.log('[SignalHubClient-SEAG] Ignoring close event during new connection setup');
+      return;
+    }
+
     this.ws = null;
     this.stopHeartbeat();
 

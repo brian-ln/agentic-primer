@@ -1,0 +1,119 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "error-response.schema.json",
+  "title": "HubErrorResponse",
+  "description": "Standard error message format for all Signal Hub errors",
+  "type": "object",
+  "required": ["type", "from", "to", "payload"],
+  "properties": {
+    "type": {
+      "type": "string",
+      "const": "hub:error",
+      "description": "Message type for all errors"
+    },
+    "from": {
+      "type": "string",
+      "const": "cloudflare/signal-hub",
+      "description": "Errors always originate from Signal Hub"
+    },
+    "to": {
+      "$ref": "canonical-address.schema.json",
+      "description": "Error recipient (original message sender)"
+    },
+    "payload": {
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "version_mismatch",
+            "unauthorized",
+            "rate_limited",
+            "unknown_actor",
+            "message_too_large",
+            "message_expired",
+            "timeout",
+            "internal_error"
+          ],
+          "description": "Error code for programmatic handling"
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable error description"
+        },
+        "details": {
+          "type": "object",
+          "description": "Additional error context (structure varies by error code)",
+          "additionalProperties": true
+        }
+      }
+    },
+    "correlationId": {
+      "type": "string",
+      "description": "Optional correlation ID if responding to a specific request"
+    }
+  },
+  "_errorCodes": {
+    "version_mismatch": {
+      "description": "Protocol version incompatible",
+      "recovery": "Upgrade client to matching version",
+      "details": {
+        "expected": "string (server version)",
+        "received": "string (client version)"
+      }
+    },
+    "unauthorized": {
+      "description": "JWT invalid, expired, or missing",
+      "recovery": "Re-authenticate and obtain new JWT",
+      "details": {
+        "reason": "string (specific auth failure)"
+      }
+    },
+    "rate_limited": {
+      "description": "Exceeded 100 messages per minute",
+      "recovery": "Backoff and retry after delay",
+      "details": {
+        "retryAfter": "number (seconds to wait)",
+        "limit": "string (rate limit description)"
+      }
+    },
+    "unknown_actor": {
+      "description": "Target actor not registered or disconnected",
+      "recovery": "Use hub:discover to find actor, or wait for re-registration",
+      "details": {
+        "targetActor": "string (canonical address)"
+      }
+    },
+    "message_too_large": {
+      "description": "Message exceeds 512KB limit",
+      "recovery": "Split into smaller messages or reduce payload",
+      "details": {
+        "actualSize": "number (bytes)",
+        "maxSize": "number (bytes)"
+      }
+    },
+    "message_expired": {
+      "description": "Message TTL exceeded before delivery",
+      "recovery": "Resend with fresh timestamp and TTL",
+      "details": {
+        "age": "number (milliseconds)",
+        "ttl": "number (milliseconds)"
+      }
+    },
+    "timeout": {
+      "description": "Operation timed out",
+      "recovery": "Retry with exponential backoff",
+      "details": {
+        "operation": "string (operation name)"
+      }
+    },
+    "internal_error": {
+      "description": "Server-side error",
+      "recovery": "Retry, report if persistent",
+      "details": {
+        "error": "string (internal error message)"
+      }
+    }
+  }
+}

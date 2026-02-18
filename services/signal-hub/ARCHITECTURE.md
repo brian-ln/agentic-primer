@@ -129,7 +129,7 @@ Central WebSocket server that routes messages between actors across different ru
 **Deployment:**
 - Runs as Cloudflare Durable Object (one instance per DO)
 - Globally distributed (auto-routed to nearest edge location)
-- Hibernation-aware (heartbeat prevents 30s idle timeout)
+- Hibernation-aware (automatic wake on message delivery, transparent to application)
 
 **Interface:**
 - HTTP endpoint: `GET /ws` → WebSocket upgrade
@@ -160,7 +160,7 @@ Isolated business logic for each message type category.
 
 - **connection.ts** - Connection lifecycle
   - `hub:connect` → authenticate, create session
-  - `hub:heartbeat` → prevent hibernation, renew actors
+  - `hub:heartbeat` → detect dead connections, renew actors
   - `hub:disconnect` → cleanup session and registrations
 
 - **registration.ts** - Actor registry management
@@ -201,7 +201,7 @@ WebSocket client for browser environments (Chrome extension, web apps).
 - Register actors with hub:register
 - Send messages via hub:send (handles flat payload wrapping)
 - Receive messages and dispatch to handlers
-- Maintain heartbeat to prevent hibernation
+- Maintain heartbeat to detect dead connections
 - Reconnect with exponential backoff on disconnect
 
 **API:**
@@ -567,7 +567,7 @@ type HubErrorCode =
 - Actor re-registration: Automatic on reconnect
 
 **Heartbeat:**
-- Interval: 25s (< 30s Cloudflare hibernation threshold)
+- Interval: 25s (frequent enough to detect dead connections, hibernation happens automatically after 30s idle)
 - Client sends hub:heartbeat
 - Server responds with hub:heartbeat_ack
 - Client tracks last ack timestamp (detect dead connections)

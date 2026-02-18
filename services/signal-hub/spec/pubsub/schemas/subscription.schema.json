@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "subscription.schema.json",
+  "title": "TopicSubscription",
+  "description": "Pub/Sub topic subscription record",
+  "type": "object",
+  "required": ["topic", "actorAddress", "subscribedAt"],
+  "properties": {
+    "topic": {
+      "type": "string",
+      "description": "Topic name (hierarchical path notation recommended)",
+      "pattern": "^[a-zA-Z0-9/_-]+$",
+      "examples": [
+        "system/events",
+        "user/notifications",
+        "analytics/pageviews"
+      ]
+    },
+    "actorAddress": {
+      "$ref": "../../schemas/canonical-address.schema.json",
+      "description": "Subscriber's canonical address"
+    },
+    "subscribedAt": {
+      "type": "integer",
+      "description": "Subscription timestamp in epoch milliseconds",
+      "minimum": 0
+    }
+  },
+  "_storageStructure": {
+    "type": "Map<string, Set<CanonicalAddress>>",
+    "description": "Server stores as Map of topic → Set of subscriber addresses",
+    "example": {
+      "system/events": ["browser/client-ui", "seag/agent-1"],
+      "user/notifications": ["browser/client-ui"]
+    }
+  },
+  "_cleanupBehavior": {
+    "automatic": [
+      "On hub:unsubscribe",
+      "On actor unregister",
+      "On connection close"
+    ],
+    "emptyTopics": "Topics with zero subscribers are removed from Map"
+  }
+}

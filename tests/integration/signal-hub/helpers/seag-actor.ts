@@ -22,6 +22,7 @@ export class SeagActorWrapper {
   private capabilities: string[];
   private metadata: Record<string, unknown>;
   private receivedMessages: SharedMessage[] = [];
+  private messageHandlers: Array<(msg: SharedMessage) => void> = [];
 
   constructor(options: SeagActorOptions) {
     this.actorAddress = options.actorAddress;
@@ -52,6 +53,7 @@ export class SeagActorWrapper {
     // Capture incoming messages
     this.client.on('message', (msg: SharedMessage) => {
       this.receivedMessages.push(msg);
+      this.messageHandlers.forEach(handler => handler(msg));
     });
   }
 
@@ -65,13 +67,22 @@ export class SeagActorWrapper {
 
   /**
    * Send message to another actor
+   *
+   * @param to - Target actor's canonical address (from registry)
+   * @param type - Message type (e.g., 'app:task:assigned')
+   * @param payload - Application-specific payload data
+   * @param metadata - Optional message metadata
+   *
+   * @example
+   * actor.send('runtime:browser/actor-123', 'task:assigned', { taskId: '456' });
    */
-  send(to: CanonicalAddress, type: string, payload: unknown): void {
+  send(to: CanonicalAddress, type: string, payload: unknown, metadata?: Record<string, unknown>): void {
     this.client.send({
       to,
       type,
       payload,
       from: this.actorAddress,
+      ...(metadata && { metadata }),
     });
   }
 
@@ -129,7 +140,26 @@ export class SeagActorWrapper {
   }
 
   /**
-   * Wait for a specific message type
+   * Wait for a specific message matching predicate
+   *
+   * @param predicate - Function to test each message (receives SharedMessage, NOT MessageEvent)
+   * @param timeout - Timeout in milliseconds (default: 5000)
+   * @returns Promise resolving to the matched SharedMessage
+   *
+   * @example
+   * // Wait for hub:registered confirmation
+   * const msg = await actor.waitForMessage(
+   *   msg => msg.type === 'hub:registered',
+   *   5000
+   * );
+   * expect(msg.payload.address).toBe('runtime:seag/actor-123');
+   *
+   * @example
+   * // Wait for application message
+   * const taskMsg = await actor.waitForMessage(
+   *   msg => msg.type === 'task:assigned' && msg.payload.taskId === '456',
+   *   10000
+   * );
    */
   async waitForMessage(
     predicate: (msg: SharedMessage) => boolean,
@@ -196,10 +226,62 @@ export class SeagActorWrapper {
   }
 
   /**
-   * Get the underlying client (for advanced usage)
+   * Reconnect to Signal Hub and re-register actor
    */
-  getClient(): SignalHubClient {
-    return this.client;
+  async reconnect(): Promise<void> {
+    await this.client.connect();
+    await this.client.registerActor(this.actorAddress, this.capabilities, this.metadata);
+  }
+
+  /**
+   * Register event listener
+   *
+   * **IMPORTANT:** Event signatures are transformed by this wrapper:
+   * - 'message': Handler receives `SharedMessage` (already parsed from JSON, NOT MessageEvent)
+   * - 'connected': Handler receives no arguments
+   * - 'disconnected': Handler receives no arguments
+   * - 'error': Handler receives `Error` object
+   *
+   * @param event - Event name ('message' | 'connected' | 'disconnected' | 'error')
+   * @param handler - Event handler with signature specific to event type
+   *
+   * @example
+   * // Listen for all messages (receives SharedMessage, not MessageEvent)
+   * actor.on('message', (msg: SharedMessage) => {
+   *   console.log('Received:', msg.type, msg.payload);
+   * });
+   *
+   * @example
+   * // Listen for connection events
+   * actor.on('connected', () => {
+   *   console.log('Connected to hub');
+   * });
+   *
+   * @example
+   * // Listen for errors
+   * actor.on('error', (error: Error) => {
+   *   console.error('Actor error:', error);
+   * });
+   */
+  on(event: string, handler: (...args: any[]) => void): void {
+    if (event === 'message') {
+      this.messageHandlers.push(handler);
+    } else {
+      this.client.on(event as any, handler);
+    }
+  }
+
+  /**
+   * Remove event listener
+   * For 'message' events, removes from internal messageHandlers
+   * For other events, delegates to underlying client
+   */
+  off(event: string, handler: (...args: any[]) => void): void {
+    if (event === 'message') {
+      this.messageHandlers = this.messageHandlers.filter(h => h !== handler);
+    } else {
+      this.client.off(event as any, handler);
+    }
   }
 }
 

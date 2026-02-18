@@ -41,7 +41,7 @@ describe('Signal Hub - Connection Lifecycle (P0 Fixes)', () => {
       let disconnectReceived = false;
       let disconnectReason: string | undefined;
 
-      actor1.getClient().on('message', (msg) => {
+      actor1.on('message', (msg) => {
         if (msg.type === 'hub:disconnect') {
           disconnectReceived = true;
           disconnectReason = (msg.payload as any)?.reason;
@@ -174,7 +174,7 @@ describe('Signal Hub - Connection Lifecycle (P0 Fixes)', () => {
       let websocketCloseTimestamp: number | undefined;
 
       // Track disconnect acknowledgment
-      actor.getClient().on('message', (msg) => {
+      actor.on('message', (msg) => {
         if (msg.type === 'hub:disconnect' && (msg.payload as any)?.acknowledged === true) {
           disconnectAckReceived = true;
           disconnectAckTimestamp = Date.now();
@@ -185,7 +185,7 @@ describe('Signal Hub - Connection Lifecycle (P0 Fixes)', () => {
       const disconnectedHandler = () => {
         websocketCloseTimestamp = Date.now();
       };
-      actor.getClient().on('disconnected', disconnectedHandler);
+      actor.on('disconnected', disconnectedHandler);
 
       // Disconnect
       await actor.disconnect();
@@ -215,7 +215,7 @@ describe('Signal Hub - Connection Lifecycle (P0 Fixes)', () => {
 
       let disconnectAckReceived = false;
 
-      actor.getClient().on('message', (msg) => {
+      actor.on('message', (msg) => {
         if (msg.type === 'hub:disconnect') {
           disconnectAckReceived = true;
         }
@@ -291,7 +291,7 @@ describe('Signal Hub - Connection Lifecycle (P0 Fixes)', () => {
 
       // Start message exchange
       const messagePromise = new Promise((resolve) => {
-        actor1.getClient().on('message', (msg) => {
+        actor1.on('message', (msg) => {
           if (msg.type === 'test:ping') {
             resolve(msg);
           }
@@ -317,7 +317,7 @@ describe('Signal Hub - Connection Lifecycle (P0 Fixes)', () => {
       expect(actor2.getState()).toBe('connected');
 
       const messagePromise2 = new Promise((resolve) => {
-        actor2.getClient().on('message', (msg) => {
+        actor2.on('message', (msg) => {
           if (msg.type === 'test:ping2') {
             resolve(msg);
           }

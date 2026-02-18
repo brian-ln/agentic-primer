@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "shared-message.schema.json",
+  "title": "SharedMessage",
+  "description": "Universal message envelope for all Signal Hub communication across Browser ↔ Cloudflare ↔ SEAG",
+  "type": "object",
+  "required": ["type", "from", "to", "payload"],
+  "properties": {
+    "type": {
+      "type": "string",
+      "description": "Message type identifier (e.g., 'hub:connect', 'hub:send')",
+      "examples": ["hub:connect", "hub:send", "hub:publish"]
+    },
+    "from": {
+      "$ref": "#/definitions/CanonicalAddress",
+      "description": "Sender's canonical address"
+    },
+    "to": {
+      "$ref": "#/definitions/CanonicalAddress",
+      "description": "Recipient's canonical address"
+    },
+    "payload": {
+      "description": "Message-specific payload (structure varies by message type)"
+    },
+    "pattern": {
+      "type": "string",
+      "enum": ["request", "notify", "response"],
+      "description": "Routing pattern for message handling"
+    },
+    "timestamp": {
+      "type": "integer",
+      "description": "Message creation timestamp in epoch milliseconds",
+      "minimum": 0
+    },
+    "correlationId": {
+      "type": "string",
+      "description": "Correlation identifier for request-response pairing",
+      "pattern": "^[a-zA-Z0-9_-]+$"
+    },
+    "ttl": {
+      "type": "integer",
+      "description": "Time-to-live in milliseconds",
+      "minimum": 0
+    }
+  },
+  "definitions": {
+    "CanonicalAddress": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+/[a-z0-9-]+$",
+      "description": "Canonical actor address format: runtime/actor-id",
+      "examples": [
+        "browser/client-ui",
+        "cloudflare/signal-hub",
+        "seag/agent-1"
+      ]
+    }
+  }
+}

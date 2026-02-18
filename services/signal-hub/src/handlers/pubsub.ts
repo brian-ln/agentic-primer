@@ -47,7 +47,14 @@ export function handleSubscribe(
   // Generate subscription ID
   const subscriptionId = `sub-${crypto.randomUUID()}`;
 
-  console.log(`Actor ${actorAddress} subscribed to topic: ${topic}`);
+  // ASSERTION LOG: Verify correct identity used
+  console.log(JSON.stringify({
+    event: 'subscription_added',
+    actorAddress,       // Should be registered address, not temp session ID
+    topic,
+    subscriberCount: subscribers.size,
+    timestamp: Date.now(),
+  }));
 
   // Send hub:subscribed response
   const responsePayload = {
@@ -172,6 +179,16 @@ export function handlePublish(
 
       ws.send(JSON.stringify(recipientMessage));
       deliveredCount++;
+
+      // ASSERTION LOG: Message delivered to subscriber
+      console.log(JSON.stringify({
+        event: 'publication_delivered',
+        subscriberAddress,  // Should be registered address, not session ID
+        topic,
+        messageType: payload.type,
+        messageId: recipientMessage.id,
+        timestamp: Date.now(),
+      }));
     } catch (err) {
       console.error(`Failed to publish to ${subscriberAddress}:`, err);
     }

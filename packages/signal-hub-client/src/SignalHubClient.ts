@@ -49,6 +49,9 @@ export class SignalHubClient {
   private actorIdentity: CanonicalAddress | null = null;
   private serverVersion: string | null = null;
 
+  // Temporary identity for initial connection (unique per client instance)
+  private readonly temporaryIdentity: CanonicalAddress;
+
   // Actor registry
   private registeredActors: Set<CanonicalAddress> = new Set();
 
@@ -83,6 +86,10 @@ export class SignalHubClient {
     this.maxReconnectDelay = options.maxReconnectDelay ?? 30000;
     this.heartbeatInterval = options.heartbeatInterval ?? 25000; // 25s (< 30s Cloudflare hibernation)
     this.protocolVersion = options.protocolVersion ?? '0.1.0';
+
+    // Generate unique temporary identity for this client instance
+    // Prevents duplicate connection detection during parallel connections
+    this.temporaryIdentity = generateBrowserAddress();
   }
 
   // -------------------------------------------------------------------------
@@ -715,7 +722,7 @@ export class SignalHubClient {
     // Send hub:connect
     const connectMsg: SharedMessage = {
       id: crypto.randomUUID(),
-      from: '@(browser/unknown)' as CanonicalAddress,
+      from: this.temporaryIdentity,
       to: '@(cloudflare/signal-hub)' as CanonicalAddress,
       type: 'hub:connect',
       pattern: 'ask',
@@ -888,7 +895,7 @@ export class SignalHubClient {
       if (this.connected && this.ws?.readyState === WebSocket.OPEN) {
         const heartbeatMsg: SharedMessage = {
           id: crypto.randomUUID(),
-          from: this.actorIdentity || ('@(browser/unknown)' as CanonicalAddress),
+          from: this.actorIdentity || this.temporaryIdentity,
           to: '@(cloudflare/signal-hub)' as CanonicalAddress,
           type: 'hub:heartbeat',
           pattern: 'tell',
@@ -1049,7 +1056,7 @@ export class SignalHubClient {
   private async sendHubMessage(type: HubMessageType, payload: any): Promise<void> {
     const message: SharedMessage = {
       id: crypto.randomUUID(),
-      from: this.actorIdentity || ('@(browser/unknown)' as CanonicalAddress),
+      from: this.actorIdentity || this.temporaryIdentity,
       to: '@(cloudflare/signal-hub)' as CanonicalAddress,
       type,
       pattern: 'tell',

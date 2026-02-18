@@ -199,7 +199,7 @@ Test Files  2 passed (2)
 ### Hibernatable WebSockets
 
 **Configuration:**
-- Cloudflare hibernation: 30s idle timeout
+- Cloudflare hibernation: Automatic sleep after 30s idle, automatic wake on message arrival (transparent to application)
 - Client heartbeat: 25s interval (< 30s threshold)
 - Server responds: `hub:heartbeat_ack` within 1s
 

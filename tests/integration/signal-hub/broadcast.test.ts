@@ -63,6 +63,39 @@ describe('Signal Hub - Broadcast', () => {
       if (browserActor2) await browserActor2.disconnect();
     });
 
+    it('DIAGNOSTIC: trace broadcast message flow', async () => {
+      console.log('[DIAGNOSTIC] Actors registered. Setting up message listeners...');
+
+      // Use proper async pattern with waitForMessage (like other passing tests)
+      const browser1Promise = browserActor1.waitForMessage(
+        msg => msg.type === 'test:diagnostic',
+        5000
+      );
+      const browser2Promise = browserActor2.waitForMessage(
+        msg => msg.type === 'test:diagnostic',
+        5000
+      );
+
+      console.log('[DIAGNOSTIC] Sending broadcast from SEAG...');
+
+      // Broadcast from SEAG
+      await seagActor.broadcast('test:diagnostic', { test: true });
+
+      console.log('[DIAGNOSTIC] Waiting for messages...');
+
+      // Both browser actors should receive the broadcast
+      const [msg1, msg2] = await Promise.all([browser1Promise, browser2Promise]);
+
+      console.log('[DIAGNOSTIC] Messages received:');
+      console.log('  Browser1:', msg1.type, msg1.payload);
+      console.log('  Browser2:', msg2.type, msg2.payload);
+
+      expect(msg1.type).toBe('test:diagnostic');
+      expect(msg1.payload).toEqual({ test: true });
+      expect(msg2.type).toBe('test:diagnostic');
+      expect(msg2.payload).toEqual({ test: true });
+    });
+
     it('should broadcast from SEAG to all browser actors', async () => {
       const browser1Promise = browserActor1.waitForMessage(
         msg => msg.type === 'test:broadcast:all',
@@ -73,8 +106,8 @@ describe('Signal Hub - Broadcast', () => {
         5000
       );
 
-      // Broadcast from SEAG
-      await seagActor.getClient().broadcast('test:broadcast:all', { data: 'broadcast message' });
+      // Broadcast from SEAG using wrapper method (correct signature)
+      await seagActor.broadcast('test:broadcast:all', { data: 'broadcast message' });
 
       // Both browser actors should receive the message
       const [msg1, msg2] = await Promise.all([browser1Promise, browser2Promise]);
@@ -168,7 +201,7 @@ describe('Signal Hub - Broadcast', () => {
       ];
 
       // Broadcast from seag1
-      await seag1.getClient().broadcast('test:multi:broadcast', { sender: 'seag1' });
+      await seag1.broadcast('test:multi:broadcast', { sender: 'seag1' });
 
       // All other actors should receive
       const messages = await Promise.all(messagePromises);
@@ -229,7 +262,7 @@ describe('Signal Hub - Broadcast', () => {
       );
 
       // Broadcast and wait for ack
-      await seagActor.getClient().broadcast('test:broadcast:ack', { data: 'ack test' });
+      await seagActor.broadcast('test:broadcast:ack', { data: 'ack test' });
 
       // Verify messages received
       await Promise.all([browser1Promise, browser2Promise]);
@@ -258,7 +291,7 @@ describe('Signal Hub - Broadcast', () => {
     it('should handle broadcast when only one actor is connected', async () => {
       // Broadcast should not fail even if no other actors are connected
       await expect(
-        seagActor.getClient().broadcast('test:empty:broadcast', { data: 'alone' })
+        seagActor.broadcast('test:empty:broadcast', { data: 'alone' })
       ).resolves.not.toThrow();
     });
   });
@@ -307,7 +340,7 @@ describe('Signal Hub - Broadcast', () => {
         5000
       );
 
-      await seagActor.getClient().broadcast('test:broadcast:complex', complexPayload);
+      await seagActor.broadcast('test:broadcast:complex', complexPayload);
 
       const received = await messagePromise;
       expect(received.payload).toEqual(complexPayload);

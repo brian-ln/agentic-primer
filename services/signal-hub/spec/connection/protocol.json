@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "domain": "connection",
+  "description": "WebSocket connection lifecycle protocol messages",
+  "version": "1.0",
+  "messages": {
+    "hub:connect": {
+      "direction": "client-to-server",
+      "pattern": "ask",
+      "description": "Establish WebSocket connection and authenticate",
+      "payload": {
+        "type": "object",
+        "required": ["version"],
+        "properties": {
+          "version": {
+            "type": "string",
+            "description": "Protocol version (must match server)",
+            "examples": ["1.0"]
+          },
+          "jwt": {
+            "type": "string",
+            "description": "JWT authentication token (optional if AUTH_ENABLED=false)",
+            "pattern": "^[A-Za-z0-9-_=]+\\.[A-Za-z0-9-_=]+\\.[A-Za-z0-9-_.+/=]*$"
+          }
+        }
+      },
+      "response": {
+        "success": "hub:connected",
+        "errors": ["version_mismatch", "unauthorized"]
+      }
+    },
+    "hub:connected": {
+      "direction": "server-to-client",
+      "pattern": "response",
+      "description": "Connection established successfully",
+      "payload": {
+        "type": "object",
+        "required": ["sessionId", "serverTime"],
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "description": "Unique session identifier",
+            "pattern": "^sess_[a-zA-Z0-9]+$"
+          },
+          "actorIdentity": {
+            "type": "string",
+            "description": "Verified actor canonical address from JWT (null if no auth)",
+            "oneOf": [
+              { "$ref": "../../schemas/canonical-address.schema.json" },
+              { "type": "null" }
+            ]
+          },
+          "capabilities": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Permitted actions from JWT"
+          },
+          "serverTime": {
+            "type": "integer",
+            "description": "Server timestamp in epoch milliseconds"
+          }
+        }
+      }
+    },
+    "hub:heartbeat": {
+      "direction": "client-to-server",
+      "pattern": "ask",
+      "description": "Keep-alive message to detect dead connections",
+      "payload": {
+        "type": "object",
+        "required": ["timestamp"],
+        "properties": {
+          "timestamp": {
+            "type": "integer",
+            "description": "Client timestamp in epoch milliseconds"
+          }
+        }
+      },
+      "response": {
+        "success": "hub:heartbeat_ack"
+      },
+      "configuration": {
+        "clientInterval": 30000,
+        "serverTimeout": 60000,
+        "description": "Client sends every 30s, server expects within 60s"
+      }
+    },
+    "hub:heartbeat_ack": {
+      "direction": "server-to-client",
+      "pattern": "response",
+      "description": "Heartbeat acknowledgment with server time",
+      "payload": {
+        "type": "object",
+        "required": ["serverTime"],
+        "properties": {
+          "serverTime": {
+            "type": "integer",
+            "description": "Server timestamp in epoch milliseconds"
+          }
+        }
+      }
+    },
+    "hub:disconnect": {
+      "direction": "client-to-server",
+      "pattern": "ask",
+      "description": "Graceful disconnection with cleanup",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Human-readable disconnect reason",
+            "examples": ["User logout", "Application closing"]
+          }
+        }
+      },
+      "response": {
+        "success": "hub:disconnect_ack"
+      },
+      "critical": "Server MUST send hub:disconnect_ack BEFORE closing WebSocket"
+    },
+    "hub:disconnect_ack": {
+      "direction": "server-to-client",
+      "pattern": "response",
+      "description": "Disconnect acknowledgment confirming cleanup",
+      "payload": {
+        "type": "object",
+        "required": ["sessionId", "cleanedUp"],
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "description": "Session identifier being closed"
+          },
+          "cleanedUp": {
+            "type": "boolean",
+            "description": "Cleanup completed successfully"
+          }
+        }
+      }
+    }
+  },
+  "errorCodes": {
+    "version_mismatch": {
+      "description": "Protocol version incompatible",
+      "triggeredBy": ["hub:connect"],
+      "details": {
+        "expected": "Server protocol version",
+        "received": "Client protocol version"
+      }
+    },
+    "unauthorized": {
+      "description": "JWT invalid, expired, or missing when AUTH_ENABLED=true",
+      "triggeredBy": ["hub:connect"],
+      "details": {
+        "reason": "Specific authentication failure"
+      }
+    }
+  },
+  "stateTransitions": {
+    "reference": "state-machine.json",
+    "description": "See state-machine.json for complete state transition rules"
+  }
+}

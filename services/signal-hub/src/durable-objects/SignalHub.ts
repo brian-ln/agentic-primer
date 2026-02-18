@@ -247,12 +247,6 @@ export class SignalHub implements DurableObject {
     if (messageType === 'hub:connect') {
       const response = await handleConnect(msg, session, this.env);
 
-      // CRITICAL: Detect duplicate connections (same actorIdentity)
-      // If actor is already connected, close old session and keep new one
-      if (session.actorIdentity) {
-        this.handleDuplicateConnection(session.actorIdentity, session.sessionId, ws);
-      }
-
       // Update connection state to connected
       session.connectionState = 'connected';
 
@@ -319,7 +313,22 @@ export class SignalHub implements DurableObject {
 
     // Actor registration
     if (messageType === 'hub:register') {
-      return handleRegister(msg, this.registry, session.sessionId, this.env);
+      // Extract the actor address being registered
+      const payload = msg.payload as { actorAddress: CanonicalAddress };
+      const actorAddress = payload.actorAddress;
+
+      // CRITICAL: Detect duplicate connections (same actorAddress)
+      // Check BEFORE registering to close old session first
+      this.handleDuplicateConnection(actorAddress, session.sessionId, ws);
+
+      // Update session's actorIdentity to the registered address
+      // This ensures subscriptions use the registered address, not the temporary connection ID
+      session.actorIdentity = actorAddress;
+
+      // Register the actor
+      const response = handleRegister(msg, this.registry, session.sessionId, this.env);
+
+      return response;
     }
 
     if (messageType === 'hub:unregister') {
@@ -424,8 +433,29 @@ export class SignalHub implements DurableObject {
     newSessionId: string,
     newWs: WebSocket
   ): void {
+    console.log(JSON.stringify({
+      event: 'handleDuplicateConnection_start',
+      actorIdentity,
+      newSessionId,
+      totalSessions: this.sessions.size,
+      timestamp: Date.now(),
+    }));
+
     // Find existing session with same actorIdentity
+    let checkedSessions = 0;
     for (const [ws, session] of this.sessions.entries()) {
+      checkedSessions++;
+      console.log(JSON.stringify({
+        event: 'checking_session',
+        sessionId: session.sessionId,
+        sessionActorIdentity: session.actorIdentity,
+        sessionConnectionState: session.connectionState,
+        targetActorIdentity: actorIdentity,
+        matches: session.actorIdentity === actorIdentity,
+        isDifferentSession: session.sessionId !== newSessionId,
+        isNotDisconnected: session.connectionState !== 'disconnected',
+      }));
+
       if (
         session.actorIdentity === actorIdentity &&
         session.sessionId !== newSessionId &&
@@ -479,6 +509,14 @@ export class SignalHub implements DurableObject {
         }));
       }
     }
+
+    console.log(JSON.stringify({
+      event: 'handleDuplicateConnection_complete',
+      actorIdentity,
+      newSessionId,
+      sessionsChecked: checkedSessions,
+      timestamp: Date.now(),
+    }));
   }
 
   /**

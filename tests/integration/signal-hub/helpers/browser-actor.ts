@@ -119,7 +119,26 @@ export class BrowserActorWrapper {
   }
 
   /**
-   * Wait for a specific message type
+   * Wait for a specific message matching predicate
+   *
+   * @param predicate - Function to test each message (receives SharedMessage, NOT MessageEvent)
+   * @param timeout - Timeout in milliseconds (default: 5000)
+   * @returns Promise resolving to the matched SharedMessage
+   *
+   * @example
+   * // Wait for hub:registered confirmation
+   * const msg = await actor.waitForMessage(
+   *   msg => msg.type === 'hub:registered',
+   *   5000
+   * );
+   * expect(msg.payload.address).toBe('runtime:browser/actor-456');
+   *
+   * @example
+   * // Wait for application message
+   * const taskMsg = await actor.waitForMessage(
+   *   msg => msg.type === 'task:assigned' && msg.payload.taskId === '456',
+   *   10000
+   * );
    */
   async waitForMessage(
     predicate: (msg: SharedMessage) => boolean,
@@ -194,10 +213,54 @@ export class BrowserActorWrapper {
   }
 
   /**
-   * Get the underlying client (for advanced usage)
+   * Register event listener
+   *
+   * **IMPORTANT:** Event signatures are transformed by this wrapper:
+   * - 'message': Handler receives `SharedMessage` (already parsed from JSON, NOT MessageEvent)
+   * - 'connected': Handler receives no arguments
+   * - 'disconnected': Handler receives no arguments
+   * - 'error': Handler receives `Error` object
+   *
+   * @param event - Event name ('message' | 'connected' | 'disconnected' | 'error')
+   * @param handler - Event handler with signature specific to event type
+   *
+   * @example
+   * // Listen for all messages (receives SharedMessage, not MessageEvent)
+   * actor.on('message', (msg: SharedMessage) => {
+   *   console.log('Received:', msg.type, msg.payload);
+   * });
+   *
+   * @example
+   * // Listen for connection events
+   * actor.on('connected', () => {
+   *   console.log('Connected to hub');
+   * });
+   *
+   * @example
+   * // Listen for errors
+   * actor.on('error', (error: Error) => {
+   *   console.error('Actor error:', error);
+   * });
    */
-  getClient(): SignalHubClient {
-    return this.client;
+  on(event: string, handler: (...args: any[]) => void): void {
+    if (event === 'message') {
+      this.messageHandlers.push(handler);
+    } else {
+      this.client.on(event as any, handler);
+    }
+  }
+
+  /**
+   * Remove event listener
+   * For 'message' events, removes from internal messageHandlers
+   * For other events, delegates to underlying client
+   */
+  off(event: string, handler: (...args: any[]) => void): void {
+    if (event === 'message') {
+      this.messageHandlers = this.messageHandlers.filter(h => h !== handler);
+    } else {
+      this.client.off(event as any, handler);
+    }
   }
 }
 

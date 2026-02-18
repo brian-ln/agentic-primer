@@ -1,0 +1,86 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "actor-registration.schema.json",
+  "title": "ActorRegistration",
+  "description": "Actor registration entry in Signal Hub registry",
+  "type": "object",
+  "required": [
+    "actorAddress",
+    "capabilities",
+    "metadata",
+    "connectionId",
+    "registeredAt",
+    "expiresAt",
+    "version",
+    "renewalToken"
+  ],
+  "properties": {
+    "actorAddress": {
+      "$ref": "../../schemas/canonical-address.schema.json",
+      "description": "Actor's canonical address (e.g., 'browser/client-ui')"
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Actor capabilities for discovery filtering",
+      "examples": [
+        ["send", "receive"],
+        ["inference", "analysis"],
+        ["ui", "interaction"]
+      ]
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Custom metadata for discovery (version, userAgent, model, etc.)",
+      "examples": [
+        {
+          "version": "1.0.0",
+          "userAgent": "Mozilla/5.0..."
+        },
+        {
+          "model": "claude-3.5-sonnet",
+          "provider": "anthropic"
+        }
+      ]
+    },
+    "connectionId": {
+      "type": "string",
+      "description": "WebSocket connection session ID",
+      "pattern": "^sess_[a-zA-Z0-9]+$"
+    },
+    "registeredAt": {
+      "type": "integer",
+      "description": "Registration timestamp in epoch milliseconds",
+      "minimum": 0
+    },
+    "expiresAt": {
+      "type": "integer",
+      "description": "Expiration timestamp in epoch milliseconds",
+      "minimum": 0
+    },
+    "version": {
+      "type": "integer",
+      "description": "Registration version for conflict resolution (increments on each registration)",
+      "minimum": 1
+    },
+    "renewalToken": {
+      "type": "string",
+      "description": "Opaque token for hub:renew (UUID format)",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    }
+  },
+  "_ttlBehavior": {
+    "default": "300000 (5 minutes)",
+    "maximum": "3600000 (1 hour)",
+    "renewal": "Use renewalToken with hub:renew before expiration",
+    "cleanup": "Automatic lazy cleanup on expiration or manual via hub:unregister"
+  },
+  "_versionTracking": {
+    "purpose": "Detect duplicate registrations from different connections",
+    "behavior": "Increments on each successful registration",
+    "usage": "Client compares versions to determine which registration is active"
+  }
+}
