@@ -146,6 +146,98 @@ regularly.
 
 ---
 
+## Token Refresh (Long-Lived Sessions)
+
+Sessions that remain connected beyond their initial token's validity period can
+use `hub:refresh_token` to obtain a fresh token without disconnecting.
+
+### When to Use
+
+Clients that hold connections for more than 1 hour (the default refreshed-token
+TTL) should refresh their token before it expires to avoid being rejected on the
+next reconnect. A client can also refresh proactively (e.g., every 50 minutes)
+to maintain a rolling session.
+
+### Message Flow
+
+```
+Client                          Signal Hub (DO)
+  |                                  |
+  |--- hub:refresh_token ----------> |
+  |    payload: { token: "<current>" }
+  |                                  |
+  |<-- hub:token_refreshed ----------|  (success)
+  |    payload: { token, expiresAt }
+  |                                  |
+  |<-- hub:error (INVALID_TOKEN) ---|  (failure)
+```
+
+### hub:refresh_token
+
+**Direction:** client -> server
+**Pattern:** `ask`
+
+**Request payload:**
+
+```json
+{ "token": "<current-token>" }
+```
+
+- `token` (string, required): The token to rotate. In JWT mode (AUTH_ENABLED=true)
+  this is the bearer JWT. In development mode (AUTH_ENABLED=false) this is the
+  opaque session token previously issued.
+
+### hub:token_refreshed
+
+**Direction:** server -> client
+**Pattern:** `tell`
+
+**Response payload:**
+
+```json
+{
+  "token": "<new-token>",
+  "expiresAt": 1708303600000
+}
+```
+
+- `token` (string): New token, valid for 1 hour from issue time.
+- `expiresAt` (number): Epoch milliseconds when the new token expires.
+
+### hub:error (invalid_token)
+
+Returned when the supplied token cannot be validated:
+
+| Condition | Description |
+|-----------|-------------|
+| Missing or non-string `token` field | Payload validation failed |
+| Token not parseable | Not a recognised JWT or session token |
+| Token expired | Token's `exp` / `expiresAt` is in the past |
+| Session mismatch | Session token belongs to a different session (dev mode only) |
+
+**Error payload:**
+
+```json
+{
+  "code": "invalid_token",
+  "message": "Token validation failed",
+  "resolution": "Try refreshing your token with hub:refresh_token or reconnect with a new authToken."
+}
+```
+
+### Token Strategy by Mode
+
+| `AUTH_ENABLED` | Token format | Issued by |
+|---|---|---|
+| `true` (JWT mode) | HS256 JWT, 1h lifetime | `createJWT()` using `JWT_SECRET` |
+| `false` (dev mode) | Opaque session token, 1h lifetime | `createSessionToken()` — base64-encoded session metadata |
+
+In JWT mode the refreshed token preserves the original actor identity and
+capabilities. In development mode the session token is bound to the session ID,
+preventing token reuse across different sessions.
+
+---
+
 ## Structured Logging
 
 All hot paths use the `log()` utility from `src/utils.ts`:

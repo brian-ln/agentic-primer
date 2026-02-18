@@ -112,7 +112,8 @@ export type HubErrorCode =
   | 'message_too_large'
   | 'message_expired'
   | 'timeout'
-  | 'internal_error';
+  | 'internal_error'
+  | 'invalid_token';
 
 export class HubError extends Error {
   constructor(
