@@ -175,7 +175,6 @@ export class SignalHub implements DurableObject {
       }
 
       const msg = parsedMessage as SharedMessage;
-      console.log('[SignalHub] Received message:', msg.type, 'from', msg.from, 'session', session.sessionId);
 
       // Update heartbeat timestamp
       session.lastHeartbeat = Date.now();
@@ -185,7 +184,6 @@ export class SignalHub implements DurableObject {
 
       // Send response if returned
       if (response) {
-        console.log('[SignalHub] Sending response:', response.type, 'to session', session.sessionId);
         ws.send(JSON.stringify(response));
       }
 
@@ -395,16 +393,10 @@ export class SignalHub implements DurableObject {
     reason: string,
     wasClean: boolean
   ): Promise<void> {
-    console.log(`[webSocketClose] WebSocket closed (code=${code}, reason=${reason}, clean=${wasClean})`);
     const session = this.sessions.get(ws);
     if (!session) {
-      console.log('[webSocketClose] No session found for WebSocket - already cleaned up?');
       return;
     }
-
-    console.log(
-      `[webSocketClose] Found session: ${session.sessionId} for closed WebSocket`
-    );
 
     this.cleanupConnection(ws, session);
   }
