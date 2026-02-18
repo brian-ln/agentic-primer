@@ -240,7 +240,7 @@ export class SignalHub implements DurableObject {
       authenticated: false,
       paused: false,
       connectionState: 'connecting', // Initial state before hub:connect
-      rateLimitBucket: createTokenBucket(100, 100 / 60), // 100 msg/min = 1.67 msg/sec
+      rateLimitBucket: createTokenBucket(10, 10), // 10 msg/sec per session
     };
 
     // Store session and connection
@@ -354,16 +354,18 @@ export class SignalHub implements DurableObject {
     const messageType = msg.type;
 
     // Rate limiting check (skip for hub:connect to allow initial connection)
+    // Per-session token bucket: 10 messages/sec capacity, 10 tokens/sec refill.
+    // When exceeded, returns hub:error with code RATE_LIMIT_EXCEEDED.
     if (messageType !== 'hub:connect') {
       if (!consumeToken(session.rateLimitBucket)) {
-        // Calculate retry-after time
+        // Calculate retry-after time (seconds until next token available)
         const tokensNeeded = 1 - session.rateLimitBucket.tokens;
         const retryAfter = Math.ceil(tokensNeeded / session.rateLimitBucket.refillRate);
 
         throw new HubError(
           'rate_limited',
-          `Rate limit exceeded. Max 100 messages per minute.`,
-          { retryAfter, limit: '100 messages/min' }
+          `Rate limit exceeded. Max 10 messages per second per session.`,
+          { retryAfter, limit: '10 msg/sec', code: 'RATE_LIMIT_EXCEEDED' }
         );
       }
     }

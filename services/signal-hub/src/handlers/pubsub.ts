@@ -177,37 +177,39 @@ export function handlePublish(
 
 /**
  * Handle hub:unsubscribe message
+ *
+ * Removes the actor from the specified topic subscription only.
+ * Other topic subscriptions for the same actor are preserved.
+ *
+ * Protocol: payload must contain { topic: string }
  */
 export function handleUnsubscribe(
   msg: SharedMessage,
   subscriptions: Map<string, Set<CanonicalAddress>>,
   actorAddress: CanonicalAddress
 ): void {
-  const payload = msg.payload as { subscriptionId: string };
+  const payload = msg.payload as { topic: string };
 
-  if (!payload.subscriptionId || typeof payload.subscriptionId !== 'string') {
-    throw new HubError('internal_error', 'subscriptionId is required');
+  if (!payload.topic || typeof payload.topic !== 'string') {
+    throw new HubError('internal_error', 'topic is required');
   }
 
-  // For MVP, we don't track subscription IDs explicitly
-  // Instead, remove actor from all topics (could be improved in Phase 2)
-  let removed = false;
-  for (const [topic, subscribers] of subscriptions.entries()) {
-    if (subscribers.has(actorAddress)) {
-      subscribers.delete(actorAddress);
-      removed = true;
+  const { topic } = payload;
 
-      // Cleanup empty topic sets
-      if (subscribers.size === 0) {
-        subscriptions.delete(topic);
-      }
-    }
-  }
-
-  if (!removed) {
+  // Remove actor from the specified topic only
+  const subscribers = subscriptions.get(topic);
+  if (!subscribers || !subscribers.has(actorAddress)) {
     console.warn(
-      `No active subscriptions found for actor: ${actorAddress} (subscriptionId: ${payload.subscriptionId})`
+      `No active subscription found for actor: ${actorAddress} on topic: ${topic}`
     );
+    return;
+  }
+
+  subscribers.delete(actorAddress);
+
+  // Cleanup empty topic sets
+  if (subscribers.size === 0) {
+    subscriptions.delete(topic);
   }
 }
 

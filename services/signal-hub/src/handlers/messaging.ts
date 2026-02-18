@@ -76,6 +76,12 @@ export function handleSend(
     connectionsSize: connections.size,
   });
 
+  // ADDRESS RESOLUTION: The registry is a Map<CanonicalAddress, ActorRegistration> — one entry
+  // per actor address. When the same actor address re-registers (e.g., reconnect), handleRegister
+  // overwrites the previous entry (last-write-wins). This means an actor address always resolves
+  // to exactly one session: the most recent registration. There is no ambiguity by design.
+  // If an old session races with a new one, handleDuplicateConnection() in SignalHub.ts closes
+  // the old session before the new registration is stored, ensuring a clean handoff.
   const targetActor = registry.get(targetAddress);
 
   if (!targetActor) {

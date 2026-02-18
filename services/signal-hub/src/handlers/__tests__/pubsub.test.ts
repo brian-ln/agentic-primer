@@ -365,13 +365,17 @@ describe('Pub/Sub Handlers', () => {
   });
 
   describe('handleUnsubscribe', () => {
-    it('should unsubscribe actor from topic', () => {
+    it('should unsubscribe actor from specified topic only', () => {
       const actorAddress = toCanonicalAddress('browser/widget-123');
 
-      // Add subscription
-      const subscribers = new Set<CanonicalAddress>();
-      subscribers.add(actorAddress);
-      subscriptions.set('events', subscribers);
+      // Add actor to multiple topics
+      const subscribers1 = new Set<CanonicalAddress>();
+      subscribers1.add(actorAddress);
+      subscriptions.set('events', subscribers1);
+
+      const subscribers2 = new Set<CanonicalAddress>();
+      subscribers2.add(actorAddress);
+      subscriptions.set('notifications', subscribers2);
 
       const unsubscribeMsg: SharedMessage = {
         id: 'msg-9',
@@ -382,7 +386,41 @@ describe('Pub/Sub Handlers', () => {
         correlationId: null,
         timestamp: Date.now(),
         payload: {
-          subscriptionId: 'sub-123',
+          topic: 'events',
+        },
+        metadata: {},
+        ttl: 5000,
+        signature: null,
+      };
+
+      handleUnsubscribe(unsubscribeMsg, subscriptions, actorAddress);
+
+      // Only 'events' topic should be removed (empty set cleaned up)
+      expect(subscriptions.has('events')).toBe(false);
+
+      // 'notifications' topic subscription should remain intact
+      expect(subscriptions.has('notifications')).toBe(true);
+      expect(subscriptions.get('notifications')?.has(actorAddress)).toBe(true);
+    });
+
+    it('should clean up empty topic set after unsubscribe', () => {
+      const actorAddress = toCanonicalAddress('browser/widget-123');
+
+      // Single subscriber on topic
+      const subscribers = new Set<CanonicalAddress>();
+      subscribers.add(actorAddress);
+      subscriptions.set('events', subscribers);
+
+      const unsubscribeMsg: SharedMessage = {
+        id: 'msg-9b',
+        from: actorAddress,
+        to: toCanonicalAddress('cloudflare/signal-hub'),
+        type: 'hub:unsubscribe',
+        pattern: 'tell',
+        correlationId: null,
+        timestamp: Date.now(),
+        payload: {
+          topic: 'events',
         },
         metadata: {},
         ttl: 5000,
@@ -395,7 +433,41 @@ describe('Pub/Sub Handlers', () => {
       expect(subscriptions.has('events')).toBe(false);
     });
 
-    it('should reject missing subscriptionId', () => {
+    it('should leave other subscribers on topic when one unsubscribes', () => {
+      const actor1 = toCanonicalAddress('browser/widget-1');
+      const actor2 = toCanonicalAddress('browser/widget-2');
+
+      // Both actors subscribed to 'events'
+      const subscribers = new Set<CanonicalAddress>();
+      subscribers.add(actor1);
+      subscribers.add(actor2);
+      subscriptions.set('events', subscribers);
+
+      const unsubscribeMsg: SharedMessage = {
+        id: 'msg-9c',
+        from: actor1,
+        to: toCanonicalAddress('cloudflare/signal-hub'),
+        type: 'hub:unsubscribe',
+        pattern: 'tell',
+        correlationId: null,
+        timestamp: Date.now(),
+        payload: {
+          topic: 'events',
+        },
+        metadata: {},
+        ttl: 5000,
+        signature: null,
+      };
+
+      handleUnsubscribe(unsubscribeMsg, subscriptions, actor1);
+
+      // actor1 removed but actor2 remains
+      expect(subscriptions.has('events')).toBe(true);
+      expect(subscriptions.get('events')?.has(actor1)).toBe(false);
+      expect(subscriptions.get('events')?.has(actor2)).toBe(true);
+    });
+
+    it('should reject missing topic', () => {
       const actorAddress = toCanonicalAddress('browser/widget-123');
 
       const unsubscribeMsg: SharedMessage = {
@@ -413,8 +485,32 @@ describe('Pub/Sub Handlers', () => {
       };
 
       expect(() => handleUnsubscribe(unsubscribeMsg, subscriptions, actorAddress)).toThrow(
-        'subscriptionId is required'
+        'topic is required'
       );
+    });
+
+    it('should not throw when actor is not subscribed to specified topic', () => {
+      const actorAddress = toCanonicalAddress('browser/widget-123');
+
+      // Actor not subscribed to anything
+      const unsubscribeMsg: SharedMessage = {
+        id: 'msg-10b',
+        from: actorAddress,
+        to: toCanonicalAddress('cloudflare/signal-hub'),
+        type: 'hub:unsubscribe',
+        pattern: 'tell',
+        correlationId: null,
+        timestamp: Date.now(),
+        payload: {
+          topic: 'nonexistent-topic',
+        },
+        metadata: {},
+        ttl: 5000,
+        signature: null,
+      };
+
+      // Should not throw — gracefully handles missing subscription
+      expect(() => handleUnsubscribe(unsubscribeMsg, subscriptions, actorAddress)).not.toThrow();
     });
   });
 
