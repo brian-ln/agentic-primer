@@ -47,15 +47,6 @@ export function handleSubscribe(
   // Generate subscription ID
   const subscriptionId = `sub-${crypto.randomUUID()}`;
 
-  // ASSERTION LOG: Verify correct identity used
-  console.log(JSON.stringify({
-    event: 'subscription_added',
-    actorAddress,       // Should be registered address, not temp session ID
-    topic,
-    subscriberCount: subscribers.size,
-    timestamp: Date.now(),
-  }));
-
   // Send hub:subscribed response
   const responsePayload = {
     topic,
@@ -91,8 +82,6 @@ export function handlePublish(
     data: unknown;
   };
 
-  console.log('[handlePublish] Received from', msg.from, 'payload:', JSON.stringify(payload).substring(0, 200));
-
   if (!payload.topic || typeof payload.topic !== 'string') {
     throw new HubError('internal_error', 'topic is required');
   }
@@ -105,11 +94,8 @@ export function handlePublish(
 
   // Get subscribers
   const subscribers = subscriptions.get(topic);
-  console.log('[handlePublish] Topic', topic, 'has', subscribers?.size ?? 0, 'subscribers');
 
   if (!subscribers || subscribers.size === 0) {
-    console.log('[handlePublish] No subscribers for topic:', topic);
-
     return createReply(
       'hub:published',
       {
@@ -144,12 +130,9 @@ export function handlePublish(
   };
 
   // Send to all subscribers
-  console.log('[handlePublish] Sending to', subscribers.size, 'subscribers');
-
   for (const subscriberAddress of subscribers) {
     const actor = registry.get(subscriberAddress);
     if (!actor) {
-      console.log('[handlePublish] Actor not found in registry:', subscriberAddress);
       // Cleanup stale subscription
       subscribers.delete(subscriberAddress);
       continue;
@@ -157,7 +140,6 @@ export function handlePublish(
 
     // Skip expired actors
     if (isExpired(actor.expiresAt)) {
-      console.log('[handlePublish] Actor expired:', subscriberAddress);
       registry.delete(subscriberAddress);
       subscribers.delete(subscriberAddress);
       continue;
@@ -165,7 +147,6 @@ export function handlePublish(
 
     const ws = connections.get(actor.connectionId);
     if (!ws) {
-      console.log('[handlePublish] No WebSocket for', subscriberAddress);
       console.warn(`WebSocket not found for subscriber: ${subscriberAddress}`);
       continue;
     }
@@ -180,24 +161,10 @@ export function handlePublish(
 
       sendMessage(ws, recipientMessage);
       deliveredCount++;
-
-      // ASSERTION LOG: Message delivered to subscriber
-      console.log(JSON.stringify({
-        event: 'publication_delivered',
-        subscriberAddress,  // Should be registered address, not session ID
-        topic,
-        messageType: payload.type,
-        messageId: recipientMessage.id,
-        timestamp: Date.now(),
-      }));
     } catch (err) {
       console.error(`Failed to publish to ${subscriberAddress}:`, err);
     }
   }
-
-  console.log(
-    `Published ${payload.type} to topic ${topic}: ${deliveredCount} subscribers`
-  );
 
   // Send hub:published response
   const responsePayload = {
@@ -228,7 +195,6 @@ export function handleUnsubscribe(
   for (const [topic, subscribers] of subscriptions.entries()) {
     if (subscribers.has(actorAddress)) {
       subscribers.delete(actorAddress);
-      console.log(`Actor ${actorAddress} unsubscribed from topic: ${topic}`);
       removed = true;
 
       // Cleanup empty topic sets

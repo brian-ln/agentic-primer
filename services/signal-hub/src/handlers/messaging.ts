@@ -272,6 +272,22 @@ export function handleBroadcast(
 
   log(env, 'handle_broadcast', { from: msg.from, payloadType: payload.type, targetCount: targets.length });
 
+  // Resource protection: enforce maximum broadcast recipient limit
+  if (targets.length > MAX_BROADCAST_RECIPIENTS) {
+    console.error(
+      `[handleBroadcast] Broadcast rejected: ${targets.length} recipients exceeds max (${MAX_BROADCAST_RECIPIENTS})`
+    );
+    return createReply(
+      'hub:error',
+      {
+        code: 'BROADCAST_LIMIT_EXCEEDED',
+        message: `Broadcast recipient count (${targets.length}) exceeds maximum allowed (${MAX_BROADCAST_RECIPIENTS})`,
+      },
+      msg,
+      SIGNAL_HUB_ADDRESS
+    );
+  }
+
   let deliveredCount = 0;
   let failedCount = 0;
 

@@ -11,6 +11,7 @@ import type {
   ActorRegistration,
   CanonicalAddress,
   QueueStats,
+  HubMetrics,
 } from '../types';
 import { HubError } from '../types';
 import {
@@ -20,6 +21,8 @@ import {
   createErrorMessage,
   createTokenBucket,
   consumeToken,
+  createReply,
+  log,
 } from '../utils';
 import { getValidator } from '../validation/schema-validator';
 import { getFSMValidator } from '../validation/fsm-validator';
@@ -44,10 +47,6 @@ import { handleQueueStats } from '../handlers/flowcontrol';
 
 const SIGNAL_HUB_ADDRESS = toCanonicalAddress('cloudflare/signal-hub');
 
-// Resource protection constants
-const TTL_CHECK_INTERVAL_MS = 60_000; // 1 minute
-const MAX_MESSAGE_SIZE_BYTES = 65_536; // 64KB hard limit
-
 /**
  * SignalHub Durable Object Class
  *
@@ -57,6 +56,7 @@ const MAX_MESSAGE_SIZE_BYTES = 65_536; // 64KB hard limit
  * - Point-to-point and broadcast messaging
  * - Pub/sub topic subscriptions
  * - Backpressure and flow control
+ * - Per-minute metrics (cumulative since last alarm reset)
  */
 export class SignalHub implements DurableObject {
   private ctx: DurableObjectState;
@@ -66,6 +66,19 @@ export class SignalHub implements DurableObject {
   private registry: Map<string, ActorRegistration>;
   private subscriptions: Map<string, Set<CanonicalAddress>>;
   private queueStats: QueueStats;
+
+  /**
+   * Metrics counters — cumulative since last alarm tick (windowStart).
+   * Call resetMetrics() to begin a new window.
+   */
+  private metrics: {
+    messages_received: number;
+    messages_sent: number;
+    errors: number;
+    connections_opened: number;
+    connections_closed: number;
+    windowStart: number;
+  };
 
   constructor(state: DurableObjectState, env: Env) {
     this.ctx = state;
@@ -80,6 +93,14 @@ export class SignalHub implements DurableObject {
       failed: 0,
       paused: false,
     };
+    this.metrics = {
+      messages_received: 0,
+      messages_sent: 0,
+      errors: 0,
+      connections_opened: 0,
+      connections_closed: 0,
+      windowStart: Date.now(),
+    };
 
     // Enable hibernation for WebSocket connections
     state.setWebSocketAutoResponse(
@@ -89,7 +110,7 @@ export class SignalHub implements DurableObject {
       )
     );
 
-    // Log validation mode on startup
+    // Log validation mode on startup (lifecycle event — always emit)
     const validator = getValidator();
     const mode = validator.getMode();
     const fsmValidator = getFSMValidator();
@@ -128,6 +149,34 @@ export class SignalHub implements DurableObject {
   }
 
   /**
+   * Return current metrics snapshot.
+   *
+   * Counters are cumulative since windowStart (last alarm reset).
+   * After reading, counters are NOT automatically reset — call resetMetrics() if desired.
+   */
+  getMetrics(): HubMetrics {
+    return {
+      ...this.metrics,
+      timestamp: Date.now(),
+    };
+  }
+
+  /**
+   * Reset metrics counters and start a new window.
+   * Called automatically on each alarm tick.
+   */
+  private resetMetrics(): void {
+    this.metrics = {
+      messages_received: 0,
+      messages_sent: 0,
+      errors: 0,
+      connections_opened: 0,
+      connections_closed: 0,
+      windowStart: Date.now(),
+    };
+  }
+
+  /**
    * Send message through WebSocket with schema validation
    *
    * Validates outgoing message before sending:
@@ -141,6 +190,7 @@ export class SignalHub implements DurableObject {
 
     // Send message
     ws.send(JSON.stringify(message));
+    this.metrics.messages_sent++;
   }
 
   /**
@@ -168,14 +218,12 @@ export class SignalHub implements DurableObject {
     // Update state
     session.connectionState = toState;
 
-    console.log(JSON.stringify({
-      event: 'state_transition',
+    log(this.env, 'state_transition', {
       sessionId: session.sessionId,
       fromState,
       toState,
       transitionEvent: event,
-      timestamp: Date.now(),
-    }));
+    });
   }
 
   /**
@@ -201,12 +249,12 @@ export class SignalHub implements DurableObject {
     // CRITICAL: Use ctx.acceptWebSocket() for wrangler dev to route messages
     this.ctx.acceptWebSocket(ws);
 
-    console.log(JSON.stringify({
-      event: 'websocket_connection_accepted',
+    this.metrics.connections_opened++;
+
+    log(this.env, 'websocket_connection_accepted', {
       sessionId: session.sessionId,
       connectionState: session.connectionState,
-      timestamp: Date.now(),
-    }));
+    });
   }
 
   /**
@@ -220,32 +268,19 @@ export class SignalHub implements DurableObject {
       return;
     }
 
+    this.metrics.messages_received++;
+
     try {
       // Check raw message size BEFORE parsing (DoS protection)
       const rawSize = typeof message === 'string' ? message.length : message.byteLength;
-      const envMaxSize = parseInt(this.env.MAX_MESSAGE_SIZE, 10);
-      // Use the stricter of the env limit or the hard-coded 64KB constant
-      const maxSize = isNaN(envMaxSize) ? MAX_MESSAGE_SIZE_BYTES : Math.min(envMaxSize, MAX_MESSAGE_SIZE_BYTES);
+      const maxSize = parseInt(this.env.MAX_MESSAGE_SIZE, 10);
 
       if (rawSize > maxSize) {
-        // Send error response directly and return early — do NOT attempt JSON.parse on oversized input
-        ws.send(JSON.stringify({
-          id: crypto.randomUUID(),
-          type: 'hub:error',
-          from: SIGNAL_HUB_ADDRESS,
-          to: null,
-          payload: {
-            code: 'MESSAGE_TOO_LARGE',
-            message: 'Message exceeds 64KB limit',
-          },
-          pattern: 'tell',
-          correlationId: null,
-          timestamp: Date.now(),
-          metadata: {},
-          ttl: null,
-          signature: null,
-        }));
-        return;
+        throw new HubError(
+          'message_too_large',
+          `Message size (${rawSize} bytes) exceeds limit (${maxSize} bytes) before parsing`,
+          { actualSize: rawSize, maxSize }
+        );
       }
 
       // Parse message
@@ -281,6 +316,8 @@ export class SignalHub implements DurableObject {
       this.queueStats.processed++;
     } catch (err) {
       console.error('[SignalHub] Error processing WebSocket message:', err);
+
+      this.metrics.errors++;
 
       // Send error response
       try {
@@ -342,25 +379,21 @@ export class SignalHub implements DurableObject {
         // Store connection after successful connect
         this.connections.set(session.sessionId, ws);
 
-        console.log(JSON.stringify({
-          event: 'actor_connected',
+        log(this.env, 'actor_connected', {
           sessionId: session.sessionId,
           actorIdentity: session.actorIdentity,
           connectionState: session.connectionState,
-          timestamp: Date.now(),
-        }));
+        });
 
         return response;
       } catch (err) {
         // Transition: connecting → disconnected (hub:connect_fail)
         this.transitionState(session, 'connecting', 'disconnected', 'hub:connect_fail');
 
-        console.log(JSON.stringify({
-          event: 'connect_failed',
+        log(this.env, 'connect_failed', {
           sessionId: session.sessionId,
           error: err instanceof Error ? err.message : 'Unknown error',
-          timestamp: Date.now(),
-        }));
+        });
 
         // Re-throw to be caught by outer error handler
         throw err;
@@ -379,12 +412,10 @@ export class SignalHub implements DurableObject {
 
     // Disconnect
     if (messageType === 'hub:disconnect') {
-      console.log(JSON.stringify({
-        event: 'disconnect_requested',
+      log(this.env, 'disconnect_requested', {
         sessionId: session.sessionId,
         actorIdentity: session.actorIdentity,
-        timestamp: Date.now(),
-      }));
+      });
 
       // Transition: connected → disconnecting (hub:disconnect)
       this.transitionState(session, 'connected', 'disconnecting', 'hub:disconnect');
@@ -394,20 +425,10 @@ export class SignalHub implements DurableObject {
       // CRITICAL: Send disconnect acknowledgment BEFORE closing WebSocket
       // Otherwise the response is sent on a closed socket and never reaches the client
       if (response) {
-        console.log(JSON.stringify({
-          event: 'sending_disconnect_ack',
-          sessionId: session.sessionId,
-          timestamp: Date.now(),
-        }));
         this.sendMessage(ws, response);
       }
 
       this.cleanupConnection(ws, session);
-      console.log(JSON.stringify({
-        event: 'closing_websocket',
-        sessionId: session.sessionId,
-        timestamp: Date.now(),
-      }));
       ws.close(1000, 'Client requested disconnect');
 
       // Return null to prevent double-send in webSocketMessage handler
@@ -430,9 +451,6 @@ export class SignalHub implements DurableObject {
 
       // Register the actor
       const response = handleRegister(msg, this.registry, session.sessionId, this.env);
-
-      // Schedule TTL cleanup alarm on first registration (if not already scheduled)
-      this.scheduleAlarmIfNeeded();
 
       return response;
     }
@@ -488,6 +506,12 @@ export class SignalHub implements DurableObject {
       return handleQueueStats(msg, this.queueStats);
     }
 
+    // Metrics
+    if (messageType === 'hub:metrics') {
+      const metrics = this.getMetrics();
+      return createReply('hub:metrics_response', metrics, msg, SIGNAL_HUB_ADDRESS);
+    }
+
     // Unknown message type
     throw new HubError('internal_error', `Unknown message type: ${messageType}`);
   }
@@ -519,6 +543,8 @@ export class SignalHub implements DurableObject {
       error
     );
 
+    this.metrics.errors++;
+
     if (session) {
       this.cleanupConnection(ws, session);
     }
@@ -533,41 +559,24 @@ export class SignalHub implements DurableObject {
     newSessionId: string,
     newWs: WebSocket
   ): void {
-    console.log(JSON.stringify({
-      event: 'handleDuplicateConnection_start',
+    log(this.env, 'handleDuplicateConnection_start', {
       actorIdentity,
       newSessionId,
       totalSessions: this.sessions.size,
-      timestamp: Date.now(),
-    }));
+    });
 
     // Find existing session with same actorIdentity
-    let checkedSessions = 0;
     for (const [ws, session] of this.sessions.entries()) {
-      checkedSessions++;
-      console.log(JSON.stringify({
-        event: 'checking_session',
-        sessionId: session.sessionId,
-        sessionActorIdentity: session.actorIdentity,
-        sessionConnectionState: session.connectionState,
-        targetActorIdentity: actorIdentity,
-        matches: session.actorIdentity === actorIdentity,
-        isDifferentSession: session.sessionId !== newSessionId,
-        isNotDisconnected: session.connectionState !== 'disconnected',
-      }));
-
       if (
         session.actorIdentity === actorIdentity &&
         session.sessionId !== newSessionId &&
         session.connectionState !== 'disconnected'
       ) {
-        console.log(JSON.stringify({
-          event: 'duplicate_connection_detected',
+        log(this.env, 'duplicate_connection_detected', {
           actorIdentity,
           oldSessionId: session.sessionId,
           newSessionId,
-          timestamp: Date.now(),
-        }));
+        });
 
         // Send disconnect notification to old session
         try {
@@ -588,12 +597,6 @@ export class SignalHub implements DurableObject {
             signature: null,
           };
 
-          console.log(JSON.stringify({
-            event: 'sending_duplicate_disconnect',
-            oldSessionId: session.sessionId,
-            timestamp: Date.now(),
-          }));
-
           this.sendMessage(ws, disconnectMsg);
         } catch (err) {
           console.error('Failed to send disconnect to old session:', err);
@@ -604,23 +607,8 @@ export class SignalHub implements DurableObject {
 
         // Close old WebSocket
         ws.close(1000, 'Duplicate connection - new session established');
-
-        console.log(JSON.stringify({
-          event: 'old_session_closed',
-          oldSessionId: session.sessionId,
-          newSessionId,
-          timestamp: Date.now(),
-        }));
       }
     }
-
-    console.log(JSON.stringify({
-      event: 'handleDuplicateConnection_complete',
-      actorIdentity,
-      newSessionId,
-      sessionsChecked: checkedSessions,
-      timestamp: Date.now(),
-    }));
   }
 
   /**
@@ -628,7 +616,6 @@ export class SignalHub implements DurableObject {
    */
   private cleanupConnection(ws: WebSocket, session: Session): void {
     const now = Date.now();
-    const sessionDuration = now - session.connectedAt;
     const fromState = session.connectionState;
 
     // Transition to disconnected based on current state
@@ -639,16 +626,15 @@ export class SignalHub implements DurableObject {
 
     session.disconnectedAt = now;
 
-    console.log(JSON.stringify({
-      event: 'cleanup_connection_start',
+    this.metrics.connections_closed++;
+
+    log(this.env, 'cleanup_connection', {
       sessionId: session.sessionId,
       actorIdentity: session.actorIdentity,
-      sessionDuration,
+      sessionDuration: now - session.connectedAt,
       registrySize: this.registry.size,
       sessionsSize: this.sessions.size,
-      connectionsSize: this.connections.size,
-      timestamp: now,
-    }));
+    });
 
     // Remove from sessions
     this.sessions.delete(ws);
@@ -657,17 +643,9 @@ export class SignalHub implements DurableObject {
     this.connections.delete(session.sessionId);
 
     // Cleanup registrations for this connection
-    let removedCount = 0;
     for (const [address, registration] of this.registry.entries()) {
       if (registration.connectionId === session.sessionId) {
         this.registry.delete(address);
-        removedCount++;
-        console.log(JSON.stringify({
-          event: 'actor_unregistered_on_disconnect',
-          actorAddress: address,
-          sessionId: session.sessionId,
-          timestamp: now,
-        }));
       }
     }
 
@@ -675,77 +653,21 @@ export class SignalHub implements DurableObject {
     if (session.actorIdentity) {
       cleanupSubscriptions(this.subscriptions, session.actorIdentity);
     }
-
-    console.log(JSON.stringify({
-      event: 'cleanup_connection_complete',
-      sessionId: session.sessionId,
-      removedRegistrations: removedCount,
-      registrySize: this.registry.size,
-      sessionsSize: this.sessions.size,
-      connectionsSize: this.connections.size,
-      timestamp: now,
-    }));
   }
 
   /**
-   * Schedule TTL cleanup alarm if not already scheduled
-   * Called on first registration to start periodic cleanup cycle
-   */
-  private async scheduleAlarmIfNeeded(): Promise<void> {
-    try {
-      const existingAlarm = await this.ctx.storage.getAlarm();
-      if (existingAlarm === null) {
-        await this.ctx.storage.setAlarm(Date.now() + TTL_CHECK_INTERVAL_MS);
-        console.log(JSON.stringify({
-          event: 'ttl_alarm_scheduled',
-          nextFireAt: Date.now() + TTL_CHECK_INTERVAL_MS,
-          timestamp: Date.now(),
-        }));
-      }
-    } catch (err) {
-      // Non-fatal: alarm scheduling failure should not block registration
-      console.error('[SignalHub] Failed to schedule TTL alarm:', err);
-    }
-  }
-
-  /**
-   * Alarm handler - periodic TTL cleanup for expired actor registrations
-   * Reschedules itself to continue periodic cleanup
+   * Alarm handler — resets per-minute metrics window and cleans up expired registrations.
    */
   async alarm(): Promise<void> {
-    const now = Date.now();
-    let expiredCount = 0;
-
-    console.log(JSON.stringify({
-      event: 'ttl_alarm_fired',
-      registrySize: this.registry.size,
-      timestamp: now,
-    }));
+    // Reset metrics for the new window
+    this.resetMetrics();
 
     // Cleanup expired registrations
+    const now = Date.now();
     for (const [address, registration] of this.registry.entries()) {
       if (now >= registration.expiresAt) {
         this.registry.delete(address);
-        expiredCount++;
-        console.log(JSON.stringify({
-          event: 'ttl_expired_actor_removed',
-          actorAddress: address,
-          expiredAt: registration.expiresAt,
-          timestamp: now,
-        }));
       }
-    }
-
-    console.log(JSON.stringify({
-      event: 'ttl_alarm_complete',
-      expiredCount,
-      remainingRegistrations: this.registry.size,
-      timestamp: now,
-    }));
-
-    // Reschedule alarm for next cleanup cycle (only if there are still registrations)
-    if (this.registry.size > 0) {
-      await this.ctx.storage.setAlarm(Date.now() + TTL_CHECK_INTERVAL_MS);
     }
   }
 }
