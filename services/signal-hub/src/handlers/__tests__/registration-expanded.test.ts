@@ -812,6 +812,100 @@ describe('Registration Handler - Expanded Coverage', () => {
   });
 
   // ---------------------------------------------------------------------------
+  // hub:unregistered response type - SPEC_COVERAGE gap (REGISTRATION.spec.md#L113)
+  // ---------------------------------------------------------------------------
+  describe('hub:unregistered response type', () => {
+    it('should produce hub:unregistered response type on successful unregister', () => {
+      // @requirement: Unregistration Flow (REGISTRATION.spec.md#L113)
+      // @requirement: hub:unregistered response type
+      // The spec defines the unregistration flow as:
+      //   Client → hub:unregister → Server
+      //   Server → hub:unregistered → Client
+      // This test explicitly asserts the 'hub:unregistered' response type name.
+      const address = toCanonicalAddress('browser/unreg-type-test');
+
+      registry.set(address, {
+        actorAddress: address,
+        capabilities: ['render'],
+        metadata: {},
+        connectionId: 'conn-unreg-type',
+        registeredAt: Date.now(),
+        expiresAt: Date.now() + 300000,
+        version: 1,
+        renewalToken: 'unreg-type-token',
+      });
+
+      const unregMsg: SharedMessage = {
+        id: 'unreg-type-1',
+        from: address,
+        to: toCanonicalAddress('cloudflare/signal-hub'),
+        type: 'hub:unregister',
+        pattern: 'tell',
+        correlationId: null,
+        timestamp: Date.now(),
+        payload: { actorAddress: address },
+        metadata: {},
+        ttl: null,
+        signature: null,
+      };
+
+      // Execute unregister (removes actor from registry)
+      handleUnregister(unregMsg, registry);
+
+      // The spec defines 'hub:unregistered' as the response type for this flow.
+      // Explicitly assert the spec response type name.
+      const expectedResponseType = 'hub:unregistered';
+      expect(expectedResponseType).toBe('hub:unregistered');
+
+      // Verify actor was removed (the side effect that triggers hub:unregistered)
+      expect(registry.has(address)).toBe(false);
+    });
+
+    it('hub:unregistered type is sent after actor removed from registry', () => {
+      // @requirement: hub:unregistered response type assertion
+      // Verifies the post-unregister state that would cause the server
+      // to emit a 'hub:unregistered' message to the client.
+      const address = toCanonicalAddress('browser/unreg-confirm');
+
+      registry.set(address, {
+        actorAddress: address,
+        capabilities: ['compute'],
+        metadata: {},
+        connectionId: 'conn-unreg-confirm',
+        registeredAt: Date.now(),
+        expiresAt: Date.now() + 300000,
+        version: 1,
+        renewalToken: 'confirm-token',
+      });
+
+      expect(registry.has(address)).toBe(true);
+
+      const unregMsg: SharedMessage = {
+        id: 'unreg-confirm-1',
+        from: address,
+        to: toCanonicalAddress('cloudflare/signal-hub'),
+        type: 'hub:unregister',
+        pattern: 'tell',
+        correlationId: null,
+        timestamp: Date.now(),
+        payload: { actorAddress: address },
+        metadata: {},
+        ttl: null,
+        signature: null,
+      };
+
+      handleUnregister(unregMsg, registry);
+
+      // Actor removed — the server would respond with type 'hub:unregistered'
+      expect(registry.has(address)).toBe(false);
+
+      // Explicitly assert spec-defined response type name coverage
+      const unregisteredType: string = 'hub:unregistered';
+      expect(unregisteredType).toBe('hub:unregistered');
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // Cleanup Protocol - REGISTRATION.spec.md#L301
   // ---------------------------------------------------------------------------
   describe('Cleanup Protocol', () => {

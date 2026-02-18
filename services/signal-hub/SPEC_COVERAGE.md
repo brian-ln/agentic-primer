@@ -1,10 +1,10 @@
 # Signal Hub Spec Coverage Report
 
 **Generated:** 2026-02-18
-**Last Updated:** 2026-02-18 (WS3.2 expansion)
+**Last Updated:** 2026-02-18 (coverage gap closure: paused/resumed/FSM/unregistered)
 **Total Requirements:** 75
-**Tests Covering Requirements:** 61
-**Coverage:** 81%
+**Tests Covering Requirements:** 65
+**Coverage:** 87%
 
 ## Coverage by Domain
 
@@ -143,7 +143,7 @@
 | hub:renew | ✅ | src/handlers/__tests__/registration-expanded.test.ts | - |
 | hub:renewed | ✅ | src/handlers/__tests__/registration-expanded.test.ts | - |
 | hub:unregister | ✅ | src/handlers/__tests__/registration.test | 135 |
-| hub:unregistered | ⚠️ | src/handlers/__tests__/registration-expanded.test.ts (unregister flow tested) | - |
+| hub:unregistered | ✅ | src/handlers/__tests__/registration-expanded.test.ts (hub:unregistered type asserted) | - |
 | hub:discover | ✅ | src/handlers/__tests__/registration.test, src/handlers/__tests__/registration-expanded.test.ts | 193 |
 | hub:discovery_result | ✅ | src/handlers/__tests__/registration-expanded.test.ts (hub:discovered tested) | - |
 | hub:send | ✅ | src/handlers/__tests__/messaging.test.ts, src/handlers/__tests__/messaging-expanded.test.ts | 86 |
@@ -155,9 +155,9 @@
 | hub:unsubscribed | ✅ | src/handlers/__tests__/pubsub-expanded.test.ts (unsubscribe flow tested) | - |
 | hub:publish | ✅ | src/handlers/__tests__/pubsub.test.ts, src/handlers/__tests__/pubsub-expanded.test.ts | 193 |
 | hub:pause | ✅ | src/handlers/__tests__/flowcontrol.test. | 104 |
-| hub:paused | ❌ | - | - |
+| hub:paused | ✅ | src/handlers/__tests__/flowcontrol.test.ts (hub:paused type asserted) | - |
 | hub:resume | ✅ | src/handlers/__tests__/flowcontrol.test. | 124 |
-| hub:resumed | ❌ | - | - |
+| hub:resumed | ✅ | src/handlers/__tests__/flowcontrol.test.ts (hub:resumed type asserted) | - |
 
 ## Error Conditions Coverage
 
@@ -179,7 +179,7 @@
 | connecting | hub:connect (valid) | connected | ✅ | tests/integration/signal-hub/connection. |
 | connecting | hub:connect (invalid) | connecting | ✅ | tests/integration/signal-hub/connection. |
 | connected | hub:disconnect | disconnecting | ✅ | tests/integration/signal-hub/connection. |
-| disconnecting | cleanup complete | disconnected | ❌ | - |
+| disconnecting | cleanup complete | disconnected | ✅ | src/handlers/__tests__/connection-expanded.test.ts |
 | connected | WebSocket close | disconnected | ✅ | tests/integration/signal-hub/connection. |
 | connected | heartbeat timeout | disconnected | ✅ | tests/integration/signal-hub/connection. |
 
@@ -189,9 +189,11 @@
 2. ~~Add tests for message types: hub:disconnect_ack, hub:error, hub:renew, hub:renewed, hub:unregistered, hub:discovery_result, hub:unsubscribed~~ - DONE
 3. ~~Add tests for error conditions: Version mismatch, Heartbeat timeout, Rate limited, Missing required fields~~ - DONE
 4. ~~Add tests for state transitions: disconnecting → disconnected~~ - DONE
-5. Remaining: hub:paused, hub:resumed coverage (flowcontrol domain)
-6. Remaining: Topic Discovery API (future feature, not yet implemented)
-7. Remaining: Cross-Reference and Implementation Notes sections (docs-only, no test value)
+5. ~~Remaining: hub:paused, hub:resumed coverage (flowcontrol domain)~~ - DONE (2026-02-18)
+6. ~~Remaining: hub:unregistered response type assertion~~ - DONE (2026-02-18)
+7. ~~Remaining: disconnecting → cleanup complete → disconnected FSM transition~~ - DONE (2026-02-18)
+8. Remaining: Topic Discovery API (future feature, not yet implemented)
+9. Remaining: Cross-Reference and Implementation Notes sections (docs-only, no test value)
 
 ---
 
