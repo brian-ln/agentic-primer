@@ -10,7 +10,8 @@
     "deploy": "wrangler deploy",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "coverage:specs": "bun run scripts/generate-coverage.ts"
   },
   "dependencies": {
     "@agentic-primer/protocols": "workspace:*",

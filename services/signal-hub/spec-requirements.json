@@ -1,0 +1,1199 @@
+{
+  "generatedDate": "2026-02-18",
+  "requirements": [
+    {
+      "id": "connection-req-1",
+      "domain": "connection",
+      "requirement": "Connection States",
+      "spec": "connection/CONNECTION.spec.md#L21",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "connection-req-2",
+      "domain": "connection",
+      "requirement": "States Summary",
+      "spec": "connection/CONNECTION.spec.md#L25",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "connection-req-3",
+      "domain": "connection",
+      "requirement": "Message Types",
+      "spec": "connection/CONNECTION.spec.md#L34",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "connection-req-4",
+      "domain": "connection",
+      "requirement": "Connection Handshake",
+      "spec": "connection/CONNECTION.spec.md#L38",
+      "priority": "P1",
+      "tested": true,
+      "testFiles": [
+        "../../tests/integration/signal-hub/connection.test.ts"
+      ],
+      "lineNumbers": [
+        40
+      ]
+    },
+    {
+      "id": "connection-req-5",
+      "domain": "connection",
+      "requirement": "Heartbeat Flow",
+      "spec": "connection/CONNECTION.spec.md#L55",
+      "priority": "P1",
+      "tested": true,
+      "testFiles": [
+        "../../tests/integration/signal-hub/connection.test.ts"
+      ],
+      "lineNumbers": [
+        216
+      ]
+    },
+    {
+      "id": "connection-req-6",
+      "domain": "connection",
+      "requirement": "Graceful Disconnection",
+      "spec": "connection/CONNECTION.spec.md#L73",
+      "priority": "P1",
+      "tested": true,
+      "testFiles": [
+        "../../tests/integration/signal-hub/connection.test.ts"
+      ],
+      "lineNumbers": [
+        70
+      ]
+    },
+    {
+      "id": "connection-req-7",
+      "domain": "connection",
+      "requirement": "**Critical:** Server MUST send `hub:disconnect_ack` BEFORE closing WebSocket to ensure client receives acknowledgment.",
+      "spec": "connection/CONNECTION.spec.md#L89",
+      "priority": "P0",
+      "tested": true,
+      "testFiles": [
+        "../../tests/integration/signal-hub/connection.test.ts"
+      ],
+      "lineNumbers": [
+        72
+      ]
+    },
+    {
+      "id": "connection-req-8",
+      "domain": "connection",
+      "requirement": "Hibernation Behavior",
+      "spec": "connection/CONNECTION.spec.md#L91",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "connection-req-9",
+      "domain": "connection",
+      "requirement": "Authentication",
+      "spec": "connection/CONNECTION.spec.md#L109",
+      "priority": "P1",
+      "tested": true,
+      "testFiles": [
+        "../../tests/integration/signal-hub/connection.test.ts"
+      ],
+      "lineNumbers": [
+        55
+      ]
+    },
+    {
+      "id": "connection-req-10",
+      "domain": "connection",
+      "requirement": "JWT Structure",
+      "spec": "connection/CONNECTION.spec.md#L119",
+      "priority": "P1",
+      "tested": true,
+      "testFiles": [
+        "../../tests/integration/signal-hub/connection.test.ts"
+      ],
+      "lineNumbers": [
+        55
+      ]
+    },
+    {
+      "id": "connection-req-11",
+      "domain": "connection",
+      "requirement": "Error Scenarios",
+      "spec": "connection/CONNECTION.spec.md#L131",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "connection-req-12",
+      "domain": "connection",
+      "requirement": "Version Mismatch",
+      "spec": "connection/CONNECTION.spec.md#L133",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "connection-req-13",
+      "domain": "connection",
+      "requirement": "Invalid JWT",
+      "spec": "connection/CONNECTION.spec.md#L151",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "connection-req-14",
+      "domain": "connection",
+      "requirement": "Heartbeat Timeout",
+      "spec": "connection/CONNECTION.spec.md#L166",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "connection-req-15",
+      "domain": "connection",
+      "requirement": "Cleanup Protocol",
+      "spec": "connection/CONNECTION.spec.md#L176",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "connection-req-16",
+      "domain": "connection",
+      "requirement": "On Graceful Disconnect (hub:disconnect)",
+      "spec": "connection/CONNECTION.spec.md#L178",
+      "priority": "P1",
+      "tested": true,
+      "testFiles": [
+        "../../tests/integration/signal-hub/connection.test.ts"
+      ],
+      "lineNumbers": [
+        71
+      ]
+    },
+    {
+      "id": "connection-req-17",
+      "domain": "connection",
+      "requirement": "On Abnormal Disconnect (WebSocket close)",
+      "spec": "connection/CONNECTION.spec.md#L188",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "connection-req-18",
+      "domain": "connection",
+      "requirement": "Scenarios",
+      "spec": "connection/CONNECTION.spec.md#L197",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "connection-req-19",
+      "domain": "connection",
+      "requirement": "Cross-References",
+      "spec": "connection/CONNECTION.spec.md#L206",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "connection-req-20",
+      "domain": "connection",
+      "requirement": "Configuration",
+      "spec": "connection/CONNECTION.spec.md#L212",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "registration-req-1",
+      "domain": "registration",
+      "requirement": "Message Types",
+      "spec": "registration/REGISTRATION.spec.md#L24",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "registration-req-2",
+      "domain": "registration",
+      "requirement": "Registration Flow",
+      "spec": "registration/REGISTRATION.spec.md#L28",
+      "priority": "P1",
+      "tested": true,
+      "testFiles": [
+        "src/handlers/__tests__/registration.test.ts"
+      ],
+      "lineNumbers": [
+        38
+      ]
+    },
+    {
+      "id": "registration-req-3",
+      "domain": "registration",
+      "requirement": "Renewal Flow",
+      "spec": "registration/REGISTRATION.spec.md#L73",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "registration-req-4",
+      "domain": "registration",
+      "requirement": "Unregistration Flow",
+      "spec": "registration/REGISTRATION.spec.md#L113",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "registration-req-5",
+      "domain": "registration",
+      "requirement": "Discovery Flow",
+      "spec": "registration/REGISTRATION.spec.md#L128",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "registration-req-6",
+      "domain": "registration",
+      "requirement": "TTL and Expiration",
+      "spec": "registration/REGISTRATION.spec.md#L178",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "registration-req-7",
+      "domain": "registration",
+      "requirement": "- Client MUST renew before expiration to stay registered",
+      "spec": "registration/REGISTRATION.spec.md#L187",
+      "priority": "P0",
+      "tested": true,
+      "testFiles": [
+        "../../tests/integration/signal-hub/connection.test.ts"
+      ],
+      "lineNumbers": [
+        72
+      ]
+    },
+    {
+      "id": "registration-req-8",
+      "domain": "registration",
+      "requirement": "Renewal Token Rotation",
+      "spec": "registration/REGISTRATION.spec.md#L198",
+      "priority": "P1",
+      "tested": true,
+      "testFiles": [
+        "src/handlers/__tests__/registration.test.ts"
+      ],
+      "lineNumbers": [
+        40
+      ]
+    },
+    {
+      "id": "registration-req-9",
+      "domain": "registration",
+      "requirement": "Registry Limits",
+      "spec": "registration/REGISTRATION.spec.md#L212",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "registration-req-10",
+      "domain": "registration",
+      "requirement": "Error Scenarios",
+      "spec": "registration/REGISTRATION.spec.md#L220",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "registration-req-11",
+      "domain": "registration",
+      "requirement": "Duplicate Registration",
+      "spec": "registration/REGISTRATION.spec.md#L222",
+      "priority": "P1",
+      "tested": true,
+      "testFiles": [
+        "src/handlers/__tests__/registration.test.ts"
+      ],
+      "lineNumbers": [
+        71
+      ]
+    },
+    {
+      "id": "registration-req-12",
+      "domain": "registration",
+      "requirement": "Invalid Renewal Token",
+      "spec": "registration/REGISTRATION.spec.md#L242",
+      "priority": "P1",
+      "tested": true,
+      "testFiles": [
+        "src/handlers/__tests__/registration.test.ts"
+      ],
+      "lineNumbers": [
+        40
+      ]
+    },
+    {
+      "id": "registration-req-13",
+      "domain": "registration",
+      "requirement": "Actor Not Found (Renewal)",
+      "spec": "registration/REGISTRATION.spec.md#L262",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "registration-req-14",
+      "domain": "registration",
+      "requirement": "Discovery Filtering",
+      "spec": "registration/REGISTRATION.spec.md#L281",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "registration-req-15",
+      "domain": "registration",
+      "requirement": "Cleanup Protocol",
+      "spec": "registration/REGISTRATION.spec.md#L301",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "registration-req-16",
+      "domain": "registration",
+      "requirement": "On Graceful Disconnect",
+      "spec": "registration/REGISTRATION.spec.md#L303",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "registration-req-17",
+      "domain": "registration",
+      "requirement": "On Abnormal Disconnect",
+      "spec": "registration/REGISTRATION.spec.md#L314",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "registration-req-18",
+      "domain": "registration",
+      "requirement": "On TTL Expiration",
+      "spec": "registration/REGISTRATION.spec.md#L324",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "registration-req-19",
+      "domain": "registration",
+      "requirement": "Cross-References",
+      "spec": "registration/REGISTRATION.spec.md#L335",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "registration-req-20",
+      "domain": "registration",
+      "requirement": "Implementation Notes",
+      "spec": "registration/REGISTRATION.spec.md#L341",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "messaging-req-1",
+      "domain": "messaging",
+      "requirement": "Message Types",
+      "spec": "messaging/MESSAGING.spec.md#L24",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "messaging-req-2",
+      "domain": "messaging",
+      "requirement": "Point-to-Point Delivery (hub:send)",
+      "spec": "messaging/MESSAGING.spec.md#L28",
+      "priority": "P1",
+      "tested": true,
+      "testFiles": [
+        "../../tests/integration/signal-hub/messaging.test.ts"
+      ],
+      "lineNumbers": [
+        56
+      ]
+    },
+    {
+      "id": "messaging-req-3",
+      "domain": "messaging",
+      "requirement": "Broadcast Delivery",
+      "spec": "messaging/MESSAGING.spec.md#L87",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "messaging-req-4",
+      "domain": "messaging",
+      "requirement": "Message Size Limits",
+      "spec": "messaging/MESSAGING.spec.md#L133",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "messaging-req-5",
+      "domain": "messaging",
+      "requirement": "Flat Payload Structure",
+      "spec": "messaging/MESSAGING.spec.md#L165",
+      "priority": "P1",
+      "tested": true,
+      "testFiles": [
+        "../../tests/integration/signal-hub/pubsub.test.ts",
+        "../../tests/integration/signal-hub/messaging.test.ts"
+      ],
+      "lineNumbers": [
+        61,
+        60
+      ]
+    },
+    {
+      "id": "messaging-req-6",
+      "domain": "messaging",
+      "requirement": "Error Scenarios",
+      "spec": "messaging/MESSAGING.spec.md#L201",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "messaging-req-7",
+      "domain": "messaging",
+      "requirement": "Unknown Actor",
+      "spec": "messaging/MESSAGING.spec.md#L203",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "messaging-req-8",
+      "domain": "messaging",
+      "requirement": "Expired Registration",
+      "spec": "messaging/MESSAGING.spec.md#L221",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "messaging-req-9",
+      "domain": "messaging",
+      "requirement": "Connection Not Found",
+      "spec": "messaging/MESSAGING.spec.md#L240",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "messaging-req-10",
+      "domain": "messaging",
+      "requirement": "Delivery Guarantees",
+      "spec": "messaging/MESSAGING.spec.md#L257",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "messaging-req-11",
+      "domain": "messaging",
+      "requirement": "Message Patterns",
+      "spec": "messaging/MESSAGING.spec.md#L275",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "messaging-req-12",
+      "domain": "messaging",
+      "requirement": "Ask Pattern (Request-Response)",
+      "spec": "messaging/MESSAGING.spec.md#L277",
+      "priority": "P1",
+      "tested": true,
+      "testFiles": [
+        "../../tests/integration/signal-hub/messaging.test.ts"
+      ],
+      "lineNumbers": [
+        78
+      ]
+    },
+    {
+      "id": "messaging-req-13",
+      "domain": "messaging",
+      "requirement": "Tell Pattern (Fire-and-Forget)",
+      "spec": "messaging/MESSAGING.spec.md#L291",
+      "priority": "P1",
+      "tested": true,
+      "testFiles": [
+        "../../tests/integration/signal-hub/messaging.test.ts"
+      ],
+      "lineNumbers": [
+        57
+      ]
+    },
+    {
+      "id": "messaging-req-14",
+      "domain": "messaging",
+      "requirement": "Cross-References",
+      "spec": "messaging/MESSAGING.spec.md#L306",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "messaging-req-15",
+      "domain": "messaging",
+      "requirement": "Implementation Notes",
+      "spec": "messaging/MESSAGING.spec.md#L313",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "pubsub-req-1",
+      "domain": "pubsub",
+      "requirement": "Message Types",
+      "spec": "pubsub/PUBSUB.spec.md#L25",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "pubsub-req-2",
+      "domain": "pubsub",
+      "requirement": "Subscription Flow",
+      "spec": "pubsub/PUBSUB.spec.md#L29",
+      "priority": "P1",
+      "tested": true,
+      "testFiles": [
+        "../../tests/integration/signal-hub/pubsub.test.ts"
+      ],
+      "lineNumbers": [
+        57
+      ]
+    },
+    {
+      "id": "pubsub-req-3",
+      "domain": "pubsub",
+      "requirement": "Publish Flow",
+      "spec": "pubsub/PUBSUB.spec.md#L67",
+      "priority": "P1",
+      "tested": true,
+      "testFiles": [
+        "../../tests/integration/signal-hub/pubsub.test.ts"
+      ],
+      "lineNumbers": [
+        58
+      ]
+    },
+    {
+      "id": "pubsub-req-4",
+      "domain": "pubsub",
+      "requirement": "Unsubscribe Flow",
+      "spec": "pubsub/PUBSUB.spec.md#L129",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "pubsub-req-5",
+      "domain": "pubsub",
+      "requirement": "Topic Naming",
+      "spec": "pubsub/PUBSUB.spec.md#L166",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "pubsub-req-6",
+      "domain": "pubsub",
+      "requirement": "Topic Matching",
+      "spec": "pubsub/PUBSUB.spec.md#L201",
+      "priority": "P1",
+      "tested": true,
+      "testFiles": [
+        "../../tests/integration/signal-hub/pubsub.test.ts"
+      ],
+      "lineNumbers": [
+        81
+      ]
+    },
+    {
+      "id": "pubsub-req-7",
+      "domain": "pubsub",
+      "requirement": "Flat Payload Structure",
+      "spec": "pubsub/PUBSUB.spec.md#L212",
+      "priority": "P1",
+      "tested": true,
+      "testFiles": [
+        "../../tests/integration/signal-hub/pubsub.test.ts",
+        "../../tests/integration/signal-hub/messaging.test.ts"
+      ],
+      "lineNumbers": [
+        61,
+        60
+      ]
+    },
+    {
+      "id": "pubsub-req-8",
+      "domain": "pubsub",
+      "requirement": "Subscription Storage",
+      "spec": "pubsub/PUBSUB.spec.md#L238",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "pubsub-req-9",
+      "domain": "pubsub",
+      "requirement": "Cleanup Protocol",
+      "spec": "pubsub/PUBSUB.spec.md#L264",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "pubsub-req-10",
+      "domain": "pubsub",
+      "requirement": "On hub:unsubscribe",
+      "spec": "pubsub/PUBSUB.spec.md#L266",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "pubsub-req-11",
+      "domain": "pubsub",
+      "requirement": "On Actor Unregister",
+      "spec": "pubsub/PUBSUB.spec.md#L273",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "pubsub-req-12",
+      "domain": "pubsub",
+      "requirement": "On Connection Close",
+      "spec": "pubsub/PUBSUB.spec.md#L280",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "pubsub-req-13",
+      "domain": "pubsub",
+      "requirement": "Subscriber Limits",
+      "spec": "pubsub/PUBSUB.spec.md#L289",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "pubsub-req-14",
+      "domain": "pubsub",
+      "requirement": "Delivery Guarantees",
+      "spec": "pubsub/PUBSUB.spec.md#L303",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "pubsub-req-15",
+      "domain": "pubsub",
+      "requirement": "Error Scenarios",
+      "spec": "pubsub/PUBSUB.spec.md#L322",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "pubsub-req-16",
+      "domain": "pubsub",
+      "requirement": "Invalid Topic Name",
+      "spec": "pubsub/PUBSUB.spec.md#L324",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "pubsub-req-17",
+      "domain": "pubsub",
+      "requirement": "Missing payload.type on Publish",
+      "spec": "pubsub/PUBSUB.spec.md#L343",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "pubsub-req-18",
+      "domain": "pubsub",
+      "requirement": "Topic Discovery",
+      "spec": "pubsub/PUBSUB.spec.md#L359",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "pubsub-req-19",
+      "domain": "pubsub",
+      "requirement": "Cross-References",
+      "spec": "pubsub/PUBSUB.spec.md#L374",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "id": "pubsub-req-20",
+      "domain": "pubsub",
+      "requirement": "Implementation Notes",
+      "spec": "pubsub/PUBSUB.spec.md#L381",
+      "priority": "P1",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    }
+  ],
+  "messageTypes": [
+    {
+      "name": "hub:connect",
+      "tested": true,
+      "testFiles": [
+        "src/validation/__tests__/schema-validator.test.ts",
+        "src/handlers/__tests__/connection.test.ts"
+      ],
+      "lineNumbers": [
+        66,
+        47
+      ]
+    },
+    {
+      "name": "hub:connected",
+      "tested": true,
+      "testFiles": [
+        "src/validation/__tests__/schema-validator.test.ts",
+        "src/handlers/__tests__/connection.test.ts"
+      ],
+      "lineNumbers": [
+        162,
+        62
+      ]
+    },
+    {
+      "name": "hub:disconnect",
+      "tested": true,
+      "testFiles": [
+        "../../tests/integration/signal-hub/connection-lifecycle.test.ts"
+      ],
+      "lineNumbers": [
+        45
+      ]
+    },
+    {
+      "name": "hub:disconnect_ack",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "name": "hub:heartbeat",
+      "tested": true,
+      "testFiles": [
+        "src/handlers/__tests__/connection.test.ts"
+      ],
+      "lineNumbers": [
+        143
+      ]
+    },
+    {
+      "name": "hub:heartbeat_ack",
+      "tested": true,
+      "testFiles": [
+        "src/handlers/__tests__/connection.test.ts"
+      ],
+      "lineNumbers": [
+        156
+      ]
+    },
+    {
+      "name": "hub:error",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "name": "hub:register",
+      "tested": true,
+      "testFiles": [
+        "src/handlers/__tests__/registration.test.ts"
+      ],
+      "lineNumbers": [
+        46
+      ]
+    },
+    {
+      "name": "hub:registered",
+      "tested": true,
+      "testFiles": [
+        "src/handlers/__tests__/registration.test.ts"
+      ],
+      "lineNumbers": [
+        63
+      ]
+    },
+    {
+      "name": "hub:renew",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "name": "hub:renewed",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "name": "hub:unregister",
+      "tested": true,
+      "testFiles": [
+        "src/handlers/__tests__/registration.test.ts"
+      ],
+      "lineNumbers": [
+        135
+      ]
+    },
+    {
+      "name": "hub:unregistered",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "name": "hub:discover",
+      "tested": true,
+      "testFiles": [
+        "src/handlers/__tests__/registration.test.ts"
+      ],
+      "lineNumbers": [
+        193
+      ]
+    },
+    {
+      "name": "hub:discovery_result",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "name": "hub:send",
+      "tested": true,
+      "testFiles": [
+        "src/handlers/__tests__/messaging.test.ts"
+      ],
+      "lineNumbers": [
+        86
+      ]
+    },
+    {
+      "name": "hub:delivery_ack",
+      "tested": true,
+      "testFiles": [
+        "src/handlers/__tests__/messaging.test.ts",
+        "../../tests/integration/signal-hub/messaging.test.ts"
+      ],
+      "lineNumbers": [
+        104,
+        100
+      ]
+    },
+    {
+      "name": "hub:broadcast",
+      "tested": true,
+      "testFiles": [
+        "src/handlers/__tests__/messaging.test.ts"
+      ],
+      "lineNumbers": [
+        305
+      ]
+    },
+    {
+      "name": "hub:subscribe",
+      "tested": true,
+      "testFiles": [
+        "src/handlers/__tests__/pubsub.test.ts"
+      ],
+      "lineNumbers": [
+        55
+      ]
+    },
+    {
+      "name": "hub:subscribed",
+      "tested": true,
+      "testFiles": [
+        "src/handlers/__tests__/pubsub.test.ts"
+      ],
+      "lineNumbers": [
+        69
+      ]
+    },
+    {
+      "name": "hub:unsubscribe",
+      "tested": true,
+      "testFiles": [
+        "src/handlers/__tests__/pubsub.test.ts"
+      ],
+      "lineNumbers": [
+        386
+      ]
+    },
+    {
+      "name": "hub:unsubscribed",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "name": "hub:publish",
+      "tested": true,
+      "testFiles": [
+        "src/handlers/__tests__/pubsub.test.ts"
+      ],
+      "lineNumbers": [
+        193
+      ]
+    },
+    {
+      "name": "hub:pause",
+      "tested": true,
+      "testFiles": [
+        "src/handlers/__tests__/flowcontrol.test.ts"
+      ],
+      "lineNumbers": [
+        104
+      ]
+    },
+    {
+      "name": "hub:paused",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    },
+    {
+      "name": "hub:resume",
+      "tested": true,
+      "testFiles": [
+        "src/handlers/__tests__/flowcontrol.test.ts"
+      ],
+      "lineNumbers": [
+        124
+      ]
+    },
+    {
+      "name": "hub:resumed",
+      "tested": false,
+      "testFiles": [],
+      "lineNumbers": []
+    }
+  ],
+  "errorConditions": [
+    {
+      "name": "Version mismatch",
+      "code": "version_mismatch",
+      "tested": false,
+      "testFiles": []
+    },
+    {
+      "name": "Invalid JWT",
+      "code": "unauthorized",
+      "tested": true,
+      "testFiles": [
+        "src/validation/__tests__/schema-validator.test.ts",
+        "../../tests/integration/signal-hub/errors.test.ts"
+      ]
+    },
+    {
+      "name": "Heartbeat timeout",
+      "tested": false,
+      "testFiles": []
+    },
+    {
+      "name": "Unknown actor",
+      "code": "unknown_actor",
+      "tested": true,
+      "testFiles": [
+        "src/handlers/__tests__/messaging.test.ts",
+        "../../tests/integration/signal-hub/session-identity.test.ts",
+        "../../tests/integration/signal-hub/errors.test.ts"
+      ]
+    },
+    {
+      "name": "Message too large",
+      "code": "message_too_large",
+      "tested": true,
+      "testFiles": [
+        "../../tests/integration/signal-hub/errors.test.ts"
+      ]
+    },
+    {
+      "name": "Rate limited",
+      "code": "rate_limited",
+      "tested": false,
+      "testFiles": []
+    },
+    {
+      "name": "Invalid message format",
+      "code": "invalid_message",
+      "tested": true,
+      "testFiles": [
+        "../../tests/integration/signal-hub/errors.test.ts"
+      ]
+    },
+    {
+      "name": "Missing required fields",
+      "tested": false,
+      "testFiles": []
+    }
+  ],
+  "stateTransitions": [
+    {
+      "from": "connecting",
+      "event": "hub:connect (valid)",
+      "to": "connected",
+      "tested": true,
+      "testFiles": [
+        "../../tests/integration/signal-hub/connection.test.ts"
+      ]
+    },
+    {
+      "from": "connecting",
+      "event": "hub:connect (invalid)",
+      "to": "connecting",
+      "tested": true,
+      "testFiles": [
+        "../../tests/integration/signal-hub/connection.test.ts"
+      ]
+    },
+    {
+      "from": "connected",
+      "event": "hub:disconnect",
+      "to": "disconnecting",
+      "tested": true,
+      "testFiles": [
+        "../../tests/integration/signal-hub/connection.test.ts",
+        "../../tests/integration/signal-hub/connection-lifecycle.test.ts"
+      ]
+    },
+    {
+      "from": "disconnecting",
+      "event": "cleanup complete",
+      "to": "disconnected",
+      "tested": false,
+      "testFiles": []
+    },
+    {
+      "from": "connected",
+      "event": "WebSocket close",
+      "to": "disconnected",
+      "tested": true,
+      "testFiles": [
+        "../../tests/integration/signal-hub/connection.test.ts",
+        "../../tests/integration/signal-hub/connection-lifecycle.test.ts",
+        "../../tests/integration/signal-hub/errors.test.ts"
+      ]
+    },
+    {
+      "from": "connected",
+      "event": "heartbeat timeout",
+      "to": "disconnected",
+      "tested": true,
+      "testFiles": [
+        "../../tests/integration/signal-hub/connection.test.ts",
+        "../../tests/integration/signal-hub/connection-lifecycle.test.ts",
+        "../../tests/integration/signal-hub/errors.test.ts"
+      ]
+    }
+  ]
+}
