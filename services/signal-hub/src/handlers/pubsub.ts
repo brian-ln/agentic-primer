@@ -7,11 +7,10 @@
 import type {
   SharedMessage,
   CanonicalAddress,
-  TopicSubscription,
   ActorRegistration,
 } from '../types';
 import { HubError } from '../types';
-import { createReply, createMessage, toCanonicalAddress, isExpired } from '../utils';
+import { createReply, toCanonicalAddress, isExpired } from '../utils';
 
 const SIGNAL_HUB_ADDRESS = toCanonicalAddress('cloudflare/signal-hub');
 

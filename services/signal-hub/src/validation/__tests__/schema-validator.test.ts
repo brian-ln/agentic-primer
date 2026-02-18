@@ -14,7 +14,6 @@ import {
   getValidationMode,
   getValidator,
   resetValidator,
-  type ValidationMode,
 } from '../schema-validator';
 import type { SharedMessage } from '../../types';
 
