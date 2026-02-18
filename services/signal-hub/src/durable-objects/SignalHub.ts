@@ -22,6 +22,7 @@ import {
   consumeToken,
 } from '../utils';
 import { getValidator } from '../validation/schema-validator';
+import { getFSMValidator } from '../validation/fsm-validator';
 
 // Handlers
 import { handleConnect, handleHeartbeat, handleDisconnect } from '../handlers/connection';
@@ -87,10 +88,14 @@ export class SignalHub implements DurableObject {
     // Log validation mode on startup
     const validator = getValidator();
     const mode = validator.getMode();
+    const fsmValidator = getFSMValidator();
+    const fsmMode = fsmValidator.getMode();
     console.log(JSON.stringify({
       event: 'signalhub_initialized',
       validationMode: mode.mode,
       validationFailOnError: mode.failOnError,
+      fsmValidationMode: fsmMode.mode,
+      fsmValidationFailOnError: fsmMode.failOnError,
       timestamp: Date.now(),
     }));
   }
@@ -132,6 +137,41 @@ export class SignalHub implements DurableObject {
 
     // Send message
     ws.send(JSON.stringify(message));
+  }
+
+  /**
+   * Transition connection state with FSM validation
+   *
+   * Validates state transition against state machine specification:
+   * - Test mode: throws on illegal transition
+   * - Production: logs warning but continues
+   *
+   * @param session - Session to update
+   * @param fromState - Current state (for validation)
+   * @param toState - Target state
+   * @param event - Event triggering the transition
+   */
+  private transitionState(
+    session: Session,
+    fromState: ConnectionState,
+    toState: ConnectionState,
+    event: string
+  ): void {
+    // FSM VALIDATION: State transition
+    const fsmValidator = getFSMValidator();
+    fsmValidator.isValidTransition(fromState, toState, event);
+
+    // Update state
+    session.connectionState = toState;
+
+    console.log(JSON.stringify({
+      event: 'state_transition',
+      sessionId: session.sessionId,
+      fromState,
+      toState,
+      transitionEvent: event,
+      timestamp: Date.now(),
+    }));
   }
 
   /**
@@ -274,23 +314,38 @@ export class SignalHub implements DurableObject {
 
     // Connection lifecycle
     if (messageType === 'hub:connect') {
-      const response = await handleConnect(msg, session, this.env);
+      try {
+        const response = await handleConnect(msg, session, this.env);
 
-      // Update connection state to connected
-      session.connectionState = 'connected';
+        // Transition: connecting → connected (hub:connect_success)
+        this.transitionState(session, 'connecting', 'connected', 'hub:connect_success');
 
-      // Store connection after successful connect
-      this.connections.set(session.sessionId, ws);
+        // Store connection after successful connect
+        this.connections.set(session.sessionId, ws);
 
-      console.log(JSON.stringify({
-        event: 'actor_connected',
-        sessionId: session.sessionId,
-        actorIdentity: session.actorIdentity,
-        connectionState: session.connectionState,
-        timestamp: Date.now(),
-      }));
+        console.log(JSON.stringify({
+          event: 'actor_connected',
+          sessionId: session.sessionId,
+          actorIdentity: session.actorIdentity,
+          connectionState: session.connectionState,
+          timestamp: Date.now(),
+        }));
 
-      return response;
+        return response;
+      } catch (err) {
+        // Transition: connecting → disconnected (hub:connect_fail)
+        this.transitionState(session, 'connecting', 'disconnected', 'hub:connect_fail');
+
+        console.log(JSON.stringify({
+          event: 'connect_failed',
+          sessionId: session.sessionId,
+          error: err instanceof Error ? err.message : 'Unknown error',
+          timestamp: Date.now(),
+        }));
+
+        // Re-throw to be caught by outer error handler
+        throw err;
+      }
     }
 
     // Check authentication for subsequent messages (if auth enabled)
@@ -312,8 +367,8 @@ export class SignalHub implements DurableObject {
         timestamp: Date.now(),
       }));
 
-      // Update connection state
-      session.connectionState = 'disconnecting';
+      // Transition: connected → disconnecting (hub:disconnect)
+      this.transitionState(session, 'connected', 'disconnecting', 'hub:disconnect');
 
       const response = handleDisconnect(msg, session);
 
@@ -552,9 +607,14 @@ export class SignalHub implements DurableObject {
   private cleanupConnection(ws: WebSocket, session: Session): void {
     const now = Date.now();
     const sessionDuration = now - session.connectedAt;
+    const fromState = session.connectionState;
 
-    // Update session state
-    session.connectionState = 'disconnected';
+    // Transition to disconnected based on current state
+    // Valid transitions: connecting→disconnected, connected→disconnected, disconnecting→disconnected
+    if (fromState !== 'disconnected') {
+      this.transitionState(session, fromState, 'disconnected', 'websocket_close');
+    }
+
     session.disconnectedAt = now;
 
     console.log(JSON.stringify({
