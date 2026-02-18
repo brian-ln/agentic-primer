@@ -248,6 +248,7 @@ describe('Schema Validator', () => {
       const validErrorResponse = {
         code: 'unauthorized',
         message: 'Invalid JWT token',
+        resolution: 'Try sending a hub:connect message with a valid authToken before other operations.',
         details: {
           reason: 'Token expired',
         },
@@ -262,7 +263,19 @@ describe('Schema Validator', () => {
     it('should throw on invalid error response - missing required fields', () => {
       const invalidErrorResponse = {
         code: 'unauthorized',
-        // Missing 'message' field (required)
+        // Missing 'message' and 'resolution' fields (required)
+      };
+
+      expect(() => {
+        validator.validateErrorResponse(invalidErrorResponse);
+      }).toThrow(/Error response validation failed/);
+    });
+
+    it('should throw on invalid error response - missing resolution field', () => {
+      const invalidErrorResponse = {
+        code: 'unauthorized',
+        message: 'Invalid JWT token',
+        // Missing 'resolution' field (required)
       };
 
       expect(() => {
@@ -274,6 +287,7 @@ describe('Schema Validator', () => {
       const invalidErrorResponse = {
         code: 'invalid_code', // Not in enum
         message: 'Test error',
+        resolution: 'Try using a valid error code.',
       };
 
       expect(() => {
@@ -285,6 +299,7 @@ describe('Schema Validator', () => {
       const invalidErrorResponse = {
         code: 'internal_error',
         message: '', // minLength: 1
+        resolution: 'Try retrying the request.',
       };
 
       expect(() => {

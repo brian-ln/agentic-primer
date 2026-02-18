@@ -4,7 +4,7 @@
   "title": "Error Response",
   "description": "Standard error response format for all hub:error messages",
   "type": "object",
-  "required": ["code", "message"],
+  "required": ["code", "message", "resolution"],
   "properties": {
     "code": {
       "type": "string",
@@ -16,13 +16,19 @@
         "message_too_large",
         "message_expired",
         "timeout",
-        "internal_error"
+        "internal_error",
+        "invalid_token"
       ],
       "description": "Error code for programmatic handling"
     },
     "message": {
       "type": "string",
       "description": "Human-readable error message",
+      "minLength": 1
+    },
+    "resolution": {
+      "type": "string",
+      "description": "Actionable hint for resolving the error",
       "minLength": 1
     },
     "details": {

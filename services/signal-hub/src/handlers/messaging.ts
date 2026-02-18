@@ -132,6 +132,7 @@ export function handleSend(
         {
           code: 'internal_error',
           message: 'Target actor connection not found',
+          resolution: 'Try retrying the request; if the error recurs contact the hub operator.',
           retryable: false,
         },
         msg,
@@ -191,6 +192,7 @@ export function handleSend(
         {
           code: 'internal_error',
           message: 'Failed to deliver message to target actor',
+          resolution: 'Try retrying the request; if the error recurs contact the hub operator.',
           details: { error: err instanceof Error ? err.message : 'unknown' },
           retryable: true,
         },
@@ -214,13 +216,24 @@ export function handleSend(
  *     data: { reason: 'maintenance' }  // Application data
  *   }
  * }
+ *
+ * Performance optimization: the invariant message body (including the
+ * potentially large payload.data) is serialized to JSON exactly once.
+ * Per-recipient fields (id, to) are prepended as a small prefix string,
+ * keeping serialization cost O(1) regardless of recipient count.
+ *
+ * When sendRaw is provided (production path), the pre-built JSON string is
+ * sent directly to each WebSocket without re-serialization. When only
+ * sendMessage is provided (test/fallback path), a standard SharedMessage
+ * object is passed per recipient.
  */
 export function handleBroadcast(
   msg: SharedMessage,
   registry: Map<string, ActorRegistration>,
   connections: Map<string, WebSocket>,
   env: Env,
-  sendMessage: (ws: WebSocket, message: SharedMessage) => void
+  sendMessage: (ws: WebSocket, message: SharedMessage) => void,
+  sendRaw?: (ws: WebSocket, raw: string) => void
 ): SharedMessage {
   const payload = msg.payload as {
     type: string;
@@ -288,6 +301,7 @@ export function handleBroadcast(
       {
         code: 'BROADCAST_LIMIT_EXCEEDED',
         message: `Broadcast recipient count (${targets.length}) exceeds maximum allowed (${MAX_BROADCAST_RECIPIENTS})`,
+        resolution: 'Try narrowing the broadcast target using capability filters to reduce the recipient count.',
       },
       msg,
       SIGNAL_HUB_ADDRESS
@@ -297,17 +311,18 @@ export function handleBroadcast(
   let deliveredCount = 0;
   let failedCount = 0;
 
-  // Create broadcast message with flat structure
-  // CRITICAL: Use original sender as 'from', not SIGNAL_HUB_ADDRESS
+  // Create broadcast message template with flat structure.
+  // CRITICAL: Use original sender as 'from', not SIGNAL_HUB_ADDRESS.
+  const timestamp = Date.now();
   const broadcastMessage: SharedMessage = {
-    id: crypto.randomUUID(),
-    from: msg.from, // Use original sender, NOT the hub
-    to: toCanonicalAddress('broadcast/all'), // Placeholder
-    type: payload.type, // Application type from payload.type
-    payload: payload.data, // Application data from payload.data
+    id: crypto.randomUUID(), // placeholder — overridden per recipient
+    from: msg.from,
+    to: toCanonicalAddress('broadcast/all'), // placeholder — overridden per recipient
+    type: payload.type,
+    payload: payload.data,
     pattern: 'tell',
     correlationId: msg.id,
-    timestamp: Date.now(),
+    timestamp,
     metadata: {
       broadcast: true,
       via: SIGNAL_HUB_ADDRESS,
@@ -316,27 +331,79 @@ export function handleBroadcast(
     signature: null,
   };
 
-  // Send to all targets
-  for (const target of targets) {
-    const ws = connections.get(target.connectionId);
-    if (!ws) {
-      failedCount++;
-      continue;
+  if (sendRaw) {
+    // --- Stringify-once fast path ---
+    // Serialize the invariant body (all fields except id and to) exactly once.
+    // The JSON object is built with id/to as the first two keys so we can
+    // replace only the leading portion for each recipient via string prefix.
+    //
+    // Serialized layout:
+    //   {"id":"<uuid>","to":"<addr>","from":...,"type":...,"payload":...,...}
+    //                               ^--- suffix is invariant for all recipients
+    //
+    // We pre-serialize the suffix (everything after the variant id+to prefix)
+    // so that payload.data — which may be large — is only JSON.stringified once.
+    const invariantSuffix = JSON.stringify({
+      from: broadcastMessage.from,
+      type: broadcastMessage.type,
+      payload: broadcastMessage.payload,
+      pattern: broadcastMessage.pattern,
+      correlationId: broadcastMessage.correlationId,
+      timestamp: broadcastMessage.timestamp,
+      metadata: broadcastMessage.metadata,
+      ttl: broadcastMessage.ttl,
+      signature: broadcastMessage.signature,
+    });
+    // invariantSuffix starts with "{" — we'll strip it and prepend the variant prefix
+    const invariantTail = invariantSuffix.slice(1); // drop leading "{"
+
+    for (const target of targets) {
+      const ws = connections.get(target.connectionId);
+      if (!ws) {
+        failedCount++;
+        continue;
+      }
+
+      try {
+        const recipientId = crypto.randomUUID();
+        // Build full JSON: {"id":"<id>","to":"<addr>",<invariantTail>}
+        const raw =
+          '{"id":' +
+          JSON.stringify(recipientId) +
+          ',"to":' +
+          JSON.stringify(target.actorAddress) +
+          ',' +
+          invariantTail;
+
+        sendRaw(ws, raw);
+        deliveredCount++;
+      } catch (err) {
+        console.error('[handleBroadcast] Failed to broadcast to', target.actorAddress, ':', err);
+        failedCount++;
+      }
     }
+  } else {
+    // --- Standard path (tests / no sendRaw provided) ---
+    for (const target of targets) {
+      const ws = connections.get(target.connectionId);
+      if (!ws) {
+        failedCount++;
+        continue;
+      }
 
-    try {
-      // Update 'to' field for each recipient
-      const recipientMessage = {
-        ...broadcastMessage,
-        id: crypto.randomUUID(), // New ID per recipient
-        to: target.actorAddress,
-      };
+      try {
+        const recipientMessage = {
+          ...broadcastMessage,
+          id: crypto.randomUUID(),
+          to: target.actorAddress,
+        };
 
-      sendMessage(ws, recipientMessage);
-      deliveredCount++;
-    } catch (err) {
-      console.error('[handleBroadcast] Failed to broadcast to', target.actorAddress, ':', err);
-      failedCount++;
+        sendMessage(ws, recipientMessage);
+        deliveredCount++;
+      } catch (err) {
+        console.error('[handleBroadcast] Failed to broadcast to', target.actorAddress, ':', err);
+        failedCount++;
+      }
     }
   }
 

@@ -103,6 +103,27 @@ export function createReply(
 }
 
 /**
+ * Resolution hints for each error code.
+ * Provides a brief "try X" hint so clients can self-diagnose without consulting docs.
+ */
+const ERROR_RESOLUTION_HINTS: Record<string, string> = {
+  // HubErrorCode values
+  version_mismatch: 'Try upgrading your client to match the server protocol version, or check the serverVersion field in hub:connected.',
+  unauthorized: 'Try sending a hub:connect message with a valid authToken before other operations.',
+  rate_limited: 'Try slowing your message rate or wait for the retryAfter window before retrying.',
+  unknown_actor: 'Try registering the target actor with hub:register before sending messages to it.',
+  message_too_large: 'Try reducing the payload size; split large payloads into smaller batched messages.',
+  message_expired: 'Try resending the message with a fresh timestamp and updated TTL.',
+  timeout: 'Try retrying the request; if the issue persists check network connectivity.',
+  internal_error: 'Try retrying the request; if the error recurs contact the hub operator.',
+  invalid_token: 'Try refreshing your token with hub:refresh_token or reconnect with a new authToken.',
+  // String codes used in handlers (not in HubErrorCode union)
+  RATE_LIMIT_EXCEEDED: 'Try slowing your message rate or wait for the retryAfter window before retrying.',
+  MESSAGE_TOO_LARGE: 'Try reducing the payload size; split large payloads into smaller batched messages.',
+  BROADCAST_LIMIT_EXCEEDED: 'Try narrowing the broadcast target using capability filters to reduce the recipient count.',
+};
+
+/**
  * Create an error message
  */
 export function createErrorMessage(
@@ -112,11 +133,16 @@ export function createErrorMessage(
   from: CanonicalAddress,
   details?: Record<string, unknown>
 ): SharedMessage {
+  const resolution =
+    ERROR_RESOLUTION_HINTS[code] ??
+    'Try retrying the request; consult the Signal Hub documentation for this error code.';
+
   return createReply(
     'hub:error',
     {
       code,
       message,
+      resolution,
       details: details ?? {},
     },
     originalMessage,
