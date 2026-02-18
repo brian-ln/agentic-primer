@@ -523,9 +523,9 @@ export class SignalHub implements DurableObject {
    */
   async webSocketClose(
     ws: WebSocket,
-    code: number,
-    reason: string,
-    wasClean: boolean
+    _code: number,
+    _reason: string,
+    _wasClean: boolean
   ): Promise<void> {
     const session = this.sessions.get(ws);
     if (!session) {
@@ -559,7 +559,7 @@ export class SignalHub implements DurableObject {
   private handleDuplicateConnection(
     actorIdentity: CanonicalAddress,
     newSessionId: string,
-    newWs: WebSocket
+    _newWs: WebSocket
   ): void {
     log(this.env, 'handleDuplicateConnection_start', {
       actorIdentity,

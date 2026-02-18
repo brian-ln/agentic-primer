@@ -265,12 +265,9 @@ describe('Messaging Handlers - Expanded Coverage', () => {
         signature: null,
       };
 
-      // Should not throw, but response indicates failure
-      // The handler may return null or an error response
-      const response = handleSend(sendMsg, registry, connections, mockEnv, mockSendMessage);
-      // Actor is registered so no unknown_actor, but connection not found
-      // Response could be error or null - just ensure no exception
-      expect(true).toBe(true); // No throw is the key behavior
+      // Should not throw — actor registered, connection missing; key behavior is no exception
+      handleSend(sendMsg, registry, connections, mockEnv, mockSendMessage);
+      expect(true).toBe(true);
     });
 
     it('should handle tell pattern with unknown actor silently (no error)', () => {

@@ -119,9 +119,7 @@ export function handleHeartbeat(msg: SharedMessage, session: Session): SharedMes
 /**
  * Handle hub:disconnect message
  */
-export function handleDisconnect(msg: SharedMessage, session: Session): SharedMessage {
-  const payload = msg.payload as { reason?: string } | null;
-
+export function handleDisconnect(msg: SharedMessage, _session: Session): SharedMessage {
   // No response needed - connection will close
   return createReply('hub:disconnect', { acknowledged: true }, msg, SIGNAL_HUB_ADDRESS);
 }
