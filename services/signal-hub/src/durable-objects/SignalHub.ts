@@ -44,6 +44,7 @@ import {
   cleanupSubscriptions,
 } from '../handlers/pubsub';
 import { handleQueueStats } from '../handlers/flowcontrol';
+import { handleRefreshToken } from '../handlers/auth';
 
 const SIGNAL_HUB_ADDRESS = toCanonicalAddress('cloudflare/signal-hub');
 
@@ -65,6 +66,8 @@ export class SignalHub implements DurableObject {
   private connections: Map<string, WebSocket>;
   private registry: Map<string, ActorRegistration>;
   private subscriptions: Map<string, Set<CanonicalAddress>>;
+  /** Inverse index: actor address → set of subscribed topic names (O(S) disconnect cleanup) */
+  private actorTopics: Map<CanonicalAddress, Set<string>>;
   private queueStats: QueueStats;
 
   /**
@@ -87,6 +90,7 @@ export class SignalHub implements DurableObject {
     this.connections = new Map();
     this.registry = new Map();
     this.subscriptions = new Map();
+    this.actorTopics = new Map();
     this.queueStats = {
       pending: 0,
       processed: 0,
@@ -190,6 +194,20 @@ export class SignalHub implements DurableObject {
 
     // Send message
     ws.send(JSON.stringify(message));
+    this.metrics.messages_sent++;
+  }
+
+  /**
+   * Send a pre-serialized JSON string directly to a WebSocket.
+   *
+   * Used by handleBroadcast for the stringify-once optimization: the message
+   * body is serialized once outside this method, so we skip JSON.stringify here
+   * and send the raw string directly. Schema validation is intentionally skipped
+   * on this path since the payload was already validated when the broadcast
+   * message was constructed.
+   */
+  private sendRawMessage(ws: WebSocket, raw: string): void {
+    ws.send(raw);
     this.metrics.messages_sent++;
   }
 
@@ -480,7 +498,14 @@ export class SignalHub implements DurableObject {
     }
 
     if (messageType === 'hub:broadcast') {
-      return handleBroadcast(msg, this.registry, this.connections, this.env, this.sendMessage.bind(this));
+      return handleBroadcast(
+        msg,
+        this.registry,
+        this.connections,
+        this.env,
+        this.sendMessage.bind(this),
+        this.sendRawMessage.bind(this)
+      );
     }
 
     // Pub/sub
@@ -488,7 +513,7 @@ export class SignalHub implements DurableObject {
       if (!session.actorIdentity) {
         throw new HubError('unauthorized', 'Actor identity required for subscriptions');
       }
-      return handleSubscribe(msg, this.subscriptions, session.actorIdentity);
+      return handleSubscribe(msg, this.subscriptions, session.actorIdentity, this.actorTopics);
     }
 
     if (messageType === 'hub:publish') {
@@ -499,7 +524,7 @@ export class SignalHub implements DurableObject {
       if (!session.actorIdentity) {
         throw new HubError('unauthorized', 'Actor identity required for subscriptions');
       }
-      handleUnsubscribe(msg, this.subscriptions, session.actorIdentity);
+      handleUnsubscribe(msg, this.subscriptions, session.actorIdentity, this.actorTopics);
       return null; // Fire-and-forget
     }
 
@@ -512,6 +537,11 @@ export class SignalHub implements DurableObject {
     if (messageType === 'hub:metrics') {
       const metrics = this.getMetrics();
       return createReply('hub:metrics_response', metrics, msg, SIGNAL_HUB_ADDRESS);
+    }
+
+    // Authentication - token refresh for long-lived sessions
+    if (messageType === 'hub:refresh_token') {
+      return handleRefreshToken(msg, session, this.env);
     }
 
     // Unknown message type
@@ -651,9 +681,9 @@ export class SignalHub implements DurableObject {
       }
     }
 
-    // Cleanup subscriptions
+    // Cleanup subscriptions — O(S) with inverse index
     if (session.actorIdentity) {
-      cleanupSubscriptions(this.subscriptions, session.actorIdentity);
+      cleanupSubscriptions(this.subscriptions, session.actorIdentity, this.actorTopics);
     }
   }
 

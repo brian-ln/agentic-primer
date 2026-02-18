@@ -21,7 +21,8 @@ const SIGNAL_HUB_ADDRESS = toCanonicalAddress('cloudflare/signal-hub');
 export function handleSubscribe(
   msg: SharedMessage,
   subscriptions: Map<string, Set<CanonicalAddress>>,
-  actorAddress: CanonicalAddress
+  actorAddress: CanonicalAddress,
+  actorTopics?: Map<CanonicalAddress, Set<string>>
 ): SharedMessage {
   const payload = msg.payload as {
     topic: string;
@@ -43,6 +44,16 @@ export function handleSubscribe(
 
   // Add subscriber
   subscribers.add(actorAddress);
+
+  // Maintain inverse index: actorTopics[actor] -> Set<topic>
+  if (actorTopics) {
+    let topics = actorTopics.get(actorAddress);
+    if (!topics) {
+      topics = new Set<string>();
+      actorTopics.set(actorAddress, topics);
+    }
+    topics.add(topic);
+  }
 
   // Generate subscription ID
   const subscriptionId = `sub-${crypto.randomUUID()}`;
@@ -186,7 +197,8 @@ export function handlePublish(
 export function handleUnsubscribe(
   msg: SharedMessage,
   subscriptions: Map<string, Set<CanonicalAddress>>,
-  actorAddress: CanonicalAddress
+  actorAddress: CanonicalAddress,
+  actorTopics?: Map<CanonicalAddress, Set<string>>
 ): void {
   const payload = msg.payload as { topic: string };
 
@@ -211,21 +223,55 @@ export function handleUnsubscribe(
   if (subscribers.size === 0) {
     subscriptions.delete(topic);
   }
+
+  // Maintain inverse index: remove topic from actorTopics[actor]
+  if (actorTopics) {
+    const topics = actorTopics.get(actorAddress);
+    if (topics) {
+      topics.delete(topic);
+      if (topics.size === 0) {
+        actorTopics.delete(actorAddress);
+      }
+    }
+  }
 }
 
 /**
  * Remove all subscriptions for an actor (cleanup on disconnect)
+ *
+ * When actorTopics inverse index is provided, this runs in O(S) where S is
+ * the number of topics the actor is subscribed to, instead of O(T×S) where T
+ * is the total number of topics.
  */
 export function cleanupSubscriptions(
   subscriptions: Map<string, Set<CanonicalAddress>>,
-  actorAddress: CanonicalAddress
+  actorAddress: CanonicalAddress,
+  actorTopics?: Map<CanonicalAddress, Set<string>>
 ): void {
-  for (const [topic, subscribers] of subscriptions.entries()) {
-    subscribers.delete(actorAddress);
+  if (actorTopics) {
+    // O(S) fast path: use inverse index to find only topics this actor is in
+    const topics = actorTopics.get(actorAddress);
+    if (topics) {
+      for (const topic of topics) {
+        const subscribers = subscriptions.get(topic);
+        if (subscribers) {
+          subscribers.delete(actorAddress);
+          if (subscribers.size === 0) {
+            subscriptions.delete(topic);
+          }
+        }
+      }
+      actorTopics.delete(actorAddress);
+    }
+  } else {
+    // O(T×S) fallback: scan all topics (no inverse index available)
+    for (const [topic, subscribers] of subscriptions.entries()) {
+      subscribers.delete(actorAddress);
 
-    // Cleanup empty topic sets
-    if (subscribers.size === 0) {
-      subscriptions.delete(topic);
+      // Cleanup empty topic sets
+      if (subscribers.size === 0) {
+        subscriptions.delete(topic);
+      }
     }
   }
 }
