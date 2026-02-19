@@ -666,6 +666,91 @@
       },
       "required": ["messageSize", "maxSize"],
       "additionalProperties": false
+    },
+
+    "channel-error-code": {
+      "type": "string",
+      "description": "Error codes for binary channel operations",
+      "enum": [
+        "address_not_found",
+        "channel_id_collision",
+        "channel_not_open",
+        "actor_rejected",
+        "internal_error"
+      ]
+    },
+
+    "channel-open-payload": {
+      "type": "object",
+      "description": "Client requests a binary channel to a specific actor address. Server replies with channel:opened containing the assigned channelId (fnv32a(address) & 0xFFFFFFFF). Subsequent binary WebSocket frames are prefixed with 4 bytes (channelId, little-endian uint32) and routed to the bound actor as Message<Uint8Array> with type 'audio.frame'.",
+      "properties": {
+        "address": {
+          "$ref": "#/definitions/canonical-address",
+          "description": "Target actor address, e.g. @(ai/stt/bln_ai/deepgram/flux)"
+        }
+      },
+      "required": ["address"],
+      "additionalProperties": false
+    },
+
+    "channel-opened-payload": {
+      "type": "object",
+      "description": "Server confirmation that a binary channel is open. The channelId is derived as fnv32a(address) & 0xFFFFFFFF. All subsequent binary frames on this connection prefixed with this channelId (4 bytes LE) are routed to the bound actor.",
+      "properties": {
+        "channelId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Unsigned 32-bit channel identifier (fnv32a hash of actor address)"
+        },
+        "address": {
+          "$ref": "#/definitions/canonical-address",
+          "description": "Confirmed actor address this channel is bound to"
+        }
+      },
+      "required": ["channelId", "address"],
+      "additionalProperties": false
+    },
+
+    "channel-close-payload": {
+      "type": "object",
+      "description": "Client or server closes a binary channel. After close, channelId is deregistered; binary frames with this channelId are dropped.",
+      "properties": {
+        "channelId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Channel to close"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Optional human-readable close reason"
+        }
+      },
+      "required": ["channelId"],
+      "additionalProperties": false
+    },
+
+    "channel-error-payload": {
+      "type": "object",
+      "description": "Error during channel open or binary frame delivery.",
+      "properties": {
+        "channelId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Channel that errored (0 if error during open before ID assigned)"
+        },
+        "code": {
+          "$ref": "#/definitions/channel-error-code"
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable error detail"
+        }
+      },
+      "required": ["channelId", "code", "message"],
+      "additionalProperties": false
     }
   }
 }

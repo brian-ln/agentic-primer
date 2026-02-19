@@ -202,6 +202,15 @@ export const hubMessageTooLargePayloadSchema = z.object({
   maxSize: z.number().int().min(0)
 }).strict();
 
+// channel-error-code
+export const channelErrorCodeSchema = z.enum(['address_not_found', 'channel_id_collision', 'channel_not_open', 'actor_rejected', 'internal_error']);
+
+// channel-close-payload
+export const channelClosePayloadSchema = z.object({
+  channelId: z.number().int().min(0).max(4294967295),
+  reason: z.string().optional()
+}).strict();
+
 // hub-error-payload
 export const hubErrorPayloadSchema = z.object({
   code: hubErrorCodeSchema,
@@ -253,6 +262,24 @@ export const hubUnknownActorPayloadSchema = z.object({
   message: z.string()
 }).strict();
 
+// channel-open-payload
+export const channelOpenPayloadSchema = z.object({
+  address: canonicalAddressSchema
+}).strict();
+
+// channel-opened-payload
+export const channelOpenedPayloadSchema = z.object({
+  channelId: z.number().int().min(0).max(4294967295),
+  address: canonicalAddressSchema
+}).strict();
+
+// channel-error-payload
+export const channelErrorPayloadSchema = z.object({
+  channelId: z.number().int().min(0).max(4294967295),
+  code: channelErrorCodeSchema,
+  message: z.string()
+}).strict();
+
 // hub-discovered-payload
 export const hubDiscoveredPayloadSchema = z.object({
   actors: z.array(actorRegistrationSchema),
@@ -301,6 +328,8 @@ export const HubMessageValidators = {
   hubRateLimitedPayload: hubRateLimitedPayloadSchema,
   hubVersionMismatchPayload: hubVersionMismatchPayloadSchema,
   hubMessageTooLargePayload: hubMessageTooLargePayloadSchema,
+  channelErrorCode: channelErrorCodeSchema,
+  channelClosePayload: channelClosePayloadSchema,
   hubErrorPayload: hubErrorPayloadSchema,
   actorRegistration: actorRegistrationSchema,
   hubConnectedMetadata: hubConnectedMetadataSchema,
@@ -308,6 +337,9 @@ export const HubMessageValidators = {
   hubRegisteredPayload: hubRegisteredPayloadSchema,
   hubUnregisterPayload: hubUnregisterPayloadSchema,
   hubUnknownActorPayload: hubUnknownActorPayloadSchema,
+  channelOpenPayload: channelOpenPayloadSchema,
+  channelOpenedPayload: channelOpenedPayloadSchema,
+  channelErrorPayload: channelErrorPayloadSchema,
   hubDiscoveredPayload: hubDiscoveredPayloadSchema,
   hubActorListPayload: hubActorListPayloadSchema,
 };
