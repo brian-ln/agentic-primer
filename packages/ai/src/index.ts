@@ -42,6 +42,18 @@ export * from './types.ts';
 export { GatewayActor, createGatewayFactory } from './gateway-actor.ts';
 export type { GatewayActorConfig } from './gateway-actor.ts';
 
+export { InferenceActor, createInferenceFactory, parseInferenceAddress } from './inference-actor.ts';
+export type { InferenceActorConfig, InferenceAddress } from './inference-actor.ts';
+
+export { TtsActor, createTtsFactory, parseTtsAddress } from './tts-actor.ts';
+export type { TtsActorConfig, TtsAddress } from './tts-actor.ts';
+
+export { SttActor, SystemSttActor, createSttFactory, parseSttAddress } from './stt-actor.ts';
+export type { SttActorConfig, SttAddress } from './stt-actor.ts';
+
+export { SessionActor, createSessionFactory } from './session-actor.ts';
+export type { SessionActorConfig } from './session-actor.ts';
+
 // ---------------------------------------------------------------------------
 // Address prefix constants
 // ---------------------------------------------------------------------------
