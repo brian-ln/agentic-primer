@@ -7,13 +7,17 @@
  * Handles:
  * - WebSocket upgrade with Hibernatable WebSocket API
  * - Actor message deserialization and routing to ActorSystem
- * - Heartbeat PING/PONG at the transport level
+ * - Heartbeat HEARTBEAT_PING/PONG (matching RemoteTransport protocol exactly)
  * - Broadcasting messages to all connected WebSockets
  * - Connection tracking via ctx.getWebSockets()
  */
 
 import type { ActorSystem, ISerde } from '@agentic-primer/actors';
-import { address, type Message } from '@agentic-primer/actors';
+import {
+  deserializeWsMessage,
+  makeHeartbeatPong,
+  routeWsActorMessage,
+} from '@agentic-primer/actors';
 
 export class WebSocketBridge {
   private readonly ctx: DurableObjectState;
@@ -51,42 +55,19 @@ export class WebSocketBridge {
   /**
    * Handle an incoming WebSocket message.
    * Deserializes the message and routes actor protocol messages to the ActorSystem.
-   * Handles PING/PONG heartbeat at the transport level.
+   * Handles HEARTBEAT_PING/PONG matching RemoteTransport protocol exactly.
    */
   handleMessage(ws: WebSocket, message: string | ArrayBuffer): void {
     try {
-      let data: Record<string, unknown>;
+      const data = deserializeWsMessage(message, this.serde);
 
-      if (typeof message === 'string') {
-        data = JSON.parse(message);
-      } else if (this.serde) {
-        data = this.serde.deserialize(new Uint8Array(message)) as Record<string, unknown>;
-      } else {
-        data = JSON.parse(new TextDecoder().decode(message));
-      }
-
-      // Handle heartbeat PING
-      if (data.type === 'PING') {
-        ws.send(JSON.stringify({ type: 'PONG', timestamp: Date.now() }));
+      // Handle heartbeat — must match RemoteTransport.sendHeartbeat() exactly
+      if (data.type === 'HEARTBEAT_PING') {
+        ws.send(JSON.stringify(makeHeartbeatPong(data as { id: string })));
         return;
       }
 
-      // Route actor protocol messages: { to, from, type, payload, id }
-      if (data.to && data.type) {
-        const actorMessage: Message = {
-          id: (data.id as string) || crypto.randomUUID(),
-          pattern: (data.pattern as Message['pattern']) || 'tell',
-          to: address(data.to as string),
-          from: data.from ? address(data.from as string) : undefined,
-          type: data.type as string,
-          payload: data.payload,
-          correlationId: data.correlationId as string | undefined,
-          timestamp: (data.timestamp as number) || Date.now(),
-          metadata: data.metadata as Record<string, unknown> | undefined,
-        };
-
-        this.system.send(actorMessage.to, actorMessage.type, actorMessage.payload);
-      }
+      routeWsActorMessage(data, this.system);
     } catch (error) {
       console.error('WebSocketBridge: Failed to handle message:', error);
     }

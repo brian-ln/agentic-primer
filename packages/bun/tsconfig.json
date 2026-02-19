@@ -16,9 +16,8 @@
     "isolatedModules": true,
     "rewriteRelativeImportExtensions": true,
     "types": ["bun-types"],
-    "paths": {
-      "@agentic-primer/actors": ["../actors/dist/index.d.ts"]
-    }
+    "paths": {}
+
   },
   "include": ["src/**/*.ts"],
   "exclude": ["dist", "node_modules", "src/__tests__"]

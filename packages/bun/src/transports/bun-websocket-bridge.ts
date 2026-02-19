@@ -15,7 +15,11 @@
  */
 
 import type { ActorSystem, ISerde } from '@agentic-primer/actors';
-import { address, type Message } from '@agentic-primer/actors';
+import {
+  deserializeWsMessage,
+  makeHeartbeatPong,
+  routeWsActorMessage,
+} from '@agentic-primer/actors';
 
 /** Per-connection data attached at upgrade time. */
 export interface ConnectionData {
@@ -71,47 +75,15 @@ export class BunWebSocketBridge {
     message: string | Uint8Array
   ): void {
     try {
-      let data: Record<string, unknown>;
+      const data = deserializeWsMessage(message, this.serde);
 
-      if (typeof message === 'string') {
-        data = JSON.parse(message) as Record<string, unknown>;
-      } else if (this.serde) {
-        data = this.serde.deserialize(message) as Record<string, unknown>;
-      } else {
-        data = JSON.parse(new TextDecoder().decode(message)) as Record<string, unknown>;
-      }
-
-      // Handle heartbeat PING — must match RemoteTransport.sendHeartbeat() exactly:
-      // incoming: { type: 'HEARTBEAT_PING', to: '__system__', from: '__client__', payload: { timestamp }, id }
-      // outgoing: { type: 'HEARTBEAT_PONG', to: '__client__', from: '__system__', payload: {}, id }
+      // Handle heartbeat — must match RemoteTransport.sendHeartbeat() exactly
       if (data.type === 'HEARTBEAT_PING') {
-        const pong = {
-          type: 'HEARTBEAT_PONG',
-          to: '__client__',
-          from: '__system__',
-          payload: {},
-          id: data.id,
-        };
-        ws.send(JSON.stringify(pong));
+        ws.send(JSON.stringify(makeHeartbeatPong(data as { id: string })));
         return;
       }
 
-      // Route actor protocol messages: { to, from, type, payload, id, ... }
-      if (data.to && data.type) {
-        const actorMessage: Message = {
-          id: (data.id as string) || crypto.randomUUID(),
-          pattern: (data.pattern as Message['pattern']) || 'tell',
-          to: address(data.to as string),
-          from: data.from ? address(data.from as string) : undefined,
-          type: data.type as string,
-          payload: data.payload,
-          correlationId: data.correlationId as string | undefined,
-          timestamp: (data.timestamp as number) || Date.now(),
-          metadata: data.metadata as Record<string, unknown> | undefined,
-        };
-
-        this.system.send(actorMessage.to, actorMessage.type, actorMessage.payload);
-      }
+      routeWsActorMessage(data, this.system);
     } catch (error) {
       console.error('BunWebSocketBridge: Failed to handle message:', error);
     }
