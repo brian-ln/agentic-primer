@@ -54,6 +54,12 @@ export type { SttActorConfig, SttAddress } from './stt-actor.ts';
 export { SessionActor, createSessionFactory } from './session-actor.ts';
 export type { SessionActorConfig } from './session-actor.ts';
 
+export { CredentialsActor, createCredentialsFactory, parseCredentialsAddress } from './credentials-actor.ts';
+export type { CredentialsActorConfig, CredentialsAddress } from './credentials-actor.ts';
+
+export { EmbeddingsActor, createEmbeddingsFactory, parseEmbeddingsAddress } from './embeddings-actor.ts';
+export type { EmbeddingsActorConfig, EmbeddingsAddress } from './embeddings-actor.ts';
+
 // ---------------------------------------------------------------------------
 // Address prefix constants
 // ---------------------------------------------------------------------------

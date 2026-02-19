@@ -102,6 +102,39 @@ export interface SttTranscriptPayload {
 }
 
 // ---------------------------------------------------------------------------
+// Credentials
+// ---------------------------------------------------------------------------
+
+export interface CredentialsGetPayload {
+  target: string;
+}
+
+export interface CredentialsPayload {
+  target: string;
+  apiKey?: string;
+  gatewayUrl?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Embeddings
+// ---------------------------------------------------------------------------
+
+export interface EmbeddingsRequestPayload {
+  inputs: string[];
+  /** Model override. Defaults to the actor's configured model. */
+  model?: string;
+}
+
+export interface EmbeddingsResponsePayload {
+  embeddings: number[][];
+  model?: string;
+  usage?: {
+    promptTokens: number;
+    totalTokens: number;
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Session
 // ---------------------------------------------------------------------------
 
@@ -136,6 +169,10 @@ export const AI_MESSAGE_TYPES = {
   SESSION_CREATE: 'ai.session.create',
   SESSION_END: 'ai.session.end',
   SESSION_STATE: 'ai.session.state',
+  /** Retrieve credentials for a named target. */
+  CREDENTIALS_GET: 'ai.credentials.get',
+  /** Request an embedding vector for a batch of inputs. */
+  EMBEDDINGS_REQUEST: 'ai.embeddings.request',
   /** Binary audio frames are delivered via binary channel (not JSON). */
   AUDIO_FRAME: 'audio.frame',
 } as const;
