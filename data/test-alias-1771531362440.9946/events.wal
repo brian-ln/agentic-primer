@@ -1,2 +1,0 @@
-{"id":"3577a718-3a81-4f1a-8f7d-674f919bce79","timestamp":1771531362440,"type":"NodeAdded","data":{"id":"alias-services-llm","type":"alias","properties":{"alias_path":"services/llm","canonical_path":"domain/inference","priority":0,"context":{},"description":"LLM service alias"},"data":null}}
-{"id":"7d590562-1dbc-4c82-a8b0-0f5a4db5e39a","timestamp":1771531362440,"type":"EdgeAdded","data":{"id":"alias-services-llm-resolves","from":"alias-services-llm","to":"domain/inference","type":"resolves_to","properties":{"created":1771531362440},"weight":1}}

@@ -1,7 +1,0 @@
-{"id":"d5fff968-f9bd-4441-9298-02a8f75bf81e","timestamp":1771529813592,"type":"NodeAdded","data":{"id":"alias-c","type":"alias","properties":{"alias_path":"c","canonical_path":"d","priority":0,"context":{}},"data":null}}
-{"id":"68fa9e3b-6059-441c-8238-10380f7e3cc6","timestamp":1771529813592,"type":"NodeAdded","data":{"id":"alias-a","type":"alias","properties":{"alias_path":"a","canonical_path":"b","priority":0,"context":{}},"data":null}}
-{"id":"e978f18b-1e91-4574-9fd5-c00e1a67f221","timestamp":1771529813592,"type":"EdgeAdded","data":{"id":"alias-a-resolves","from":"alias-a","to":"b","type":"resolves_to","properties":{"created":1771529813592},"weight":1}}
-{"id":"db095439-67c2-4a86-80d9-da4bb59023b5","timestamp":1771529813592,"type":"EdgeAdded","data":{"id":"alias-b-resolves","from":"alias-b","to":"c","type":"resolves_to","properties":{"created":1771529813592},"weight":1}}
-{"id":"86fe2c2a-080c-4e81-a7c4-0e6e2f3ce52f","timestamp":1771529813592,"type":"EdgeAdded","data":{"id":"alias-c-resolves","from":"alias-c","to":"d","type":"resolves_to","properties":{"created":1771529813592},"weight":1}}
-{"id":"515308e7-9ff4-4636-a1db-47fde5e7a2b1","timestamp":1771529813592,"type":"NodeDeleted","data":{"id":"alias-b"}}
-{"id":"7f3aca9b-d2c9-473c-a23e-1dd8895fc3f9","timestamp":1771529813592,"type":"NodeAdded","data":{"id":"alias-b","type":"alias","properties":{"alias_path":"b","canonical_path":"c","priority":0,"context":{}},"data":null}}

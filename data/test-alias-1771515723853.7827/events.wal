@@ -1,2 +1,0 @@
-{"id":"56ce16d8-83ba-4f3a-8699-f167a05c7702","timestamp":1771515723853,"type":"NodeAdded","data":{"id":"alias-a","type":"alias","properties":{"alias_path":"a","canonical_path":"b","priority":0,"context":{}},"data":null}}
-{"id":"f9632d05-acb9-4a04-b1d9-b569750eca71","timestamp":1771515723853,"type":"EdgeAdded","data":{"id":"alias-a-resolves","from":"alias-a","to":"b","type":"resolves_to","properties":{"created":1771515723853},"weight":1}}
