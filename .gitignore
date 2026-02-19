@@ -46,3 +46,8 @@ yarn-error.log*
 data-test-*/
 data/test-*/
 test-data/
+
+# GraphStore runtime state (WAL + snapshots)
+data/events.wal
+data/*.wal
+data/*.snapshot
