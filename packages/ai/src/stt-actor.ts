@@ -224,7 +224,7 @@ export class SttActor implements MessageHandler {
     const response = await fetch(url, {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'audio/raw' },
-      body: audio,
+      body: audio as Uint8Array<ArrayBuffer>,
     });
 
     if (!response.ok) return null;
