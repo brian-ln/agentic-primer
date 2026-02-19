@@ -47,7 +47,9 @@ describe('AgentManager', () => {
         success: true,
         text: 'Mocked response for testing',
         model: 'claude-sonnet-4-5',
-        usage: { promptTokens: 10, completionTokens: 15, totalTokens: 25 }
+        usage: { promptTokens: 10, completionTokens: 15, totalTokens: 25 },
+        duration: 100,
+        timestamp: Date.now()
       };
     });
   });

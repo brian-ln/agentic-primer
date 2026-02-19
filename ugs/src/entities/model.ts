@@ -652,7 +652,7 @@ export class ModelManager {
           model: aiModel,
           messages,
           temperature: effectiveParams.temperature,
-          maxTokens: effectiveParams.maxTokens,
+          maxOutputTokens: effectiveParams.maxTokens,
           topP: effectiveParams.topP,
         });
 
@@ -680,9 +680,9 @@ export class ModelManager {
           success: true,
           text: fullText,
           usage: {
-            promptTokens: usage?.promptTokens || 0,
-            completionTokens: usage?.completionTokens || 0,
-            totalTokens: (usage?.promptTokens || 0) + (usage?.completionTokens || 0)
+            promptTokens: usage?.inputTokens || 0,
+            completionTokens: usage?.outputTokens || 0,
+            totalTokens: (usage?.inputTokens || 0) + (usage?.outputTokens || 0)
           },
           duration: Date.now() - startTime,
           timestamp: Date.now(),
@@ -707,7 +707,7 @@ export class ModelManager {
           model: aiModel,
           messages,
           temperature: effectiveParams.temperature,
-          maxTokens: effectiveParams.maxTokens,
+          maxOutputTokens: effectiveParams.maxTokens,
           topP: effectiveParams.topP,
         }),
         llmRateLimiter,
@@ -718,9 +718,9 @@ export class ModelManager {
         success: true,
         text: result.text,
         usage: {
-          promptTokens: result.usage?.promptTokens || 0,
-          completionTokens: result.usage?.completionTokens || 0,
-          totalTokens: (result.usage?.promptTokens || 0) + (result.usage?.completionTokens || 0)
+          promptTokens: result.usage?.inputTokens || 0,
+          completionTokens: result.usage?.outputTokens || 0,
+          totalTokens: (result.usage?.inputTokens || 0) + (result.usage?.outputTokens || 0)
         },
         duration: Date.now() - startTime,
         timestamp: Date.now(),
