@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "agentic-primer",
@@ -15,6 +16,17 @@
       "name": "@agentic-primer/actors",
       "version": "0.1.0",
       "dependencies": {
+        "@agentic-primer/protocols": "workspace:*",
+      },
+      "devDependencies": {
+        "typescript": "^5.9.3",
+      },
+    },
+    "packages/ai": {
+      "name": "@agentic-primer/ai",
+      "version": "0.1.0",
+      "dependencies": {
+        "@agentic-primer/actors": "workspace:*",
         "@agentic-primer/protocols": "workspace:*",
       },
       "devDependencies": {
@@ -165,6 +177,8 @@
   },
   "packages": {
     "@agentic-primer/actors": ["@agentic-primer/actors@workspace:packages/actors"],
+
+    "@agentic-primer/ai": ["@agentic-primer/ai@workspace:packages/ai"],
 
     "@agentic-primer/auth-client": ["@agentic-primer/auth-client@workspace:packages/auth-client"],
 
