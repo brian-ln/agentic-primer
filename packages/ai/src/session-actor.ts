@@ -21,7 +21,7 @@
 
 import type { Message, MessageResponse, MessageHandler } from '@agentic-primer/actors';
 import { createResponse, createErrorResponse, address } from '@agentic-primer/actors';
-import { AI_MESSAGE_TYPES, AI_PREFIXES, inferenceAddress, ttsAddress, sttAddress } from './index.ts';
+import { AI_MESSAGE_TYPES, inferenceAddress, ttsAddress, sttAddress } from './index.ts';
 import type {
   SessionCreatePayload,
   SessionStatePayload,

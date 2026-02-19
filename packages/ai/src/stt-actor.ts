@@ -25,7 +25,7 @@
  */
 
 import type { Message, MessageResponse, MessageHandler, Address } from '@agentic-primer/actors';
-import { createResponse, createErrorResponse, address } from '@agentic-primer/actors';
+import { createResponse, createErrorResponse } from '@agentic-primer/actors';
 import { AI_MESSAGE_TYPES } from './types.ts';
 import type {
   SttStartPayload,
