@@ -8,16 +8,11 @@ import type { ActorSystem } from '@agentic-primer/actors';
 // Minimal mocks
 // ---------------------------------------------------------------------------
 
-function makeWs(id: ReturnType<typeof crypto.randomUUID> = crypto.randomUUID()): Bun.ServerWebSocket<ConnectionData> & { sentMessages: string[] } {
-  const sentMessages: string[] = [];
-  const ws = {
+/** Base ws object shape — shared by all mock helpers. */
+function makeWsBase(id: ReturnType<typeof crypto.randomUUID>) {
+  return {
     data: { id },
     remoteAddress: '127.0.0.1',
-    sentMessages,
-    send: mock((msg: string | Uint8Array) => {
-      sentMessages.push(typeof msg === 'string' ? msg : new TextDecoder().decode(msg));
-      return 0;
-    }),
     close: mock(() => {}),
     subscribe: mock(() => {}),
     unsubscribe: mock(() => {}),
@@ -28,8 +23,66 @@ function makeWs(id: ReturnType<typeof crypto.randomUUID> = crypto.randomUUID()):
     pong: mock(() => 0),
     readyState: 1,
     binaryType: 'arraybuffer' as const,
+  };
+}
+
+/**
+ * Normal mock: send() returns 1 (success) and records the message.
+ * Status semantics (bun-types): 0 = dropped, -1 = backpressured, >0 = sent.
+ */
+function makeWs(id: ReturnType<typeof crypto.randomUUID> = crypto.randomUUID()): Bun.ServerWebSocket<ConnectionData> & { sentMessages: string[] } {
+  const sentMessages: string[] = [];
+  return {
+    ...makeWsBase(id),
+    sentMessages,
+    send: mock((msg: string | Uint8Array) => {
+      sentMessages.push(typeof msg === 'string' ? msg : new TextDecoder().decode(msg));
+      return 1; // success
+    }),
   } as unknown as Bun.ServerWebSocket<ConnectionData> & { sentMessages: string[] };
-  return ws;
+}
+
+/**
+ * Backpressure mock: first `dropFirst` calls return 0 (dropped, NOT sent),
+ * subsequent calls return 1 (success) and record the message.
+ */
+function makeDroppedWs(
+  id: ReturnType<typeof crypto.randomUUID> = crypto.randomUUID(),
+  dropFirst = 1,
+): Bun.ServerWebSocket<ConnectionData> & { sentMessages: string[] } {
+  const sentMessages: string[] = [];
+  let dropsLeft = dropFirst;
+  return {
+    ...makeWsBase(id),
+    sentMessages,
+    send: mock((msg: string | Uint8Array) => {
+      if (dropsLeft > 0) { dropsLeft--; return 0; } // dropped
+      sentMessages.push(typeof msg === 'string' ? msg : new TextDecoder().decode(msg));
+      return 1; // success
+    }),
+  } as unknown as Bun.ServerWebSocket<ConnectionData> & { sentMessages: string[] };
+}
+
+/**
+ * Congested mock: first `bufferFirst` calls return -1 (backpressured/buffered
+ * by Bun, message IS in Bun's buffer), subsequent calls return 1 (success).
+ * Does NOT record messages that are backpressured (Bun holds them).
+ */
+function makeCongestedWs(
+  id: ReturnType<typeof crypto.randomUUID> = crypto.randomUUID(),
+  bufferFirst = 1,
+): Bun.ServerWebSocket<ConnectionData> & { sentMessages: string[] } {
+  const sentMessages: string[] = [];
+  let buffersLeft = bufferFirst;
+  return {
+    ...makeWsBase(id),
+    sentMessages,
+    send: mock((msg: string | Uint8Array) => {
+      if (buffersLeft > 0) { buffersLeft--; return -1; } // backpressured
+      sentMessages.push(typeof msg === 'string' ? msg : new TextDecoder().decode(msg));
+      return 1; // success
+    }),
+  } as unknown as Bun.ServerWebSocket<ConnectionData> & { sentMessages: string[] };
 }
 
 function makeSystem(): { send: ReturnType<typeof mock> } {
@@ -229,12 +282,99 @@ describe('BunWebSocketBridge', () => {
   });
 
   // -------------------------------------------------------------------------
-  // 7. handleDrain is a no-op
+  // 7. handleDrain — no queue
   // -------------------------------------------------------------------------
-  it('handleDrain does not throw', () => {
+  it('handleDrain is a no-op when no messages are queued', () => {
     const ws = makeWs();
     bridge.handleOpen(ws);
     expect(() => bridge.handleDrain(ws)).not.toThrow();
+    expect(ws.sentMessages).toHaveLength(0);
+  });
+
+  // -------------------------------------------------------------------------
+  // 8. Backpressure / drain queue
+  // -------------------------------------------------------------------------
+  describe('backpressure / drain queue', () => {
+    it('queues a dropped message (status 0) and retries on drain', () => {
+      const ws = makeDroppedWs('00000000-0000-0000-0000-000000000010', 1);
+      bridge.handleOpen(ws);
+
+      bridge.broadcast({ type: 'TEST' });
+      expect(ws.sentMessages).toHaveLength(0); // dropped, not delivered
+
+      bridge.handleDrain(ws);
+      expect(ws.sentMessages).toHaveLength(1);
+      expect(JSON.parse(ws.sentMessages[0]).type).toBe('TEST');
+    });
+
+    it('flushes multiple queued messages in order on drain', () => {
+      const ws = makeDroppedWs('00000000-0000-0000-0000-000000000011', 1);
+      bridge.handleOpen(ws);
+
+      bridge.broadcast({ type: 'FIRST' });   // dropped → queued
+      bridge.broadcast({ type: 'SECOND' });  // queued (socket congested)
+      expect(ws.sentMessages).toHaveLength(0);
+
+      bridge.handleDrain(ws);
+      expect(ws.sentMessages).toHaveLength(2);
+      expect(JSON.parse(ws.sentMessages[0]).type).toBe('FIRST');
+      expect(JSON.parse(ws.sentMessages[1]).type).toBe('SECOND');
+    });
+
+    it('stops draining when still dropped (status 0) — retains remaining queue', () => {
+      // 2 total drops: 1 from broadcast, 1 from first drain attempt
+      const ws = makeDroppedWs('00000000-0000-0000-0000-000000000012', 2);
+      bridge.handleOpen(ws);
+
+      bridge.broadcast({ type: 'RETRY' }); // dropped → queued
+      expect(ws.sentMessages).toHaveLength(0);
+
+      bridge.handleDrain(ws); // still dropped — nothing sent yet
+      expect(ws.sentMessages).toHaveLength(0);
+
+      bridge.handleDrain(ws); // now succeeds
+      expect(ws.sentMessages).toHaveLength(1);
+    });
+
+    it('records congestion (status -1) and queues subsequent broadcasts until drain', () => {
+      const ws = makeCongestedWs('00000000-0000-0000-0000-000000000013', 1);
+      bridge.handleOpen(ws);
+
+      bridge.broadcast({ type: 'BUFFERED' }); // -1: Bun buffered it, socket marked congested
+      bridge.broadcast({ type: 'QUEUED' });   // socket congested, queued locally
+      // BUFFERED is in Bun's hands; QUEUED is in our drain queue
+      expect(ws.sentMessages).toHaveLength(0);
+
+      bridge.handleDrain(ws); // flushes QUEUED
+      expect(ws.sentMessages).toHaveLength(1);
+      expect(JSON.parse(ws.sentMessages[0]).type).toBe('QUEUED');
+    });
+
+    it('only queues backpressured connections — other connections receive immediately', () => {
+      const wsOk = makeWs('00000000-0000-0000-0000-000000000014');
+      const wsDrop = makeDroppedWs('00000000-0000-0000-0000-000000000015', 1);
+      bridge.handleOpen(wsOk);
+      bridge.handleOpen(wsDrop);
+
+      bridge.broadcast({ type: 'MIXED' });
+      expect(wsOk.sentMessages).toHaveLength(1);   // delivered immediately
+      expect(wsDrop.sentMessages).toHaveLength(0); // dropped
+
+      bridge.handleDrain(wsDrop);
+      expect(wsDrop.sentMessages).toHaveLength(1); // delivered on drain
+    });
+
+    it('handleClose clears the drain queue', () => {
+      // drops every call
+      const ws = makeDroppedWs('00000000-0000-0000-0000-000000000016', 999);
+      bridge.handleOpen(ws);
+      bridge.broadcast({ type: 'PENDING' }); // queued
+
+      bridge.handleClose(ws, 1000, '');
+      // No throw, connection removed, queue cleaned up
+      expect(bridge.getConnectionCount()).toBe(0);
+      expect(() => bridge.handleDrain(ws)).not.toThrow();
+    });
   });
 
   // -------------------------------------------------------------------------

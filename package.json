@@ -15,7 +15,8 @@
     "generate:types": "tsx scripts/generate-domain-types.ts",
     "generate:hub-types": "tsx scripts/generate-hub-types.ts",
     "validate:domain": "tsx core/wit/domain/validation-test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check": "pnpm run typecheck"
   },
   "keywords": [
     "convergence",
@@ -29,7 +30,7 @@
   "devDependencies": {
     "@types/node": "^25.2.1",
     "json-schema-to-typescript": "^15.0.4",
-    "tsx": "^4.21.0",
+"tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "zod": "^4.3.6"
   }

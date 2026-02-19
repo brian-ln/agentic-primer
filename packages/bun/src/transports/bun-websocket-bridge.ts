@@ -35,6 +35,20 @@ export class BunWebSocketBridge {
   private readonly serde: ISerde | undefined;
   private readonly connections = new Set<Bun.ServerWebSocket<ConnectionData>>();
   private readonly handle: ReturnType<typeof composeWsMiddleware>;
+  /**
+   * Per-connection drain queue for backpressure handling.
+   *
+   * send() return values (from bun-types):
+   *   0   = dropped (buffer overflow — message NOT sent; must retry on drain)
+   *  -1   = backpressured (Bun buffered the message; stop sending until drain)
+   *  > 0  = success
+   *
+   * Presence in this Map means the socket is currently congested. An empty
+   * array marks congestion without a pending retry (status === -1 case).
+   * A non-empty array contains messages dropped (status === 0) that must be
+   * resent on the next drain event.
+   */
+  private readonly drainQueue = new Map<Bun.ServerWebSocket<ConnectionData>, string[]>();
 
   constructor(system: ActorSystem, serde?: ISerde, ...extraMiddleware: WsMiddleware[]) {
     this.serde = serde;
@@ -69,20 +83,70 @@ export class BunWebSocketBridge {
     void this.handle(message, (json) => ws.send(json), this.serde);
   }
 
-  /** Removes the socket from the connection tracking Set. */
+  /** Removes the socket from the connection tracking Set and clears its drain queue. */
   handleClose(ws: Bun.ServerWebSocket<ConnectionData>, _code: number, _reason: string): void {
     this.connections.delete(ws);
+    this.drainQueue.delete(ws);
   }
 
-  /** No-op — override via extra middleware passed to the constructor. */
-  handleDrain(_ws: Bun.ServerWebSocket<ConnectionData>): void {}
+  /**
+   * Flushes queued messages for a socket whose send buffer has drained.
+   *
+   * Stops early if the socket becomes congested again mid-flush:
+   *   status === 0  → still dropped; leave remaining messages in queue
+   *   status === -1 → Bun accepted the message but buffer is filling again;
+   *                   shift it off our queue (Bun owns it now) then stop
+   *   status  > 0  → sent immediately; continue draining
+   */
+  handleDrain(ws: Bun.ServerWebSocket<ConnectionData>): void {
+    const queue = this.drainQueue.get(ws);
+    if (!queue) return;
 
-  /** Broadcasts a message to all currently connected WebSockets. */
+    while (queue.length > 0) {
+      const status = ws.send(queue[0]);
+      if (status === 0) break;      // still dropped — wait for next drain
+      queue.shift();                // sent (immediately or buffered by Bun)
+      if (status === -1) break;     // buffer filling again — stop sending
+    }
+
+    if (queue.length === 0) this.drainQueue.delete(ws);
+  }
+
+  /**
+   * Broadcasts a message to all currently connected WebSockets.
+   *
+   * Handles backpressure per connection:
+   *   - If a socket already has queued messages, appends to its queue instead
+   *     of sending directly (preserves order).
+   *   - If send() returns -1 (Bun buffered the message but socket is now
+   *     congested), records an empty queue so future messages are queued.
+   *   - If send() returns 0 (dropped), adds the message to the queue for
+   *     retry when drain fires.
+   *
+   * Note: backpressure for individual sends via handleMessage (middleware
+   * send callbacks) is not tracked — those are typically small response
+   * messages where Bun buffering (status -1) is acceptable.
+   */
   broadcast<T>(message: T): void {
     const serialized = JSON.stringify(message);
     for (const ws of this.connections) {
       try {
-        ws.send(serialized);
+        const queue = this.drainQueue.get(ws);
+        if (queue) {
+          // Socket is congested — queue locally to preserve order.
+          queue.push(serialized);
+          continue;
+        }
+
+        const status = ws.send(serialized);
+        if (status === -1) {
+          // Bun buffered the message, but socket is now under backpressure.
+          // Queue future messages; nothing to retry (Bun owns this one).
+          this.drainQueue.set(ws, []);
+        } else if (status === 0) {
+          // Message was dropped. Queue it for retry on drain.
+          this.drainQueue.set(ws, [serialized]);
+        }
       } catch {
         // Socket may have closed between Set iteration and send()
       }
