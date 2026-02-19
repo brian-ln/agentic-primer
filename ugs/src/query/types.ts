@@ -166,6 +166,18 @@ export interface QueryMetadata {
 
   /** Index hints (advisory) */
   indexHints?: IndexHint[];
+
+  /** Path pattern used with matchPath() */
+  pathPattern?: string;
+
+  /** Whether this is a path-pattern query (set by matchPath()) */
+  isPathQuery?: boolean;
+
+  /** Event types this query reacts to (set by on()) */
+  triggerEventTypes?: string[];
+
+  /** Arbitrary user-supplied metadata (e.g. via withMetadata()) */
+  [key: string]: unknown;
 }
 
 /**
