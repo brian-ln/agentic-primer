@@ -22,6 +22,11 @@ export interface ConnectionData {
   id: string;
 }
 
+/** Minimal duck type for the server passed to fetch handlers — avoids bun-types generic variance issues. */
+interface UpgradableServer {
+  upgrade(req: Request, options?: { data?: ConnectionData; headers?: HeadersInit }): boolean;
+}
+
 export class BunWebSocketBridge {
   private readonly system: ActorSystem;
   private readonly serde: ISerde | undefined;
@@ -38,7 +43,7 @@ export class BunWebSocketBridge {
    * undefined when upgraded (Bun sends the 101 response itself) or a 400
    * response when the request is not a valid WebSocket upgrade.
    */
-  handleUpgrade(req: Request, server: Bun.Server<ConnectionData>): Response | undefined {
+  handleUpgrade(req: Request, server: UpgradableServer): Response | undefined {
     const upgraded = server.upgrade(req, {
       data: { id: crypto.randomUUID() } satisfies ConnectionData,
     });

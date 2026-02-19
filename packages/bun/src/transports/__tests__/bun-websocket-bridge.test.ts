@@ -8,7 +8,7 @@ import type { ActorSystem } from '@agentic-primer/actors';
 // Minimal mocks
 // ---------------------------------------------------------------------------
 
-function makeWs(id: string = crypto.randomUUID()): Bun.ServerWebSocket<ConnectionData> & { sentMessages: string[] } {
+function makeWs(id: ReturnType<typeof crypto.randomUUID> = crypto.randomUUID()): Bun.ServerWebSocket<ConnectionData> & { sentMessages: string[] } {
   const sentMessages: string[] = [];
   const ws = {
     data: { id },
@@ -133,9 +133,9 @@ describe('BunWebSocketBridge', () => {
   // -------------------------------------------------------------------------
   describe('broadcast', () => {
     it('sends to all tracked connections', () => {
-      const ws1 = makeWs('id-1');
-      const ws2 = makeWs('id-2');
-      const ws3 = makeWs('id-3');
+      const ws1 = makeWs('00000000-0000-0000-0000-000000000001');
+      const ws2 = makeWs('00000000-0000-0000-0000-000000000002');
+      const ws3 = makeWs('00000000-0000-0000-0000-000000000003');
 
       bridge.handleOpen(ws1);
       bridge.handleOpen(ws2);
@@ -177,8 +177,8 @@ describe('BunWebSocketBridge', () => {
     });
 
     it('tracks multiple connections independently', () => {
-      const ws1 = makeWs('a');
-      const ws2 = makeWs('b');
+      const ws1 = makeWs('aaaaaaaa-0000-0000-0000-000000000001');
+      const ws2 = makeWs('bbbbbbbb-0000-0000-0000-000000000001');
       bridge.handleOpen(ws1);
       bridge.handleOpen(ws2);
       expect(bridge.getConnectionCount()).toBe(2);
