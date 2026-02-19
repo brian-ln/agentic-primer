@@ -211,6 +211,74 @@ export const channelClosePayloadSchema = z.object({
   reason: z.string().optional()
 }).strict();
 
+// ai-actor-address
+export const aiActorAddressSchema = z.string();
+
+// ai-inference-request-payload
+export const aiInferenceRequestPayloadSchema = z.object({
+  messages: z.array(z.object({
+  role: z.enum(['system', 'user', 'assistant', 'tool']),
+  content: z.string()
+})),
+  model: z.string().optional(),
+  stream: z.boolean().optional(),
+  temperature: z.number().min(0).max(2).optional(),
+  maxTokens: z.number().int().min(1).optional()
+});
+
+// ai-inference-response-payload
+export const aiInferenceResponsePayloadSchema = z.object({
+  content: z.string(),
+  model: z.string().optional(),
+  usage: z.object({
+  promptTokens: z.number().int().optional(),
+  completionTokens: z.number().int().optional(),
+  totalTokens: z.number().int().optional()
+}).strict().optional(),
+  finishReason: z.string().optional()
+});
+
+// ai-inference-chunk-payload
+export const aiInferenceChunkPayloadSchema = z.object({
+  delta: z.string(),
+  index: z.number().int().optional()
+}).strict();
+
+// ai-tts-request-payload
+export const aiTtsRequestPayloadSchema = z.object({
+  text: z.string(),
+  voice: z.string().optional(),
+  encoding: z.enum(['opus', 'mp3', 'linear16']).optional(),
+  sampleRate: z.number().int().optional()
+}).strict();
+
+// ai-stt-start-payload
+export const aiSttStartPayloadSchema = z.object({
+  encoding: z.enum(['opus', 'mp3', 'linear16', 'mulaw']).optional(),
+  sampleRate: z.number().int().optional(),
+  language: z.string().optional(),
+  model: z.string().optional()
+}).strict();
+
+// ai-stt-transcript-payload
+export const aiSttTranscriptPayloadSchema = z.object({
+  transcript: z.string(),
+  isFinal: z.boolean(),
+  confidence: z.number().min(0).max(1).optional(),
+  words: z.array(z.object({
+  word: z.string(),
+  start: z.number(),
+  end: z.number(),
+  confidence: z.number().optional()
+})).optional()
+}).strict();
+
+// ai-session-create-payload
+export const aiSessionCreatePayloadSchema = z.object({
+  userId: z.string(),
+  metadata: z.object({}).optional()
+}).strict();
+
 // hub-error-payload
 export const hubErrorPayloadSchema = z.object({
   code: hubErrorCodeSchema,
@@ -280,6 +348,14 @@ export const channelErrorPayloadSchema = z.object({
   message: z.string()
 }).strict();
 
+// ai-session-state-payload
+export const aiSessionStatePayloadSchema = z.object({
+  userId: z.string(),
+  activeActors: z.array(aiActorAddressSchema),
+  createdAt: z.number().int(),
+  metadata: z.object({}).optional()
+}).strict();
+
 // hub-discovered-payload
 export const hubDiscoveredPayloadSchema = z.object({
   actors: z.array(actorRegistrationSchema),
@@ -330,6 +406,14 @@ export const HubMessageValidators = {
   hubMessageTooLargePayload: hubMessageTooLargePayloadSchema,
   channelErrorCode: channelErrorCodeSchema,
   channelClosePayload: channelClosePayloadSchema,
+  aiActorAddress: aiActorAddressSchema,
+  aiInferenceRequestPayload: aiInferenceRequestPayloadSchema,
+  aiInferenceResponsePayload: aiInferenceResponsePayloadSchema,
+  aiInferenceChunkPayload: aiInferenceChunkPayloadSchema,
+  aiTtsRequestPayload: aiTtsRequestPayloadSchema,
+  aiSttStartPayload: aiSttStartPayloadSchema,
+  aiSttTranscriptPayload: aiSttTranscriptPayloadSchema,
+  aiSessionCreatePayload: aiSessionCreatePayloadSchema,
   hubErrorPayload: hubErrorPayloadSchema,
   actorRegistration: actorRegistrationSchema,
   hubConnectedMetadata: hubConnectedMetadataSchema,
@@ -340,6 +424,7 @@ export const HubMessageValidators = {
   channelOpenPayload: channelOpenPayloadSchema,
   channelOpenedPayload: channelOpenedPayloadSchema,
   channelErrorPayload: channelErrorPayloadSchema,
+  aiSessionStatePayload: aiSessionStatePayloadSchema,
   hubDiscoveredPayload: hubDiscoveredPayloadSchema,
   hubActorListPayload: hubActorListPayloadSchema,
 };

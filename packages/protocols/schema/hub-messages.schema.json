@@ -751,6 +751,171 @@
       },
       "required": ["channelId", "code", "message"],
       "additionalProperties": false
+    },
+
+    "ai-actor-address": {
+      "type": "string",
+      "description": "AI capability actor address. Encodes capability/namespace/provider/model dimensions.",
+      "examples": [
+        "ai/inference/bln_ai/nim/kimi-k2.5",
+        "ai/tts/bln_ai/deepgram/aura-2",
+        "ai/stt/bln_ai/deepgram/nova-3",
+        "ai/embeddings/bln_ai/nim/llama-3.3-70b",
+        "ai/gateway/bln_ai",
+        "ai/session/user-123",
+        "ai/credentials/cf-aig"
+      ]
+    },
+
+    "ai-inference-request-payload": {
+      "type": "object",
+      "description": "Request an LLM completion from an inference actor.",
+      "properties": {
+        "messages": {
+          "type": "array",
+          "description": "Chat messages in OpenAI wire format.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "role": { "type": "string", "enum": ["system", "user", "assistant", "tool"] },
+              "content": { "type": "string" }
+            },
+            "required": ["role", "content"],
+            "additionalProperties": true
+          }
+        },
+        "model": {
+          "type": "string",
+          "description": "Model override. If omitted, the actor's default model is used."
+        },
+        "stream": {
+          "type": "boolean",
+          "description": "If true, reply with ai.inference.chunk messages followed by ai.inference.done."
+        },
+        "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
+        "maxTokens": { "type": "integer", "minimum": 1 }
+      },
+      "required": ["messages"],
+      "additionalProperties": true
+    },
+
+    "ai-inference-response-payload": {
+      "type": "object",
+      "description": "Non-streaming LLM completion response.",
+      "properties": {
+        "content": { "type": "string", "description": "Generated text." },
+        "model": { "type": "string" },
+        "usage": {
+          "type": "object",
+          "properties": {
+            "promptTokens": { "type": "integer" },
+            "completionTokens": { "type": "integer" },
+            "totalTokens": { "type": "integer" }
+          },
+          "additionalProperties": false
+        },
+        "finishReason": { "type": "string" }
+      },
+      "required": ["content"],
+      "additionalProperties": true
+    },
+
+    "ai-inference-chunk-payload": {
+      "type": "object",
+      "description": "One streaming chunk from a streaming inference request.",
+      "properties": {
+        "delta": { "type": "string", "description": "Incremental text token(s)." },
+        "index": { "type": "integer", "description": "Zero-based chunk sequence number." }
+      },
+      "required": ["delta"],
+      "additionalProperties": false
+    },
+
+    "ai-tts-request-payload": {
+      "type": "object",
+      "description": "Request text-to-speech synthesis. Audio is delivered via binary channel.",
+      "properties": {
+        "text": { "type": "string", "description": "Text to synthesize." },
+        "voice": { "type": "string", "description": "Voice ID override. Defaults to actor's configured voice." },
+        "encoding": {
+          "type": "string",
+          "enum": ["opus", "mp3", "linear16"],
+          "description": "Audio encoding format. Default: opus."
+        },
+        "sampleRate": { "type": "integer", "description": "Sample rate in Hz. Default: 16000." }
+      },
+      "required": ["text"],
+      "additionalProperties": false
+    },
+
+    "ai-stt-start-payload": {
+      "type": "object",
+      "description": "Begin a speech-to-text streaming session. Audio arrives via binary channel.",
+      "properties": {
+        "encoding": {
+          "type": "string",
+          "enum": ["opus", "mp3", "linear16", "mulaw"],
+          "description": "Expected audio encoding."
+        },
+        "sampleRate": { "type": "integer", "description": "Audio sample rate in Hz." },
+        "language": { "type": "string", "description": "BCP-47 language code. Default: en-US." },
+        "model": { "type": "string", "description": "STT model override." }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+
+    "ai-stt-transcript-payload": {
+      "type": "object",
+      "description": "A transcription result from an STT actor.",
+      "properties": {
+        "transcript": { "type": "string" },
+        "isFinal": { "type": "boolean", "description": "True for final results; false for interim." },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "words": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "word": { "type": "string" },
+              "start": { "type": "number" },
+              "end": { "type": "number" },
+              "confidence": { "type": "number" }
+            },
+            "required": ["word", "start", "end"]
+          }
+        }
+      },
+      "required": ["transcript", "isFinal"],
+      "additionalProperties": false
+    },
+
+    "ai-session-create-payload": {
+      "type": "object",
+      "description": "Create or resume a user session actor.",
+      "properties": {
+        "userId": { "type": "string" },
+        "metadata": { "type": "object", "additionalProperties": true }
+      },
+      "required": ["userId"],
+      "additionalProperties": false
+    },
+
+    "ai-session-state-payload": {
+      "type": "object",
+      "description": "Current session state snapshot.",
+      "properties": {
+        "userId": { "type": "string" },
+        "activeActors": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/ai-actor-address" },
+          "description": "Addresses of actors active within this session."
+        },
+        "createdAt": { "type": "integer", "description": "Epoch milliseconds." },
+        "metadata": { "type": "object", "additionalProperties": true }
+      },
+      "required": ["userId", "activeActors", "createdAt"],
+      "additionalProperties": false
     }
   }
 }
