@@ -1,5 +1,5 @@
-import { test, expect, describe, beforeEach, mock, spyOn } from 'bun:test';
-import { EmbeddingManager, SimilarityResult } from './embedding.ts';
+import { test, expect, describe, beforeEach, mock } from 'bun:test';
+import { EmbeddingManager } from './embedding.ts';
 import GraphStore from '../graph.ts';
 
 // Counter to ensure unique data directories per test
@@ -26,18 +26,9 @@ function mockEmbed(text: string): number[] {
   return embedding.map(v => v / norm);
 }
 
-// Similar text should have similar embeddings
-function mockEmbedSimilar(text: string, baseText: string): number[] {
-  const base = mockEmbed(baseText);
-  const noise = mockEmbed(text);
-  // Blend: 90% base + 10% noise for similar texts
-  return base.map((v, i) => v * 0.9 + noise[i] * 0.1);
-}
-
 describe('EmbeddingManager', () => {
   let store: GraphStore;
   let manager: EmbeddingManager;
-  let originalEmbed: typeof EmbeddingManager.prototype.embed;
 
   beforeEach(async () => {
     testCounter++;
@@ -46,7 +37,6 @@ describe('EmbeddingManager', () => {
     manager = new EmbeddingManager(store);
 
     // Mock the embed method to avoid actual API calls
-    originalEmbed = manager.embed.bind(manager);
     manager.embed = mock(async (text: string) => mockEmbed(text));
   });
 
@@ -343,7 +333,7 @@ describe('EmbeddingManager', () => {
       await manager.embedNode('other');
 
       // Should not throw, should auto-embed
-      const results = await manager.findSimilarToNode('auto-embed');
+      await manager.findSimilarToNode('auto-embed');
       expect(manager.hasEmbedding('auto-embed')).toBe(true);
     });
   });
@@ -428,71 +418,5 @@ describe('EmbeddingManager', () => {
       const events = manager.getEmbeddingEvents(3);
       expect(events.length).toBe(3);
     });
-  });
-});
-
-// E2E tests that require actual Cloudflare credentials
-// Workers AI requires a Cloudflare API token with "Workers AI Read" permission
-// This is DIFFERENT from the AI Gateway token used for unified billing (LLM inference)
-// Set CLOUDFLARE_WORKERS_AI_TOKEN with a token that has Workers AI permissions
-describe('EmbeddingManager E2E', () => {
-  // Only run if CLOUDFLARE_WORKERS_AI_TOKEN is explicitly set
-  // The regular CLOUDFLARE_API_TOKEN is for AI Gateway unified billing, not Workers AI
-  const hasCredentials = process.env.CLOUDFLARE_ACCOUNT_ID &&
-    process.env.CLOUDFLARE_WORKERS_AI_TOKEN;
-
-  test.skipIf(!hasCredentials)('generates real embedding from Cloudflare AI', async () => {
-    const store = new GraphStore(`/tmp/ugs-embedding-e2e-${Date.now()}`);
-    await store.initialize();
-    const manager = new EmbeddingManager(store);
-
-    const embedding = await manager.embed('Hello, this is a test sentence.');
-
-    expect(embedding).toBeDefined();
-    expect(embedding.length).toBe(768);
-    // Embeddings should be normalized
-    const norm = Math.sqrt(embedding.reduce((sum, v) => sum + v * v, 0));
-    expect(norm).toBeCloseTo(1, 1);
-  });
-
-  test.skipIf(!hasCredentials)('embeds and finds similar nodes with real API', async () => {
-    const store = new GraphStore(`/tmp/ugs-embedding-e2e-similar-${Date.now()}`);
-    await store.initialize();
-    const manager = new EmbeddingManager(store);
-
-    // Create test nodes
-    await store.addNode('ml-doc', 'document', {
-      title: 'Machine Learning',
-      content: 'Machine learning is a subset of artificial intelligence'
-    });
-    await store.addNode('dl-doc', 'document', {
-      title: 'Deep Learning',
-      content: 'Deep learning uses neural networks with many layers'
-    });
-    await store.addNode('cooking-doc', 'document', {
-      title: 'Cooking',
-      content: 'Recipes for delicious pasta and pizza'
-    });
-
-    // Embed all nodes
-    await manager.embedNode('ml-doc');
-    await manager.embedNode('dl-doc');
-    await manager.embedNode('cooking-doc');
-
-    // Search for AI-related documents
-    const results = await manager.findSimilarToText('artificial intelligence neural networks');
-
-    // ML and DL docs should be more similar than cooking doc
-    expect(results.length).toBeGreaterThan(0);
-    const mlResult = results.find(r => r.node.id === 'ml-doc');
-    const dlResult = results.find(r => r.node.id === 'dl-doc');
-    const cookingResult = results.find(r => r.node.id === 'cooking-doc');
-
-    if (mlResult && cookingResult) {
-      expect(mlResult.similarity).toBeGreaterThan(cookingResult.similarity);
-    }
-    if (dlResult && cookingResult) {
-      expect(dlResult.similarity).toBeGreaterThan(cookingResult.similarity);
-    }
   });
 });

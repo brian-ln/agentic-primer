@@ -8,12 +8,12 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdtemp, writeFile, rm, readFile } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { MigrationAnalyzer } from '../analyzer';
 import { MigrationPlanner } from '../planner';
-import { MigrationRefactor, transformAddressCalls } from '../refactor';
+import { MigrationRefactor } from '../refactor';
 import { MigrationReporter } from '../reporter';
 
 describe('Migration Analyzer', () => {
@@ -376,178 +376,6 @@ describe('Migration Planner', () => {
   });
 });
 
-// Migration completed - paths-only mode active (no flat ID support)
-describe.skip('Migration Refactor', () => {
-  let testDir: string;
-
-  beforeEach(async () => {
-    testDir = await mkdtemp(join(tmpdir(), 'refactor-test-'));
-  });
-
-  afterEach(async () => {
-    await rm(testDir, { recursive: true, force: true });
-  });
-
-  test('applies code changes to file', async () => {
-    const originalContent = `
-const msg = address('old-flat-id');
-`;
-
-    const testFile = join(testDir, 'test.ts');
-    await writeFile(testFile, originalContent);
-
-    const refactor = new MigrationRefactor({ dryRun: false });
-    const session = refactor.startSession();
-
-    const step = {
-      step: 1,
-      actorId: 'old-flat-id',
-      targetPath: 'domain/new-path',
-      type: 'update-usages' as const,
-      description: 'Update usage',
-      files: [testFile],
-      changes: [
-        {
-          file: testFile,
-          line: 2,
-          before: "address('old-flat-id')",
-          after: "address('domain/new-path')",
-          type: 'replace' as const,
-        },
-      ],
-      effort: 5,
-      prerequisites: [],
-    };
-
-    const results = await refactor.applyStep(step);
-
-    expect(results[0].success).toBe(true);
-    expect(results[0].changesApplied).toBe(1);
-
-    const newContent = await readFile(testFile, 'utf-8');
-    expect(newContent).toContain("address('domain/new-path')");
-    expect(newContent).not.toContain("address('old-flat-id')");
-
-    refactor.endSession();
-  });
-
-  test('dry run does not modify files', async () => {
-    const originalContent = `const msg = address('flat-id');`;
-    const testFile = join(testDir, 'test.ts');
-    await writeFile(testFile, originalContent);
-
-    const refactor = new MigrationRefactor({ dryRun: true });
-    const session = refactor.startSession();
-
-    const step = {
-      step: 1,
-      actorId: 'flat-id',
-      targetPath: 'domain/actor',
-      type: 'update-usages' as const,
-      description: 'Update',
-      files: [testFile],
-      changes: [
-        {
-          file: testFile,
-          line: 1,
-          before: "address('flat-id')",
-          after: "address('domain/actor')",
-          type: 'replace' as const,
-        },
-      ],
-      effort: 5,
-      prerequisites: [],
-    };
-
-    await refactor.applyStep(step);
-
-    const content = await readFile(testFile, 'utf-8');
-    expect(content).toBe(originalContent); // Unchanged
-
-    refactor.endSession();
-  });
-
-  test('supports rollback', async () => {
-    const originalContent = `const msg = address('flat');`;
-    const testFile = join(testDir, 'test.ts');
-    await writeFile(testFile, originalContent);
-
-    const refactor = new MigrationRefactor({ dryRun: false, backup: true });
-    const session = refactor.startSession();
-
-    const step = {
-      step: 1,
-      actorId: 'flat',
-      targetPath: 'domain/actor',
-      type: 'update-usages' as const,
-      description: 'Update',
-      files: [testFile],
-      changes: [
-        {
-          file: testFile,
-          line: 1,
-          before: "address('flat')",
-          after: "address('domain/actor')",
-          type: 'replace' as const,
-        },
-      ],
-      effort: 5,
-      prerequisites: [],
-    };
-
-    await refactor.applyStep(step);
-
-    // Verify change applied
-    let content = await readFile(testFile, 'utf-8');
-    expect(content).toContain("address('domain/actor')");
-
-    // Rollback
-    await refactor.rollback();
-
-    // Verify restored
-    content = await readFile(testFile, 'utf-8');
-    expect(content).toBe(originalContent);
-
-    refactor.endSession();
-  });
-
-  test('transformAddressCalls replaces flat IDs', () => {
-    const proposals = [
-      {
-        flatId: 'actor1',
-        proposedPath: 'domain/actor1',
-        reasoning: '',
-        confidence: 'high' as const,
-        dependencies: [],
-        effort: 10,
-      },
-      {
-        flatId: 'actor2',
-        proposedPath: 'services/actor2',
-        reasoning: '',
-        confidence: 'high' as const,
-        dependencies: [],
-        effort: 10,
-      },
-    ];
-
-    const content = `
-const msg1 = address('actor1');
-const msg2 = address('actor2');
-const msg3 = address('domain/already-path');
-`;
-
-    const transform = transformAddressCalls(proposals);
-    const result = transform(content);
-
-    expect(result).toContain("address('domain/actor1')");
-    expect(result).toContain("address('services/actor2')");
-    expect(result).toContain("address('domain/already-path')");
-    expect(result).not.toContain("address('actor1')");
-    expect(result).not.toContain("address('actor2')");
-  });
-});
-
 describe('Migration Reporter', () => {
   test('generates progress report', () => {
     const mockAnalysis = {
@@ -684,7 +512,7 @@ const msg = address('my-actor');
 
     // 4. Execute (dry run)
     const refactor = new MigrationRefactor({ dryRun: true });
-    const session = refactor.startSession();
+    refactor.startSession();
 
     for (const step of plan.steps) {
       await refactor.applyStep(step);
