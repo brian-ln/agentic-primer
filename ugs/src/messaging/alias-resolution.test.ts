@@ -6,7 +6,10 @@
  * context injection, priority resolution, and cycle detection.
  */
 
-import { describe, test, expect, beforeEach } from 'bun:test';
+import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import GraphStore from '@src/graph.ts';
 import {
   AliasResolver,
@@ -18,13 +21,17 @@ import {
 describe('Alias Resolver', () => {
   let graph: GraphStore;
   let resolver: AliasResolver;
+  let testDir: string;
 
   beforeEach(async () => {
-    // Use unique data directory per test run to avoid state pollution
-    const testId = Date.now() + Math.random();
-    graph = new GraphStore(`./data/test-alias-${testId}`);
+    testDir = await mkdtemp(join(tmpdir(), 'ugs-alias-'));
+    graph = new GraphStore(testDir);
     await graph.initialize();
     resolver = new AliasResolver(graph);
+  });
+
+  afterEach(async () => {
+    await rm(testDir, { recursive: true, force: true });
   });
 
   describe('createAlias', () => {

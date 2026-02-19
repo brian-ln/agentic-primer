@@ -8,7 +8,9 @@ import { ProgramManager } from '../../entities/program.ts';
 import { address, createMessage } from '@agentic-primer/actors';
 import type { Message, MessageResponse } from '@agentic-primer/actors';
 import * as fs from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import * as path from 'node:path';
+import { tmpdir } from 'node:os';
 import { existsSync } from 'node:fs';
 
 describe('FileSystemActor', () => {
@@ -16,11 +18,15 @@ describe('FileSystemActor', () => {
   let programManager: ProgramManager;
   let router: MessageRouter;
   let fsActor: FileSystemActor;
-  const testDir = path.resolve('./test-filesystem');
-  const allowedDir = path.join(testDir, 'allowed');
-  const restrictedDir = path.join(testDir, 'restricted');
+  let testDir: string;
+  let allowedDir: string;
+  let restrictedDir: string;
 
   beforeEach(async () => {
+    testDir = await mkdtemp(path.join(tmpdir(), 'ugs-filesystem-'));
+    allowedDir = path.join(testDir, 'allowed');
+    restrictedDir = path.join(testDir, 'restricted');
+
     store = new GraphStore();
     programManager = new ProgramManager(store);
     router = new MessageRouter(store, programManager);

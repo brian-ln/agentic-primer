@@ -11,6 +11,9 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { query } from '../builder.ts';
 import GraphStore from '@src/graph.ts';
 import { AliasResolver } from '@src/messaging/alias-resolver.ts';
@@ -22,10 +25,10 @@ describe('Query DSL Helpers', () => {
   let aliasResolver: AliasResolver;
   let router: MessageRouter;
   let programManager: ProgramManager;
+  let testDir: string;
 
   beforeEach(async () => {
-    // Use unique data directory for each test run
-    const testDir = `./data-test-dsl-helpers-${Date.now()}-${Math.random()}`;
+    testDir = await mkdtemp(join(tmpdir(), 'ugs-dsl-helpers-'));
     store = new GraphStore(testDir);
     await store.initialize();
     programManager = new ProgramManager(store);
@@ -38,6 +41,7 @@ describe('Query DSL Helpers', () => {
     if (store) {
       await store.shutdown();
     }
+    await rm(testDir, { recursive: true, force: true });
   });
 
   describe('matchPath()', () => {

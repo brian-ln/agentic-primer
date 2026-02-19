@@ -23,7 +23,9 @@ import { address, createMessage, createResponse } from '@agentic-primer/actors';
 import type { Message, MessageResponse } from '@agentic-primer/actors';
 import { Database } from 'bun:sqlite';
 import * as fs from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import * as path from 'node:path';
+import { tmpdir } from 'node:os';
 import { unlinkSync, existsSync } from 'fs';
 
 // Test Actor that uses system actors through routing
@@ -113,10 +115,15 @@ describe('Integration: StorageActor Access Control via Routing', () => {
   let domainStorage: StorageActor;
   let workflowActor: WorkflowActor;
   let domainActor: DomainActor;
-  const workflowDbPath = './test-workflow.db';
-  const domainDbPath = './test-domain.db';
+  let testDbDir: string;
+  let workflowDbPath: string;
+  let domainDbPath: string;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    testDbDir = await mkdtemp(path.join(tmpdir(), 'ugs-integration-storage-'));
+    workflowDbPath = path.join(testDbDir, 'workflow.db');
+    domainDbPath = path.join(testDbDir, 'domain.db');
+
     store = new GraphStore();
     programManager = new ProgramManager(store);
     router = new MessageRouter(store, programManager);
@@ -181,13 +188,8 @@ describe('Integration: StorageActor Access Control via Routing', () => {
     router.registerActor('/domain/domain-actor', domainActor);
   });
 
-  afterEach(() => {
-    try {
-      unlinkSync(workflowDbPath);
-      unlinkSync(domainDbPath);
-    } catch (e) {
-      // Ignore if files don't exist
-    }
+  afterEach(async () => {
+    await rm(testDbDir, { recursive: true, force: true });
   });
 
   test('WorkflowActor can query allowed table (tasks) via routing', async () => {
@@ -325,12 +327,17 @@ describe('Integration: FileSystemActor Access Control via Routing', () => {
   let domainFs: FileSystemActor;
   let workflowActor: WorkflowActor;
   let domainActor: DomainActor;
-  const testDir = path.resolve('./test-integration-fs');
-  const workflowDir = path.join(testDir, 'workflows');
-  const domainDir = path.join(testDir, 'domain');
-  const restrictedDir = path.join(testDir, 'restricted');
+  let testDir: string;
+  let workflowDir: string;
+  let domainDir: string;
+  let restrictedDir: string;
 
   beforeEach(async () => {
+    testDir = await mkdtemp(path.join(tmpdir(), 'ugs-integration-fs-'));
+    workflowDir = path.join(testDir, 'workflows');
+    domainDir = path.join(testDir, 'domain');
+    restrictedDir = path.join(testDir, 'restricted');
+
     store = new GraphStore();
     programManager = new ProgramManager(store);
     router = new MessageRouter(store, programManager);
@@ -524,11 +531,15 @@ describe('Integration: Cross-System Actor Operations', () => {
   let storage: StorageActor;
   let fsActor: FileSystemActor;
   let workflowActor: WorkflowActor;
-  const dbPath = './test-cross.db';
-  const testDir = path.resolve('./test-cross-fs');
-  const allowedDir = path.join(testDir, 'allowed');
+  let testDir: string;
+  let dbPath: string;
+  let allowedDir: string;
 
   beforeEach(async () => {
+    testDir = await mkdtemp(path.join(tmpdir(), 'ugs-integration-cross-'));
+    dbPath = path.join(testDir, 'cross.db');
+    allowedDir = path.join(testDir, 'allowed');
+
     store = new GraphStore();
     programManager = new ProgramManager(store);
     router = new MessageRouter(store, programManager);
@@ -572,13 +583,7 @@ describe('Integration: Cross-System Actor Operations', () => {
 
   afterEach(async () => {
     await fsActor.shutdown();
-
-    try {
-      unlinkSync(dbPath);
-      await fs.rm(testDir, { recursive: true, force: true });
-    } catch (e) {
-      // Ignore
-    }
+    await rm(testDir, { recursive: true, force: true });
   });
 
   test('Actor uses both StorageActor and FileSystemActor in single workflow', async () => {
@@ -702,11 +707,15 @@ describe('Integration: Operation Permission Enforcement', () => {
   let router: MessageRouter;
   let readOnlyStorage: StorageActor;
   let readOnlyFs: FileSystemActor;
-  const dbPath = './test-readonly.db';
-  const testDir = path.resolve('./test-readonly-fs');
-  const allowedDir = path.join(testDir, 'allowed');
+  let testDir: string;
+  let dbPath: string;
+  let allowedDir: string;
 
   beforeEach(async () => {
+    testDir = await mkdtemp(path.join(tmpdir(), 'ugs-integration-readonly-'));
+    dbPath = path.join(testDir, 'readonly.db');
+    allowedDir = path.join(testDir, 'allowed');
+
     store = new GraphStore();
     programManager = new ProgramManager(store);
     router = new MessageRouter(store, programManager);
@@ -739,13 +748,7 @@ describe('Integration: Operation Permission Enforcement', () => {
 
   afterEach(async () => {
     await readOnlyFs.shutdown();
-
-    try {
-      unlinkSync(dbPath);
-      await fs.rm(testDir, { recursive: true, force: true });
-    } catch (e) {
-      // Ignore
-    }
+    await rm(testDir, { recursive: true, force: true });
   });
 
   test('Read-only storage allows queries but denies writes', async () => {
