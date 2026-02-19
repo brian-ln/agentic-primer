@@ -28,3 +28,6 @@ export { LibSqlStorage } from './libsql-storage.ts';
 
 export { LibSqlVectorStore } from './libsql-vector-store.ts';
 export type { LibSqlVectorStoreConfig } from './libsql-vector-store.ts';
+
+export { BunWebSocketBridge } from './transports/bun-websocket-bridge.ts';
+export type { ConnectionData } from './transports/bun-websocket-bridge.ts';

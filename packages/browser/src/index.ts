@@ -65,6 +65,8 @@ export {
   ServiceWorkerTransport,
 } from './transports/service-worker-transport.ts';
 
+export { RemoteTransportAdapter } from './transports/remote-transport-adapter.ts';
+
 // Signal <-> Channel Bridges (browser-specific)
 export {
   type BridgeSignal,
