@@ -14,8 +14,6 @@ import GraphStore from '@src/graph.ts';
 import {
   AliasResolver,
   AliasError,
-  type Alias,
-  type ResolvedPath,
 } from './alias-resolver';
 
 describe('Alias Resolver', () => {
@@ -79,19 +77,19 @@ describe('Alias Resolver', () => {
     test('rejects duplicate alias', async () => {
       await resolver.createAlias('services/llm', 'domain/inference');
 
-      await expect(
+      expect(
         resolver.createAlias('services/llm', 'domain/executor')
       ).rejects.toThrow(AliasError);
     });
 
     test('rejects invalid alias path', async () => {
-      await expect(
+      expect(
         resolver.createAlias('services/../domain', 'domain/inference')
       ).rejects.toThrow(AliasError);
     });
 
     test('rejects invalid canonical path', async () => {
-      await expect(
+      expect(
         resolver.createAlias('services/llm', 'domain/../inference')
       ).rejects.toThrow(AliasError);
     });
@@ -100,7 +98,7 @@ describe('Alias Resolver', () => {
       await resolver.createAlias('a', 'b');
 
       // Creating b → a would create a cycle
-      await expect(
+      expect(
         resolver.createAlias('b', 'a')
       ).rejects.toThrow(AliasError);
     });
@@ -181,8 +179,8 @@ describe('Alias Resolver', () => {
         context: {},
       });
 
-      await expect(resolver.resolve('a')).rejects.toThrow(AliasError);
-      await expect(resolver.resolve('a')).rejects.toThrow('cycle');
+      expect(resolver.resolve('a')).rejects.toThrow(AliasError);
+      expect(resolver.resolve('a')).rejects.toThrow('cycle');
     });
 
     test('prevents infinite resolution (max depth)', async () => {
@@ -192,7 +190,7 @@ describe('Alias Resolver', () => {
       }
 
       // Should hit max depth (default: 10)
-      await expect(
+      expect(
         resolver.resolve('alias0')
       ).rejects.toThrow('exceeded max depth');
     });
@@ -203,7 +201,7 @@ describe('Alias Resolver', () => {
       await resolver.createAlias('c', 'd');
 
       // Max depth 2 should fail
-      await expect(
+      expect(
         resolver.resolve('a', { maxDepth: 2 })
       ).rejects.toThrow('exceeded max depth');
 
