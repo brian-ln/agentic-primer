@@ -14,7 +14,7 @@
  */
 
 import { Actor, createResponse, createErrorResponse, createPortChannel } from '@agentic-primer/actors';
-import type { Message, MessageResponse, MessageRouter } from '@agentic-primer/actors';
+import type { Message, MessageResponse, IMessageRouter } from '@agentic-primer/actors';
 import type { PortChannel } from '@agentic-primer/actors';
 
 /**
@@ -101,7 +101,7 @@ export class WebSocketActor extends Actor {
   private connections: Map<string, WSConnection>;
   private eventPorts: Map<string, PortChannel<WSEvent>>;
 
-  constructor(id: string, router: MessageRouter, config: WebSocketActorConfig) {
+  constructor(id: string, router: IMessageRouter, config: WebSocketActorConfig) {
     super(id, router);
     this.allowedHosts = new Set(config.allowedHosts);
     this.maxConnections = config.maxConnections;

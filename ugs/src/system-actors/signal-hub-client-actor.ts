@@ -35,7 +35,7 @@
  */
 
 import { Actor, createResponse, createErrorResponse, address } from '@agentic-primer/actors';
-import type { Message, MessageResponse, MessageRouter, Address } from '@agentic-primer/actors';
+import type { Message, MessageResponse, IMessageRouter, Address } from '@agentic-primer/actors';
 import { SignalHubClient } from '../messaging/signal-hub/client.ts';
 import type { SignalHubConfig } from '../messaging/signal-hub/types.ts';
 import type { SharedMessage, CanonicalAddress } from '@agentic-primer/protocols';
@@ -61,7 +61,7 @@ export class SignalHubClientActor extends Actor {
   private client: SignalHubClient;
   private config: SignalHubClientActorConfig;
 
-  constructor(router: MessageRouter, config: SignalHubClientActorConfig) {
+  constructor(router: IMessageRouter, config: SignalHubClientActorConfig) {
     super('bridges/signal-hub-client', router);
     this.config = config;
     this.client = new SignalHubClient(config);

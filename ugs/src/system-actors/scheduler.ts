@@ -11,7 +11,7 @@
  */
 
 import { Actor, createResponse, createMessage } from '@agentic-primer/actors';
-import type { Message, MessageResponse, Address, MessageRouter } from '@agentic-primer/actors';
+import type { Message, MessageResponse, Address, IMessageRouter } from '@agentic-primer/actors';
 
 /**
  * Clock interface - abstracts time for testability
@@ -194,7 +194,7 @@ export class SchedulerActor extends Actor {
   private nextScheduleId = 1;
 
   constructor(
-    router: MessageRouter,
+    router: IMessageRouter,
     options: {
       clock?: 'real' | 'virtual' | Clock;
     } = {}
