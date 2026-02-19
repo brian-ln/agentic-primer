@@ -8,7 +8,7 @@
 
 import type GraphStore from '../graph.ts';
 import type { ProgramManager } from '../entities/program.ts';
-import { MessageRouter, type RouterStats } from './router.ts';
+import { MessageRouter, type RouterStats, type BridgeRoute } from './router.ts';
 import {
   ActorWithIntrospection,
   type Message,
@@ -1006,6 +1006,26 @@ export class ActorSystem {
       from: address('system/actor-system'),
     });
     await this.router.tell(message);
+  }
+
+  /**
+   * Register a bridge route for cross-runtime message delivery.
+   *
+   * Messages addressed to targets starting with `bridge.prefix` are serialized
+   * with `bridge.serde` and dispatched via `bridge.transport`.
+   *
+   * Example — wire Signal Hub transport:
+   * ```typescript
+   * system.registerBridge({
+   *   prefix: 'hub://',
+   *   transport: new SignalHubTransport(client),
+   *   serde: new JsonSerde(),
+   * });
+   * // Any message to address('hub://my-actor') now routes through Signal Hub
+   * ```
+   */
+  registerBridge(bridge: BridgeRoute): void {
+    this.router.registerBridge(bridge);
   }
 
   /**

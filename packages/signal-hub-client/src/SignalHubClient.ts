@@ -734,8 +734,8 @@ export class SignalHubClient {
         authToken: this.jwt,
         capabilities: ['send', 'receive'],
         clientMetadata: {
-          userAgent: navigator.userAgent,
-          platform: navigator.platform,
+          userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : `node/${(globalThis as any).process?.version ?? 'unknown'}`,
+          platform: typeof navigator !== 'undefined' ? navigator.platform : ((globalThis as any).process?.platform ?? 'unknown'),
         },
       },
       ttl: 5000,

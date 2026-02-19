@@ -30,9 +30,11 @@
   "author": "Brian Lloyd-Newberry",
   "license": "MIT",
   "peerDependencies": {
+    "@agentic-primer/actors": "^0.1.0",
     "@agentic-primer/protocols": "^0.1.0"
   },
   "devDependencies": {
+    "@agentic-primer/actors": "workspace:*",
     "@agentic-primer/protocols": "workspace:*",
     "typescript": "^5.3.3"
   }

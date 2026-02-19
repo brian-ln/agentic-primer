@@ -5,6 +5,7 @@
  */
 
 export { SignalHubClient } from './SignalHubClient.js';
+export { SignalHubTransport, createSignalHubTransport } from './SignalHubTransport.js';
 
 export type {
   SignalHubClientOptions,

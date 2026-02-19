@@ -339,9 +339,7 @@ export class SignalHubClientActor extends Actor {
   }
 
   private getLocalActors(): Address[] {
-    // This would need to be implemented based on how MessageRouter exposes registered actors
-    // For now, return empty array (will be enhanced when integrating with router)
-    return [];
+    return this.router.listActors().map((id) => address(id));
   }
 
   private async queryActorCapabilities(actorAddress: Address): Promise<string[]> {
