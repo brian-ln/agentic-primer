@@ -13,7 +13,7 @@
  * - Error handling with retry
  */
 
-import type { MessageRouter } from '../../messaging/router.ts';
+import type { MessageRouter } from '@src/messaging/router.ts';
 import type { Address, Message } from '@agentic-primer/actors';
 import type { PatternSpec, FilterExpression, ActionSpec } from '../types.ts';
 import { address as createAddress } from '@agentic-primer/actors';

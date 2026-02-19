@@ -15,14 +15,14 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { QueryExecutor } from '../../messaging/actors/query-executor.ts';
-import { ProgramExecutorActor } from '../../messaging/actors/program-executor.ts';
-import { InferenceActor } from '../../messaging/actors/inference.ts';
-import { StoreQueryActor } from '../../messaging/actors/store-query-actor.ts';
-import { SilentLoggerActor } from '../../messaging/actors/logger.ts';
-import { MessageRouter } from '../../messaging/router.ts';
-import GraphStore from '../../graph.ts';
-import { ProgramManager } from '../../entities/program.ts';
+import { QueryExecutor } from '@src/messaging/actors/query-executor.ts';
+import { ProgramExecutorActor } from '@src/messaging/actors/program-executor.ts';
+import { InferenceActor } from '@src/messaging/actors/inference.ts';
+import { StoreQueryActor } from '@src/messaging/actors/store-query-actor.ts';
+import { SilentLoggerActor } from '@src/messaging/actors/logger.ts';
+import { MessageRouter } from '@src/messaging/router.ts';
+import GraphStore from '@src/graph.ts';
+import { ProgramManager } from '@src/entities/program.ts';
 import { query, send, upsertRelationship } from '../builder.ts';
 import { pattern } from '../pattern.ts';
 import type { Subscription } from '../types.ts';

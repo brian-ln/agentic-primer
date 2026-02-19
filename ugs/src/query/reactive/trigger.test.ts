@@ -8,9 +8,9 @@
 import { test, expect, describe, beforeEach, afterEach } from 'bun:test';
 import { EventTriggerManager, type EventPayload, type TriggerSpec } from './trigger.ts';
 import { query, send, pattern } from '../index.ts';
-import { MessageRouter } from '../../messaging/router.ts';
-import GraphStore from '../../graph.ts';
-import { ProgramManager } from '../../entities/program.ts';
+import { MessageRouter } from '@src/messaging/router.ts';
+import GraphStore from '@src/graph.ts';
+import { ProgramManager } from '@src/entities/program.ts';
 import { address, type Message } from '@agentic-primer/actors';
 
 // Mock router for testing

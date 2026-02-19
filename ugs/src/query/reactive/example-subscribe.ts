@@ -5,10 +5,10 @@
  * Demonstrates live queries that automatically update when patterns match/unmatch.
  */
 
-import GraphStore from '../../graph.ts';
-import { ProgramManager } from '../../entities/program.ts';
-import { MessageRouter } from '../../messaging/router.ts';
-import { QueryExecutor } from '../../messaging/actors/query-executor.ts';
+import GraphStore from '@src/graph.ts';
+import { ProgramManager } from '@src/entities/program.ts';
+import { MessageRouter } from '@src/messaging/router.ts';
+import { QueryExecutor } from '@src/messaging/actors/query-executor.ts';
 import { query } from '../builder.ts';
 import { pattern } from '../pattern.ts';
 

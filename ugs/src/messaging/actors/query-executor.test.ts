@@ -8,12 +8,12 @@
 import { test, expect, describe, beforeEach } from 'bun:test';
 import { QueryExecutor } from './query-executor.ts';
 import { MessageRouter } from '../router.ts';
-import { SilentLoggerActor } from '../../messaging/actors/logger.ts';
+import { SilentLoggerActor } from './logger.ts';
 import { address, generateMessageId, type Message } from '@agentic-primer/actors';
-import { query, send } from '../../query/builder.ts';
-import { pattern } from '../../query/pattern.ts';
-import type GraphStore from '../../graph.ts';
-import type { ProgramManager } from '../../entities/program.ts';
+import { query, send } from '@src/query/builder.ts';
+import { pattern } from '@src/query/pattern.ts';
+import type GraphStore from '@src/graph.ts';
+import type { ProgramManager } from '@src/entities/program.ts';
 
 // Mock implementations
 function createMockGraphStore(): GraphStore {

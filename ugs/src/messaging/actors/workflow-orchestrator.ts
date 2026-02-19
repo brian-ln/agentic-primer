@@ -21,8 +21,8 @@ import { Actor } from '../actor.ts';
 import type { MessageRouter } from '../router.ts';
 import type { Message, MessageResponse, Address } from '@agentic-primer/actors';
 import { createResponse, createErrorResponse, address } from '@agentic-primer/actors';
-import type GraphStore from '../../graph.ts';
-import type { Task, TaskEventType } from '../../entities/task.ts';
+import type GraphStore from '@src/graph.ts';
+import type { Task, TaskEventType } from '@src/entities/task.ts';
 import type { Relationship } from './relationship.ts';
 
 /**

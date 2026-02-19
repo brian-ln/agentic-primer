@@ -15,7 +15,7 @@ import { Actor } from '../actor.ts';
 import type { MessageRouter } from '../router.ts';
 import type { Message, MessageResponse, Address } from '@agentic-primer/actors';
 import { createResponse, createErrorResponse, parseAddress } from '@agentic-primer/actors';
-import { LibSQLKnowledgeStore } from '../../storage/LibSQLKnowledgeStore.ts';
+import { LibSQLKnowledgeStore } from '@src/storage/LibSQLKnowledgeStore.ts';
 
 // Epistemic types (from epistemic gradients work)
 export type EpistemicLevel = 'reject' | 'doubt' | 'wonder' | 'suspect' | 'believe' | 'know';

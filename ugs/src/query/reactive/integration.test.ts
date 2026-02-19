@@ -6,11 +6,11 @@
  */
 
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { QueryExecutor } from '../../messaging/actors/query-executor.ts';
-import { MessageRouter } from '../../messaging/router.ts';
-import { SilentLoggerActor } from '../../messaging/actors/logger.ts';
-import GraphStore from '../../graph.ts';
-import { ProgramManager } from '../../entities/program.ts';
+import { QueryExecutor } from '@src/messaging/actors/query-executor.ts';
+import { MessageRouter } from '@src/messaging/router.ts';
+import { SilentLoggerActor } from '@src/messaging/actors/logger.ts';
+import GraphStore from '@src/graph.ts';
+import { ProgramManager } from '@src/entities/program.ts';
 import { query } from '../builder.ts';
 import { pattern } from '../pattern.ts';
 

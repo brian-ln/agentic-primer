@@ -14,8 +14,8 @@ import { Actor } from '../actor.ts';
 import type { MessageRouter } from '../router.ts';
 import type { Message, MessageResponse, Address } from '@agentic-primer/actors';
 import { createResponse, createErrorResponse, address } from '@agentic-primer/actors';
-import { TaskManager, type Task, type TaskSpec, type TaskPriority } from '../../entities/task.ts';
-import GraphStore from '../../graph.ts';
+import { TaskManager, type Task, type TaskSpec, type TaskPriority } from '@src/entities/task.ts';
+import GraphStore from '@src/graph.ts';
 
 /**
  * TaskActor - Manages tasks through message interface

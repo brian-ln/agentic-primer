@@ -7,8 +7,8 @@
  */
 
 import { bench, run } from 'mitata';
-import GraphStore from '../../graph.ts';
-import { ProgramManager } from '../../entities/program.ts';
+import GraphStore from '@src/graph.ts';
+import { ProgramManager } from '@src/entities/program.ts';
 import { ActorSystem, address } from '../index.ts';
 
 // Setup: Create actor system

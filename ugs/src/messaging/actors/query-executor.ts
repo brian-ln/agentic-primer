@@ -25,10 +25,10 @@ import {
   address as createAddress,
   generateMessageId,
 } from '@agentic-primer/actors';
-import { QueryCompiler } from '../../query/compiler.ts';
-import { QueryCache } from '../../query/cache.ts';
-import { SubscriptionManager } from '../../query/reactive/subscriber.ts';
-import { EventTriggerManager, type TriggerSpec, type EventPayload } from '../../query/reactive/trigger.ts';
+import { QueryCompiler } from '@src/query/compiler.ts';
+import { QueryCache } from '@src/query/cache.ts';
+import { SubscriptionManager } from '@src/query/reactive/subscriber.ts';
+import { EventTriggerManager, type TriggerSpec, type EventPayload } from '@src/query/reactive/trigger.ts';
 import type {
   QueryDefinition,
   QueryPlan,
@@ -39,7 +39,7 @@ import type {
   StepStats,
   Subscription,
   SubscriptionCallbacks,
-} from '../../query/types.ts';
+} from '@src/query/types.ts';
 
 /**
  * QueryExecutor - Executes compiled query plans

@@ -12,10 +12,10 @@
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { query } from '../builder.ts';
-import GraphStore from '../../graph.ts';
-import { AliasResolver } from '../../messaging/alias-resolver.ts';
-import { MessageRouter } from '../../messaging/router.ts';
-import { ProgramManager } from '../../entities/program.ts';
+import GraphStore from '@src/graph.ts';
+import { AliasResolver } from '@src/messaging/alias-resolver.ts';
+import { MessageRouter } from '@src/messaging/router.ts';
+import { ProgramManager } from '@src/entities/program.ts';
 
 describe('Query DSL Helpers', () => {
   let store: GraphStore;

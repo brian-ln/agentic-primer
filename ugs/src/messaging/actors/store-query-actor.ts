@@ -6,7 +6,7 @@
  * Used as fallback for unlabeled patterns in query system.
  */
 
-import type GraphStore from '../../graph.ts';
+import type GraphStore from '@src/graph.ts';
 import type { Message, MessageResponse } from '@agentic-primer/actors';
 import { createResponse, createErrorResponse } from '@agentic-primer/actors';
 

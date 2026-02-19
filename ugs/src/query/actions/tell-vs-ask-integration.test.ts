@@ -7,12 +7,12 @@
 import { test, expect, describe, beforeEach, afterEach } from 'bun:test';
 import { query, send, pattern } from '../index.ts';
 import { QueryCompiler } from '../compiler.ts';
-import { QueryExecutor } from '../../messaging/actors/query-executor.ts';
-import { MessageRouter } from '../../messaging/router.ts';
-import { SilentLoggerActor } from '../../messaging/actors/logger.ts';
-import { Actor } from '../../messaging/actor.ts';
-import GraphStore from '../../graph.ts';
-import { ProgramManager } from '../../entities/program.ts';
+import { QueryExecutor } from '@src/messaging/actors/query-executor.ts';
+import { MessageRouter } from '@src/messaging/router.ts';
+import { SilentLoggerActor } from '@src/messaging/actors/logger.ts';
+import { Actor } from '@src/messaging/actor.ts';
+import GraphStore from '@src/graph.ts';
+import { ProgramManager } from '@src/entities/program.ts';
 import type { ExecutionContext } from '../types.ts';
 import { address, createResponse, type Message, type MessageResponse } from '@agentic-primer/actors';
 

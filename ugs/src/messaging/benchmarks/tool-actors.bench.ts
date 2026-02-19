@@ -12,8 +12,8 @@
  */
 
 import { bench, run } from 'mitata';
-import GraphStore from '../../graph.ts';
-import { ProgramManager } from '../../entities/program.ts';
+import GraphStore from '@src/graph.ts';
+import { ProgramManager } from '@src/entities/program.ts';
 import { MessageRouter } from '../router.ts';
 import { FileSystemActor } from '../actors/filesystem.ts';
 import { UnsafeCodeComputeActor } from '../actors/compute/unsafe-code.ts';

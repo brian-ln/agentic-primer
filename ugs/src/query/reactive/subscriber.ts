@@ -14,9 +14,9 @@ import type {
   ExecutionContext,
 } from '../types.ts';
 import { QueryCompiler } from '../compiler.ts';
-import { QueryExecutor } from '../../messaging/actors/query-executor.ts';
-import type { MessageRouter } from '../../messaging/router.ts';
-import type { Channel } from '../../messaging/channel.ts';
+import { QueryExecutor } from '@src/messaging/actors/query-executor.ts';
+import type { MessageRouter } from '@src/messaging/router.ts';
+import type { Channel } from '@src/messaging/channel.ts';
 import { address, createMessage } from '@agentic-primer/actors';
 
 /**

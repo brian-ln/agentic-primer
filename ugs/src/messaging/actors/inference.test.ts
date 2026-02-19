@@ -9,8 +9,8 @@ import { test, expect, describe, beforeEach, mock } from 'bun:test';
 import { InferenceActor } from './inference.ts';
 import { MessageRouter } from '../router.ts';
 import { address, generateMessageId, type Message } from '@agentic-primer/actors';
-import type GraphStore from '../../graph.ts';
-import type { ProgramManager } from '../../entities/program.ts';
+import type GraphStore from '@src/graph.ts';
+import type { ProgramManager } from '@src/entities/program.ts';
 import Anthropic from '@anthropic-ai/sdk';
 
 // Mock implementations

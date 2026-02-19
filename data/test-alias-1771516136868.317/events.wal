@@ -1,0 +1,3 @@
+{"id":"5f912912-85d5-445e-b284-29c9874dd4d0","timestamp":1771516136868,"type":"NodeAdded","data":{"id":"alias-services-llm","type":"alias","properties":{"alias_path":"services/llm","canonical_path":"domain/inference","priority":0,"context":{}},"data":null}}
+{"id":"5fe26d91-14ab-4372-8dd3-415ebde4cc3e","timestamp":1771516136868,"type":"EdgeAdded","data":{"id":"alias-services-llm-resolves","from":"alias-services-llm","to":"domain/inference","type":"resolves_to","properties":{"created":1771516136868},"weight":1}}
+{"id":"1275cfb9-6e86-41f2-9e44-93f368e26286","timestamp":1771516136868,"type":"NodeDeleted","data":{"id":"alias-services-llm"}}

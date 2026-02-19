@@ -21,7 +21,7 @@ import { Actor } from '../actor.ts';
 import type { MessageRouter } from '../router.ts';
 import type { Message, MessageResponse, Address } from '@agentic-primer/actors';
 import { createResponse, createErrorResponse } from '@agentic-primer/actors';
-import { LibSQLKnowledgeStore } from '../../storage/LibSQLKnowledgeStore.ts';
+import { LibSQLKnowledgeStore } from '@src/storage/LibSQLKnowledgeStore.ts';
 
 export type RelationshipType =
   | 'supports'      // Evidence/reasoning supports conclusion

@@ -1,0 +1,41 @@
+{
+  "timestamp": 1771516387495,
+  "eventCount": 2,
+  "nodes": [
+    {
+      "id": "alias-a",
+      "type": "alias",
+      "properties": {
+        "alias_path": "a",
+        "canonical_path": "b",
+        "priority": 0,
+        "context": {}
+      },
+      "data": null,
+      "created": 1771516387495,
+      "modified": 1771516387495
+    },
+    {
+      "id": "alias-b",
+      "type": "alias",
+      "properties": {
+        "alias_path": "b",
+        "canonical_path": "a",
+        "priority": 0,
+        "context": {}
+      },
+      "data": null,
+      "created": 1771516387495,
+      "modified": 1771516387495
+    }
+  ],
+  "edges": [],
+  "stats": {
+    "nodeCount": 2,
+    "edgeCount": 0,
+    "indexCount": 9,
+    "eventCount": 2,
+    "lastSnapshot": 0,
+    "lastUpdate": 1771516387495
+  }
+}

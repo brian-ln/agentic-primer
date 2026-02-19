@@ -9,9 +9,9 @@
  * - Return responses
  */
 
-import type GraphStore from '../../graph.ts';
-import type { SessionManager, Session } from '../../entities/session.ts';
-import { ProgramManager } from '../../entities/program.ts';
+import type GraphStore from '@src/graph.ts';
+import type { SessionManager, Session } from '@src/entities/session.ts';
+import { ProgramManager } from '@src/entities/program.ts';
 import { MessageRouter } from '../router.ts';
 import { Actor } from '../actor.ts';
 import {
@@ -21,7 +21,7 @@ import {
   type TokenStreamEvent,
   address,
 } from '@agentic-primer/actors';
-import type { ModelManager } from '../../entities/model.ts';
+import type { ModelManager } from '@src/entities/model.ts';
 
 export class SessionActor extends Actor {
   private sessionId: string;

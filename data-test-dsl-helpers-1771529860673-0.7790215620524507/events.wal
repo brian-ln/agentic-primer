@@ -1,0 +1,2 @@
+{"id":"36711d4d-7e2e-48f6-a619-f0da5a328bef","timestamp":1771529860673,"type":"NodeAdded","data":{"id":"alias-services-llm","type":"alias","properties":{"alias_path":"services/llm","canonical_path":"domain/inference","priority":1,"context":{"role":"llm-service"}},"data":null}}
+{"id":"4137a274-c52b-455f-b73c-9f36ba3f4c08","timestamp":1771529860673,"type":"EdgeAdded","data":{"id":"alias-services-llm-resolves","from":"alias-services-llm","to":"domain/inference","type":"resolves_to","properties":{"created":1771529860673},"weight":1}}

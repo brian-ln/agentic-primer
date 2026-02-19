@@ -14,8 +14,8 @@ import {
 } from '../builder.ts';
 import { pattern } from '../pattern.ts';
 import { QueryCompiler } from '../compiler.ts';
-import { QueryExecutor } from '../../messaging/actors/query-executor.ts';
-import { MessageRouter } from '../../messaging/router.ts';
+import { QueryExecutor } from '@src/messaging/actors/query-executor.ts';
+import { MessageRouter } from '@src/messaging/router.ts';
 import type { QueryDefinition, ActionSpec } from '../types.ts';
 
 describe('DeleteActionBuilder - Construction', () => {
