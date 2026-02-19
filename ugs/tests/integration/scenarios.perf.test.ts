@@ -22,12 +22,12 @@ import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'bun:tes
 import { createClient, type Client } from '@libsql/client';
 import { join } from 'path';
 import { mkdirSync, rmSync, existsSync } from 'fs';
-import { KnowledgeExtractor } from '@/session-knowledge/extraction/KnowledgeExtractor';
-import { EmbeddingGenerator } from '@/session-knowledge/embeddings/EmbeddingGenerator';
-import { TemporalQueries } from '@/session-knowledge/temporal/TemporalQueries';
-import { ArcDetector } from '@/session-knowledge/temporal/ArcDetector';
-import { ConfidenceDecay } from '@/session-knowledge/temporal/ConfidenceDecay';
-import { QueryEngine } from '@/session-knowledge/index/QueryEngine';
+import { KnowledgeExtractor } from '@src/session-knowledge/extraction/KnowledgeExtractor';
+import { EmbeddingGenerator } from '@src/session-knowledge/embeddings/EmbeddingGenerator';
+import { TemporalQueries } from '@src/session-knowledge/temporal/TemporalQueries';
+import { ArcDetector } from '@src/session-knowledge/temporal/ArcDetector';
+import { ConfidenceDecay } from '@src/session-knowledge/temporal/ConfidenceDecay';
+import { QueryEngine } from '@src/session-knowledge/index/QueryEngine';
 
 // Skip performance tests unless explicitly enabled
 const describeOrSkip = process.env.RUN_SLOW_TESTS ? describe : describe.skip;

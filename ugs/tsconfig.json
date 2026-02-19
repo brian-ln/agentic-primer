@@ -14,7 +14,7 @@
     "noImplicitAny": false,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@src/*": ["./src/*"]
     }
   },
   "include": ["src/**/*.ts", "tests/**/*.ts"],

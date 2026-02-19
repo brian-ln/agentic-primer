@@ -13,17 +13,17 @@
 import { test, expect, describe, beforeEach, afterEach } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import GraphStore from '@/graph.ts';
-import { ProviderManager } from '@/entities/provider.ts';
-import { ModelManager } from '@/entities/model.ts';
-import { SessionManager } from '@/entities/session.ts';
-import { TaskManager } from '@/entities/task.ts';
-import { AgentManager } from '@/entities/agent.ts';
+import GraphStore from '@src/graph.ts';
+import { ProviderManager } from '@src/entities/provider.ts';
+import { ModelManager } from '@src/entities/model.ts';
+import { SessionManager } from '@src/entities/session.ts';
+import { TaskManager } from '@src/entities/task.ts';
+import { AgentManager } from '@src/entities/agent.ts';
 import {
   ExecutionContext,
   runWithContextAsync,
   createContextFromEnv,
-} from '@/context.ts';
+} from '@src/context.ts';
 
 // Check credentials (unified billing - only need CF Gateway token)
 // Support both /ai config names (CF_*) and standard names (CLOUDFLARE_*)

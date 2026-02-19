@@ -13,8 +13,8 @@
  */
 
 import { test, expect, describe, beforeAll } from 'bun:test';
-import { EmbeddingManager } from '@/entities/embedding.ts';
-import GraphStore from '@/graph.ts';
+import { EmbeddingManager } from '@src/entities/embedding.ts';
+import GraphStore from '@src/graph.ts';
 
 const hasCredentials =
   !!process.env.CLOUDFLARE_ACCOUNT_ID &&

@@ -14,14 +14,14 @@
  */
 
 import { test, expect, describe, beforeEach, afterEach } from 'bun:test';
-import GraphStore from '@/graph.ts';
-import { ProviderManager } from '@/entities/provider.ts';
-import { ModelManager } from '@/entities/model.ts';
+import GraphStore from '@src/graph.ts';
+import { ProviderManager } from '@src/entities/provider.ts';
+import { ModelManager } from '@src/entities/model.ts';
 import {
   ExecutionContext,
   runWithContextAsync,
   createContextFromEnv,
-} from '@/context.ts';
+} from '@src/context.ts';
 
 // Skip E2E tests by default - only run when RUN_E2E=true
 // This keeps default test runs fast (no external API calls)
