@@ -13,6 +13,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:node": "vitest run --config vitest.node.config.ts"
   },

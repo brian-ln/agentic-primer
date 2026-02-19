@@ -228,16 +228,32 @@ describe('composeWsMiddleware', () => {
   it('catches middleware errors without propagating', async () => {
     const throwing: WsMiddleware = async () => { throw new Error('boom'); };
     const handle = composeWsMiddleware(throwing);
-    await expect(handle(JSON.stringify({}), () => {})).resolves.toBeUndefined();
+    const spy = mock(() => {});
+    const original = console.error;
+    console.error = spy;
+    try {
+      await handle(JSON.stringify({}), () => {});
+    } finally {
+      console.error = original;
+    }
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 
   it('catches double-next errors without propagating', async () => {
     const doubleNext: WsMiddleware = async (_ctx, next) => {
       await next();
-      await next(); // second call should throw inside compose
+      await next(); // second call throws inside compose — should be swallowed
     };
     const handle = composeWsMiddleware(doubleNext);
-    await expect(handle(JSON.stringify({}), () => {})).resolves.toBeUndefined();
+    const spy = mock(() => {});
+    const original = console.error;
+    console.error = spy;
+    try {
+      await handle(JSON.stringify({}), () => {});
+    } finally {
+      console.error = original;
+    }
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 
   it('ctx.send is bound to the send argument', async () => {

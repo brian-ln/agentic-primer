@@ -13,7 +13,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "bun test src/__tests__/"
+    "typecheck": "tsc --noEmit",
+    "test": "bun test src/"
   },
   "dependencies": {
     "@agentic-primer/actors": "workspace:*",
