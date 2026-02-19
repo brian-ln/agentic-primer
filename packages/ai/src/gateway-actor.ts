@@ -25,6 +25,9 @@ import type {
   InferenceRequestPayload,
   InferenceResponsePayload,
   SessionStatePayload,
+  DiscoverResponsePayload,
+  HealthPayload,
+  HealthResponsePayload,
 } from './types.ts';
 
 // ---------------------------------------------------------------------------
@@ -98,6 +101,10 @@ export class GatewayActor implements MessageHandler {
           return this.handleSessionEnd(message);
         case 'gateway.capabilities':
           return this.handleCapabilities(message);
+        case AI_MESSAGE_TYPES.DISCOVER:
+          return this.handleDiscover(message);
+        case AI_MESSAGE_TYPES.HEALTH:
+          return this.handleHealth(message);
         default:
           return createErrorResponse(
             message,
@@ -160,6 +167,23 @@ export class GatewayActor implements MessageHandler {
     const { userId } = message.payload as { userId: string };
     this.activeSessions.delete(userId);
     return createResponse(message, { userId });
+  }
+
+  private handleDiscover(message: Message): MessageResponse {
+    const namespace = this.actorAddress.split('/')[2];
+    const result: DiscoverResponsePayload = {
+      address: this.actorAddress,
+      type: 'gateway',
+      handles: [AI_MESSAGE_TYPES.INFERENCE_REQUEST, AI_MESSAGE_TYPES.DISCOVER, AI_MESSAGE_TYPES.HEALTH],
+      meta: { namespace },
+    };
+    return createResponse(message, result);
+  }
+
+  private handleHealth(message: Message): MessageResponse {
+    const payload = message.payload as HealthPayload;
+    const result: HealthResponsePayload = { status: 'ok', address: this.actorAddress, token: payload?.token };
+    return createResponse(message, result);
   }
 
   private handleCapabilities(message: Message): MessageResponse {

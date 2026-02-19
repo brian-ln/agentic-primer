@@ -16,7 +16,13 @@
 import type { Message, MessageResponse, MessageHandler } from '@agentic-primer/actors';
 import { createResponse, createErrorResponse } from '@agentic-primer/actors';
 import { AI_MESSAGE_TYPES } from './types.ts';
-import type { CredentialsGetPayload, CredentialsPayload } from './types.ts';
+import type {
+  CredentialsGetPayload,
+  CredentialsPayload,
+  DiscoverResponsePayload,
+  HealthPayload,
+  HealthResponsePayload,
+} from './types.ts';
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -69,6 +75,12 @@ export class CredentialsActor implements MessageHandler {
       if (message.type === AI_MESSAGE_TYPES.CREDENTIALS_GET) {
         return await this.handleCredentialsGet(message);
       }
+      if (message.type === AI_MESSAGE_TYPES.DISCOVER) {
+        return this.handleDiscover(message);
+      }
+      if (message.type === AI_MESSAGE_TYPES.HEALTH) {
+        return this.handleHealth(message);
+      }
       return createErrorResponse(
         message,
         `CredentialsActor(${this.actorAddress}): unhandled message type '${message.type}'`,
@@ -76,6 +88,22 @@ export class CredentialsActor implements MessageHandler {
     } catch (err) {
       return createErrorResponse(message, err instanceof Error ? err.message : String(err));
     }
+  }
+
+  private handleDiscover(message: Message): MessageResponse {
+    const result: DiscoverResponsePayload = {
+      address: this.actorAddress,
+      type: 'credentials',
+      handles: [AI_MESSAGE_TYPES.CREDENTIALS_GET, AI_MESSAGE_TYPES.DISCOVER, AI_MESSAGE_TYPES.HEALTH],
+      meta: { target: this.parsed.target },
+    };
+    return createResponse(message, result);
+  }
+
+  private handleHealth(message: Message): MessageResponse {
+    const payload = message.payload as HealthPayload;
+    const result: HealthResponsePayload = { status: 'ok', address: this.actorAddress, token: payload?.token };
+    return createResponse(message, result);
   }
 
   private async handleCredentialsGet(message: Message): Promise<MessageResponse> {

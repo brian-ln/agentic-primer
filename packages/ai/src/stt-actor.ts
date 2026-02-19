@@ -27,7 +27,14 @@
 import type { Message, MessageResponse, MessageHandler, Address } from '@agentic-primer/actors';
 import { createResponse, createErrorResponse, address } from '@agentic-primer/actors';
 import { AI_MESSAGE_TYPES } from './types.ts';
-import type { SttStartPayload, SttTranscriptPayload, SttAudioEncoding } from './types.ts';
+import type {
+  SttStartPayload,
+  SttTranscriptPayload,
+  SttAudioEncoding,
+  DiscoverResponsePayload,
+  HealthPayload,
+  HealthResponsePayload,
+} from './types.ts';
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -110,6 +117,10 @@ export class SttActor implements MessageHandler {
           return await this.handleStop(message);
         case AI_MESSAGE_TYPES.AUDIO_FRAME:
           return await this.handleAudioFrame(message);
+        case AI_MESSAGE_TYPES.DISCOVER:
+          return this.handleDiscover(message);
+        case AI_MESSAGE_TYPES.HEALTH:
+          return this.handleHealth(message);
         default:
           return createErrorResponse(
             message,
@@ -122,6 +133,28 @@ export class SttActor implements MessageHandler {
   }
 
   // --- Handlers ---
+
+  private handleDiscover(message: Message): MessageResponse {
+    const result: DiscoverResponsePayload = {
+      address: this.actorAddress,
+      type: 'stt',
+      handles: [
+        AI_MESSAGE_TYPES.STT_START,
+        AI_MESSAGE_TYPES.STT_STOP,
+        AI_MESSAGE_TYPES.AUDIO_FRAME,
+        AI_MESSAGE_TYPES.DISCOVER,
+        AI_MESSAGE_TYPES.HEALTH,
+      ],
+      meta: { namespace: this.parsed.namespace, provider: this.parsed.provider, model: this.parsed.model },
+    };
+    return createResponse(message, result);
+  }
+
+  private handleHealth(message: Message): MessageResponse {
+    const payload = message.payload as HealthPayload;
+    const result: HealthResponsePayload = { status: 'ok', address: this.actorAddress, token: payload?.token };
+    return createResponse(message, result);
+  }
 
   private handleStart(message: Message): MessageResponse {
     const payload = (message.payload ?? {}) as SttStartPayload;

@@ -19,7 +19,13 @@
 import type { Message, MessageResponse, MessageHandler } from '@agentic-primer/actors';
 import { createResponse, createErrorResponse } from '@agentic-primer/actors';
 import { AI_MESSAGE_TYPES } from './types.ts';
-import type { InferenceRequestPayload, InferenceResponsePayload } from './types.ts';
+import type {
+  InferenceRequestPayload,
+  InferenceResponsePayload,
+  DiscoverResponsePayload,
+  HealthPayload,
+  HealthResponsePayload,
+} from './types.ts';
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -101,6 +107,12 @@ export class InferenceActor implements MessageHandler {
       if (message.type === AI_MESSAGE_TYPES.INFERENCE_REQUEST) {
         return await this.handleInferenceRequest(message);
       }
+      if (message.type === AI_MESSAGE_TYPES.DISCOVER) {
+        return this.handleDiscover(message);
+      }
+      if (message.type === AI_MESSAGE_TYPES.HEALTH) {
+        return this.handleHealth(message);
+      }
       return createErrorResponse(
         message,
         `InferenceActor(${this.actorAddress}): unhandled message type '${message.type}'`,
@@ -108,6 +120,22 @@ export class InferenceActor implements MessageHandler {
     } catch (err) {
       return createErrorResponse(message, err instanceof Error ? err.message : String(err));
     }
+  }
+
+  private handleDiscover(message: Message): MessageResponse {
+    const result: DiscoverResponsePayload = {
+      address: this.actorAddress,
+      type: 'inference',
+      handles: [AI_MESSAGE_TYPES.INFERENCE_REQUEST, AI_MESSAGE_TYPES.DISCOVER, AI_MESSAGE_TYPES.HEALTH],
+      meta: { namespace: this.parsed.namespace, provider: this.parsed.provider, model: this.parsed.model },
+    };
+    return createResponse(message, result);
+  }
+
+  private handleHealth(message: Message): MessageResponse {
+    const payload = message.payload as HealthPayload;
+    const result: HealthResponsePayload = { status: 'ok', address: this.actorAddress, token: payload?.token };
+    return createResponse(message, result);
   }
 
   private async handleInferenceRequest(message: Message): Promise<MessageResponse> {

@@ -175,6 +175,45 @@ export const AI_MESSAGE_TYPES = {
   EMBEDDINGS_REQUEST: 'ai.embeddings.request',
   /** Binary audio frames are delivered via binary channel (not JSON). */
   AUDIO_FRAME: 'audio.frame',
+  /** Discovery: query an actor's capabilities and metadata. */
+  DISCOVER: 'ai.discover',
+  /** Health: check whether an actor is operational. */
+  HEALTH: 'ai.health',
 } as const;
 
 export type MessageType = (typeof AI_MESSAGE_TYPES)[keyof typeof AI_MESSAGE_TYPES];
+
+// ---------------------------------------------------------------------------
+// Discovery
+// ---------------------------------------------------------------------------
+
+export interface DiscoverPayload {
+  /** Requesting actor address, for targeted responses. */
+  from?: string;
+}
+
+export interface DiscoverResponsePayload {
+  /** Actor address. */
+  address: string;
+  /** Actor type / capability name (e.g. 'inference', 'tts', 'embeddings'). */
+  type: string;
+  /** Supported message types. */
+  handles: string[];
+  /** Actor-specific metadata (model, provider, namespace, etc). */
+  meta: Record<string, string | undefined>;
+}
+
+export interface HealthPayload {
+  /** Optional echo token returned in response. */
+  token?: string;
+}
+
+export interface HealthResponsePayload {
+  status: 'ok' | 'degraded' | 'unavailable';
+  address: string;
+  /** Echo of request token if provided. */
+  token?: string;
+  /** Optional latency measurement (ms) or error message. */
+  latency?: number;
+  error?: string;
+}

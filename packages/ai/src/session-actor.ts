@@ -22,7 +22,13 @@
 import type { Message, MessageResponse, MessageHandler } from '@agentic-primer/actors';
 import { createResponse, createErrorResponse, address } from '@agentic-primer/actors';
 import { AI_MESSAGE_TYPES, AI_PREFIXES, inferenceAddress, ttsAddress, sttAddress } from './index.ts';
-import type { SessionCreatePayload, SessionStatePayload } from './types.ts';
+import type {
+  SessionCreatePayload,
+  SessionStatePayload,
+  DiscoverResponsePayload,
+  HealthPayload,
+  HealthResponsePayload,
+} from './types.ts';
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -88,6 +94,10 @@ export class SessionActor implements MessageHandler {
           return this.forwardToStt(message);
         case 'session.state':
           return createResponse(message, this.state);
+        case AI_MESSAGE_TYPES.DISCOVER:
+          return this.handleDiscover(message);
+        case AI_MESSAGE_TYPES.HEALTH:
+          return this.handleHealth(message);
         default:
           return createErrorResponse(
             message,
@@ -100,6 +110,28 @@ export class SessionActor implements MessageHandler {
   }
 
   // --- Handlers ---
+
+  private handleDiscover(message: Message): MessageResponse {
+    const result: DiscoverResponsePayload = {
+      address: this.actorAddress,
+      type: 'session',
+      handles: [
+        AI_MESSAGE_TYPES.SESSION_CREATE,
+        AI_MESSAGE_TYPES.SESSION_END,
+        AI_MESSAGE_TYPES.SESSION_STATE,
+        AI_MESSAGE_TYPES.DISCOVER,
+        AI_MESSAGE_TYPES.HEALTH,
+      ],
+      meta: { userId: this.userId },
+    };
+    return createResponse(message, result);
+  }
+
+  private handleHealth(message: Message): MessageResponse {
+    const payload = message.payload as HealthPayload;
+    const result: HealthResponsePayload = { status: 'ok', address: this.actorAddress, token: payload?.token };
+    return createResponse(message, result);
+  }
 
   private handleCreate(message: Message): MessageResponse {
     const payload = (message.payload ?? {}) as SessionCreatePayload;
