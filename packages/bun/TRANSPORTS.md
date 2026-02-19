@@ -6,7 +6,7 @@ Covers the transport stack for actor-system communication across Bun, Cloudflare
 
 Both server-side bridges (Bun and Cloudflare) ARE adapters: they adapt platform-specific WebSocket APIs to the shared actor routing protocol. Shared logic lives in `@agentic-primer/actors/transport/bridge-utils`.
 
-```
+```text
 Browser (RemoteTransport)
     ↕ WebSocket
 BunWebSocketBridge  OR  WebSocketBridge (Cloudflare DO)
@@ -19,6 +19,7 @@ ActorSystem
 All bridges MUST implement the HEARTBEAT_PING → HEARTBEAT_PONG contract exactly, or `RemoteTransport` will disconnect.
 
 ### Client → Server (PING)
+
 ```json
 {
   "type": "HEARTBEAT_PING",
@@ -30,6 +31,7 @@ All bridges MUST implement the HEARTBEAT_PING → HEARTBEAT_PONG contract exactl
 ```
 
 ### Server → Client (PONG)
+
 ```json
 {
   "type": "HEARTBEAT_PONG",
@@ -52,7 +54,7 @@ Types: `HeartbeatPing`, `HeartbeatPong`, `makeHeartbeatPong()` — exported from
 | Heartbeat | ✅ HEARTBEAT_PING/PONG | ✅ HEARTBEAT_PING/PONG |
 | Connection tracking | `Set<ServerWebSocket>` | `ctx.getWebSockets()` (hibernation) |
 | Upgrade | `server.upgrade()` → `undefined` | `WebSocketPair` → `Response { status: 101 }` |
-| Backpressure | `send()` returns `number` — **currently not handled** | n/a |
+| Backpressure | Drain queue — queues dropped/congested sends, flushes on `drain` event | n/a |
 | Tags/filtering | No | Yes (via URL `?tag=` param) |
 
 ## Shared Utilities (`@agentic-primer/actors`)
@@ -93,10 +95,5 @@ If you need `instanceof ArrayBuffer` checks to work, set `ws.binaryType = "array
 
 ### Important gotcha: `send()` backpressure
 
-`BunWebSocketBridge.broadcast()` currently ignores the `send()` return value. For high-throughput deployments, implement backpressure handling via the `drain` handler. See open task `bun-backpressure`.
+`BunWebSocketBridge.broadcast()` implements a per-connection drain queue. If `send()` returns `0` (dropped) or `-1` (backpressured), subsequent broadcasts for that socket are queued locally and flushed when the `drain` event fires.
 
-## Known Gaps
-
-| Gap | Task | Impact |
-|---|---|---|
-| `BunWebSocketBridge` ignores `send()` return — no backpressure queue | `bun-backpressure` | Dropped messages under load |
