@@ -10,7 +10,9 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces",
-    "test": "bun test packages/actors packages/bun packages/knowledge packages/protocols packages/signal-hub-client packages/cloudflare/src/__tests__/types.test.ts simplify/ ugs/",
+    "test": "bun test packages/actors packages/bun packages/knowledge packages/protocols packages/signal-hub-client packages/cloudflare/src/__tests__/types.test.ts simplify/ ugs/src/",
+    "test:integration": "RUN_SLOW_TESTS=true bun test ugs/tests/integration/",
+    "test:e2e": "RUN_E2E=true bun test ugs/tests/e2e/",
     "test:cf": "cd packages/cloudflare && bun test",
     "generate:types": "tsx scripts/generate-domain-types.ts",
     "generate:hub-types": "tsx scripts/generate-hub-types.ts",

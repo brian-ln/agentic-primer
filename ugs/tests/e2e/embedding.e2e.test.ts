@@ -9,12 +9,12 @@
  * - CLOUDFLARE_ACCOUNT_ID
  * - CLOUDFLARE_WORKERS_AI_TOKEN  (Workers AI permission — DIFFERENT from CLOUDFLARE_API_TOKEN)
  *
- * Run: bun test ugs/src/entities/embedding.e2e.test.ts
+ * Run: bun test ugs/tests/e2e/embedding.e2e.test.ts
  */
 
 import { test, expect, describe, beforeAll } from 'bun:test';
-import { EmbeddingManager } from './embedding.ts';
-import GraphStore from '../graph.ts';
+import { EmbeddingManager } from '../../src/entities/embedding.ts';
+import GraphStore from '../../src/graph.ts';
 
 const hasCredentials =
   !!process.env.CLOUDFLARE_ACCOUNT_ID &&
