@@ -85,7 +85,7 @@ Command-line interface.
 
 ### Analysis Report
 
-```
+```text
 ═══════════════════════════════════════════════════════
   Migration Analysis Report
 ═══════════════════════════════════════════════════════
@@ -103,7 +103,7 @@ BY COMPLEXITY
 
 ### Migration Plan
 
-```
+```text
 ═══════════════════════════════════════════════════════
   Migration Plan
 ═══════════════════════════════════════════════════════
@@ -120,7 +120,7 @@ PATH PROPOSALS
 
 ### Progress Report
 
-```
+```text
 ═══════════════════════════════════════════════════════
   Migration Progress Report
 ═══════════════════════════════════════════════════════
@@ -151,7 +151,7 @@ Full documentation: [`docs/MIGRATION_TOOLING.md`](../../docs/MIGRATION_TOOLING.m
 
 ## Architecture
 
-```
+```text
 analyzer.ts    - Codebase analysis (detects flat IDs)
 planner.ts     - Migration planning (generates steps)
 refactor.ts    - Code transformations (applies changes)

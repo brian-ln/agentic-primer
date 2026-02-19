@@ -17,7 +17,7 @@ System actors use **namespace routing** to provide different capabilities to dif
 
 ### Namespace Hierarchy
 
-```
+```text
 /system/                       # Global shared system actors
   /scheduler                   # Shared time/scheduling (singleton)
   /logger                      # Shared logging (singleton)

@@ -69,7 +69,7 @@ See `packages/protocols/README.md` for usage examples.
 
 ## Repository Structure
 
-```
+```text
 agentic-primer/
 ├── packages/
 │   └── protocols/            # @agentic-primer/protocols npm package

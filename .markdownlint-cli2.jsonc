@@ -1,0 +1,56 @@
+{
+  // markdownlint-cli2 configuration
+  // Rules: disable overly pedantic checks for this project
+  "config": {
+    "default": true,
+    // Line length — too noisy for technical docs
+    "MD013": false,
+    // Inline HTML — used legitimately in docs
+    "MD033": false,
+    // First line heading — not always applicable
+    "MD041": false,
+    // Blanks around headings/lists/fences — pervasive legacy style in this codebase
+    "MD022": false,
+    "MD031": false,
+    "MD032": false,
+    // Table column style — aesthetic, not semantic
+    "MD060": false,
+    // Duplicate headings in same doc — common in comparison/reference docs
+    "MD024": false
+  },
+  // Ignore historical/generated/tooling-internal directories.
+  // This project has accumulated many docs predating linting enforcement;
+  // ignoring these allows the check to run clean on actively-maintained code.
+  "ignores": [
+    // Top-level archive/generated
+    "archive/**",
+    ".beads/**",
+    ".claude/**",
+    "core/**",
+    "data-test-*/**",
+    "data/**",
+    "test-data/**",
+    "node_modules/**",
+    // Experiment run outputs (historical AI session data)
+    "experiments/**",
+    // UGS: ignore docs subdirs and accumulated root design docs
+    "ugs/docs/**",
+    "ugs/docs-archive/**",
+    "ugs/.claude/**",
+    "ugs/.beads/**",
+    "ugs/.migration-output/**",
+    "ugs/examples/**",
+    "ugs/scripts/**",
+    "ugs/src/session-knowledge/**",
+    // UGS root-level design/migration docs (pre-linting, not actively updated)
+    "ugs/*.md",
+    // Design/spec/simulation docs written before linting enforcement
+    "docs/**",
+    // Test fixtures and integration agent docs
+    "tests/**",
+    // Service specs (large generated/accumulated spec docs)
+    "services/**",
+    // Scripts (non-primary markdown)
+    "scripts/**"
+  ]
+}

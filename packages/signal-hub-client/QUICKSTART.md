@@ -357,6 +357,6 @@ console.log('Connected:', client.connected);
 
 ## Support
 
-- Issues: https://github.com/BrianLN-AI/agentic-primer/issues
+- Issues: <https://github.com/BrianLN-AI/agentic-primer/issues>
 - Documentation: `/packages/signal-hub-client/README.md`
 - Protocol: `/docs/signal-hub/PROTOCOL.md`

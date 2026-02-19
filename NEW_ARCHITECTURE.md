@@ -115,7 +115,7 @@ Agentic Primer is a **protocol-first convergence platform** for multi-agent acto
 
 ### Entity Hierarchy
 
-```
+```text
 Entity (abstract)
 ├── Agent          - AI agents (execution, reasoning)
 ├── Human          - Human participants (commands, feedback)
@@ -215,7 +215,7 @@ Entity (abstract)
 **Solution:** Support both IDs and hierarchical paths in Address type
 
 **Example Paths:**
-```
+```text
 system/actors/agent-123           - Actor in system hierarchy
 workflows/orchestration/phase-1   - Workflow phase
 sessions/2026-02-06/abc123        - Session with date context
@@ -292,7 +292,7 @@ topics/ai/completions             - Pub/Sub topic hierarchy
 
 ### SEAG Architecture Diagram
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                        SEAG System                           │
 │                                                              │

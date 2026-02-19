@@ -255,7 +255,7 @@ export class WebSocketBridge {
 - Client-specific routing logic
 
 **Architecture:**
-```
+```text
 Browser ←WebSocket→ SessionActor (Gateway DO)
                          ↓
          ┌───────────────┼───────────────┐
@@ -340,7 +340,7 @@ return null; // Prevent double-send
 **Implementation:** Signal Hub `ConnectionState` enum
 
 **States:**
-```
+```text
 disconnected → connecting → connected → disconnecting → disconnected
 ```
 

@@ -439,7 +439,6 @@ try {
      }
    }
    ```
-   ```
 
 **Documentation Structure:**
 - Error types catalog
@@ -672,7 +671,7 @@ console.log(JSON.stringify({
 
 - `~/.claude/skills/cloudflare/references/durable-objects.md` - DO patterns
 - `~/.claude/skills/cloudflare/references/debugging.md` - Debugging strategies
-- Official: https://developers.cloudflare.com/durable-objects/
+- Official: <https://developers.cloudflare.com/durable-objects/>
 
 ### Related Patterns
 

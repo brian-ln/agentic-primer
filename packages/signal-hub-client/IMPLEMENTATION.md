@@ -148,7 +148,7 @@ client.send('@(browser/widget)', '@(local/coordinator)', 'app:render', { compone
 
 ## File Structure
 
-```
+```text
 packages/signal-hub-client/
 ├── src/
 │   ├── SignalHubClient.ts    # Main client class (23 KB)
@@ -178,7 +178,8 @@ packages/signal-hub-client/
 - Source maps included
 
 ### Build Output
-```
+
+```text
 dist/
 ├── SignalHubClient.js         # Main implementation
 ├── SignalHubClient.d.ts       # Type declarations

@@ -228,7 +228,7 @@ class SelectiveValidationActor extends Actor {
 
 Validation errors include the JSON path and description:
 
-```
+```text
 Invalid payload: $.email: String does not match pattern: ^[^@]+@[^@]+\.[^@]+$; $.age: Number 200 exceeds maximum 150
 ```
 

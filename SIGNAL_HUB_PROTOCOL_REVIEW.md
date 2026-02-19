@@ -615,7 +615,7 @@ private async restoreFromCheckpoint() {
 **Current Plan:** Doesn't specify.
 
 **Analysis:**
-```
+```text
 Memory constraints:
 - Per-actor metadata: ~500 bytes
 - Heartbeat timer: ~200 bytes
@@ -676,7 +676,7 @@ async handleActorMessage(req: Request) {
 **Current Plan:** Doesn't address.
 
 **Analysis:**
-```
+```text
 Broadcasting to all 50,000 actors:
 - Send time: 50,000 WebSocket sends × 1ms = 50 seconds
 - Problem: Exceeds 30s CPU limit
@@ -763,7 +763,7 @@ private async broadcastToList(addrs: string[], message: unknown) {
 **Current Plan:** Connection state machine mentioned but no throttling.
 
 **Risk Scenario:**
-```
+```text
 Signal Hub restart (1s eviction)
 ↓
 All 50,000 actors get connection:close (code 1001)
@@ -1227,11 +1227,11 @@ if (error.code === 'UNKNOWN_ACTOR') {
 **Current State:** Schema defined but flow unclear.
 
 **Recommended Addition (Phase 7 - PROTOCOL.md):**
-```markdown
+````markdown
 ## Registration Flow
 
 ### Step 1: Connect
-```
+```text
 Client                        Signal Hub
   |                               |
   | WebSocket upgrade             |
@@ -1242,7 +1242,7 @@ Client                        Signal Hub
 ```
 
 ### Step 2: Register
-```
+```text
   | Message: { type: 'register', ... }
   |-------------------------------|->
   |                 ACK: { code: 'REGISTERED', ... }
@@ -1250,9 +1250,10 @@ Client                        Signal Hub
 ```
 
 ### Step 3: Heartbeat
-```
+```text
   | Heartbeat every 30 seconds
   |------|------|------|------|
+
   | beat | beat | beat | beat |
   |------|------|------|------|
 
@@ -1268,7 +1269,7 @@ Client                        Signal Hub
   - **Action**: Break into smaller messages
 
 ### Example Client Implementation
-\`\`\`typescript
+```typescript
 const client = new SignalHubClient('ws://signal-hub.example.com');
 
 client.on('registered', () => {
@@ -1281,8 +1282,8 @@ client.on('error', (err) => {
 });
 
 // Automatic heartbeat and reconnection handled internally
-\`\`\`
 ```
+````
 
 ### DX Improvement #4: Monitoring/Observability
 **Current State:** No mention of metrics or observability.
