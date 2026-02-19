@@ -6,12 +6,12 @@
   "workspaces": [
     "packages/*",
     "services/*",
-    "ugs",
-    "tk-agents"
+    "ugs"
   ],
   "scripts": {
     "build": "npm run build --workspaces",
-    "test": "npm run test --workspaces",
+    "test": "bun test packages/actors packages/bun packages/knowledge packages/protocols packages/signal-hub-client packages/cloudflare/src/__tests__/types.test.ts simplify/ ugs/",
+    "test:cf": "cd packages/cloudflare && bun test",
     "generate:types": "tsx scripts/generate-domain-types.ts",
     "generate:hub-types": "tsx scripts/generate-hub-types.ts",
     "validate:domain": "tsx core/wit/domain/validation-test.ts",

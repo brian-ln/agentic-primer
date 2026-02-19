@@ -1,0 +1,15 @@
+[test]
+# Exclude tests that require non-bun runtimes:
+# - archive/: cloudflare:test (needs wrangler)
+# - tests/integration/signal-hub/: needs running wrangler dev server + broken pnpm symlinks
+# - services/signal-hub/: vitest + cloudflare workers pool (needs wrangler)
+# - cloudflare __tests__ (except types): cloudflare:test / miniflare (needs wrangler)
+exclude = [
+  "archive/**",
+  "tests/integration/**",
+  "services/**",
+  "packages/cloudflare/src/__tests__/do-actor-checkpoint.test.ts",
+  "packages/cloudflare/src/__tests__/provisioner-do.test.ts",
+  "packages/cloudflare/src/__tests__/provisioner.test.ts",
+  "packages/cloudflare/src/__tests__/storage.test.ts",
+]
