@@ -22,9 +22,9 @@ import type { Message, MessageResponse, MessageHandler } from '@agentic-primer/a
 import { createResponse, createErrorResponse } from '@agentic-primer/actors';
 import { AI_MESSAGE_TYPES } from './types.ts';
 import type {
-  AiInferenceRequestPayload,
-  AiInferenceResponsePayload,
-  AiSessionStatePayload,
+  InferenceRequestPayload,
+  InferenceResponsePayload,
+  SessionStatePayload,
 } from './types.ts';
 
 // ---------------------------------------------------------------------------
@@ -80,7 +80,7 @@ interface OpenAiChatResponse {
 export class GatewayActor implements MessageHandler {
   private readonly actorAddress: string;
   private readonly config: GatewayActorConfig;
-  private activeSessions = new Map<string, AiSessionStatePayload>();
+  private activeSessions = new Map<string, SessionStatePayload>();
 
   constructor(address: string, config: GatewayActorConfig) {
     this.actorAddress = address;
@@ -115,7 +115,7 @@ export class GatewayActor implements MessageHandler {
   // --- Handlers ---
 
   private async handleInferenceRequest(message: Message): Promise<MessageResponse> {
-    const payload = message.payload as AiInferenceRequestPayload;
+    const payload = message.payload as InferenceRequestPayload;
     const model = payload.model ?? this.config.defaultModel ?? 'meta/llama-3.3-70b-instruct';
 
     const raw = await this.callGateway('/openai/chat/completions', {
@@ -129,7 +129,7 @@ export class GatewayActor implements MessageHandler {
     const content = raw.choices?.[0]?.message?.content ?? '';
     const usage = raw.usage;
 
-    const result: AiInferenceResponsePayload = {
+    const result: InferenceResponsePayload = {
       content,
       model: raw.model ?? model,
       usage: usage
@@ -147,7 +147,7 @@ export class GatewayActor implements MessageHandler {
 
   private handleSessionCreate(message: Message): MessageResponse {
     const { userId } = message.payload as { userId: string };
-    const session: AiSessionStatePayload = {
+    const session: SessionStatePayload = {
       userId,
       activeActors: [],
       createdAt: Date.now(),

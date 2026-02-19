@@ -12,14 +12,14 @@
  *   [4] = model     (e.g. 'kimi-k2.5', 'gpt-4o', 'claude-opus-4-6')
  *
  * Handles:
- *   ai.inference.request  → AiInferenceRequestPayload  (non-streaming)
+ *   ai.inference.request  → InferenceRequestPayload  (non-streaming)
  *   ai.inference.request (stream: true) → yields ai.inference.chunk + ai.inference.done
  */
 
 import type { Message, MessageResponse, MessageHandler } from '@agentic-primer/actors';
 import { createResponse, createErrorResponse } from '@agentic-primer/actors';
 import { AI_MESSAGE_TYPES } from './types.ts';
-import type { AiInferenceRequestPayload, AiInferenceResponsePayload } from './types.ts';
+import type { InferenceRequestPayload, InferenceResponsePayload } from './types.ts';
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -111,14 +111,14 @@ export class InferenceActor implements MessageHandler {
   }
 
   private async handleInferenceRequest(message: Message): Promise<MessageResponse> {
-    const payload = message.payload as AiInferenceRequestPayload;
+    const payload = message.payload as InferenceRequestPayload;
     const model = payload.model ?? this.parsed.model;
 
     const raw = await this.callGateway(model, payload) as OaiResponse;
     const content = raw.choices?.[0]?.message?.content ?? '';
     const usage = raw.usage;
 
-    const result: AiInferenceResponsePayload = {
+    const result: InferenceResponsePayload = {
       content,
       model: raw.model ?? model,
       usage: usage
@@ -134,7 +134,7 @@ export class InferenceActor implements MessageHandler {
     return createResponse(message, result);
   }
 
-  private async callGateway(model: string, payload: AiInferenceRequestPayload): Promise<unknown> {
+  private async callGateway(model: string, payload: InferenceRequestPayload): Promise<unknown> {
     // Route to provider-appropriate endpoint under the AI Gateway
     const path = this.providerPath(this.parsed.provider);
     const url = `${this.config.gatewayUrl}${path}`;

@@ -12,7 +12,7 @@
  *   [4] = voice     (e.g. 'aura-2-en-us', 'tts-1-hd')
  *
  * Handles:
- *   ai.tts.request → AiTtsRequestPayload
+ *   ai.tts.request → TtsRequestPayload
  *   Response payload contains synthesized audio as base64 or binary reference.
  *
  * Audio delivery:
@@ -24,7 +24,7 @@
 import type { Message, MessageResponse, MessageHandler } from '@agentic-primer/actors';
 import { createResponse, createErrorResponse } from '@agentic-primer/actors';
 import { AI_MESSAGE_TYPES } from './types.ts';
-import type { AiTtsRequestPayload, AudioEncoding } from './types.ts';
+import type { TtsRequestPayload, AudioEncoding } from './types.ts';
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -93,7 +93,7 @@ export class TtsActor implements MessageHandler {
   }
 
   private async handleTtsRequest(message: Message): Promise<MessageResponse> {
-    const payload = message.payload as AiTtsRequestPayload;
+    const payload = message.payload as TtsRequestPayload;
     const voice = payload.voice ?? this.parsed.voice;
     const encoding = payload.encoding ?? this.config.defaultEncoding ?? 'opus';
     const sampleRate = payload.sampleRate ?? this.config.defaultSampleRate ?? 24000;

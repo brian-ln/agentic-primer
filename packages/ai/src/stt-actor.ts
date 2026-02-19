@@ -27,7 +27,7 @@
 import type { Message, MessageResponse, MessageHandler, Address } from '@agentic-primer/actors';
 import { createResponse, createErrorResponse, address } from '@agentic-primer/actors';
 import { AI_MESSAGE_TYPES } from './types.ts';
-import type { AiSttStartPayload, AiSttTranscriptPayload, SttAudioEncoding } from './types.ts';
+import type { SttStartPayload, SttTranscriptPayload, SttAudioEncoding } from './types.ts';
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -124,7 +124,7 @@ export class SttActor implements MessageHandler {
   // --- Handlers ---
 
   private handleStart(message: Message): MessageResponse {
-    const payload = (message.payload ?? {}) as AiSttStartPayload;
+    const payload = (message.payload ?? {}) as SttStartPayload;
     const senderKey = message.from ? String(message.from) : 'unknown';
 
     const session: SttSession = {
@@ -313,7 +313,7 @@ export class SystemSttActor extends SttActor {
     transcript: string,
     isFinal: boolean,
   ): Promise<void> {
-    const payload: AiSttTranscriptPayload = { transcript, isFinal };
+    const payload: SttTranscriptPayload = { transcript, isFinal };
     this.system.send(replyTo, AI_MESSAGE_TYPES.STT_TRANSCRIPT, payload);
   }
 }

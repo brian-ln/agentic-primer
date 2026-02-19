@@ -7,14 +7,14 @@
  * These are the payloads carried by actor messages (Message.payload) between
  * AI capability actors. The message type strings are the canonical identifiers:
  *
- *   'ai.inference.request'   → AiInferenceRequestPayload
- *   'ai.inference.response'  → AiInferenceResponsePayload
- *   'ai.inference.chunk'     → AiInferenceChunkPayload (streaming)
- *   'ai.tts.request'         → AiTtsRequestPayload
- *   'ai.stt.start'           → AiSttStartPayload
- *   'ai.stt.transcript'      → AiSttTranscriptPayload
- *   'ai.session.create'      → AiSessionCreatePayload
- *   'ai.session.state'       → AiSessionStatePayload
+ *   'ai.inference.request'   → InferenceRequestPayload
+ *   'ai.inference.response'  → InferenceResponsePayload
+ *   'ai.inference.chunk'     → InferenceChunkPayload (streaming)
+ *   'ai.tts.request'         → TtsRequestPayload
+ *   'ai.stt.start'           → SttStartPayload
+ *   'ai.stt.transcript'      → SttTranscriptPayload
+ *   'ai.session.create'      → SessionCreatePayload
+ *   'ai.session.state'       → SessionStatePayload
  *   'audio.frame'            → Uint8Array (binary fast-path, no JSON payload)
  */
 
@@ -28,7 +28,7 @@ export interface ChatMessage {
   [key: string]: unknown;
 }
 
-export interface AiInferenceRequestPayload {
+export interface InferenceRequestPayload {
   messages: ChatMessage[];
   /** Model override. Defaults to the actor's configured model. */
   model?: string;
@@ -39,22 +39,22 @@ export interface AiInferenceRequestPayload {
   [key: string]: unknown;
 }
 
-export interface AiUsage {
+export interface InferenceUsage {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
 }
 
-export interface AiInferenceResponsePayload {
+export interface InferenceResponsePayload {
   content: string;
   model?: string;
-  usage?: AiUsage;
+  usage?: InferenceUsage;
   finishReason?: string;
   [key: string]: unknown;
 }
 
 /** One incremental token chunk from a streaming inference response. */
-export interface AiInferenceChunkPayload {
+export interface InferenceChunkPayload {
   delta: string;
   index: number;
 }
@@ -65,7 +65,7 @@ export interface AiInferenceChunkPayload {
 
 export type AudioEncoding = 'opus' | 'mp3' | 'linear16';
 
-export interface AiTtsRequestPayload {
+export interface TtsRequestPayload {
   text: string;
   /** Voice ID override. Defaults to actor's configured voice. */
   voice?: string;
@@ -79,7 +79,7 @@ export interface AiTtsRequestPayload {
 
 export type SttAudioEncoding = 'opus' | 'mp3' | 'linear16' | 'mulaw';
 
-export interface AiSttStartPayload {
+export interface SttStartPayload {
   encoding?: SttAudioEncoding;
   sampleRate?: number;
   /** BCP-47 language code. Default: en-US. */
@@ -94,7 +94,7 @@ export interface SttWord {
   confidence?: number;
 }
 
-export interface AiSttTranscriptPayload {
+export interface SttTranscriptPayload {
   transcript: string;
   isFinal: boolean;
   confidence?: number;
@@ -105,12 +105,12 @@ export interface AiSttTranscriptPayload {
 // Session
 // ---------------------------------------------------------------------------
 
-export interface AiSessionCreatePayload {
+export interface SessionCreatePayload {
   userId: string;
   metadata?: Record<string, unknown>;
 }
 
-export interface AiSessionStatePayload {
+export interface SessionStatePayload {
   userId: string;
   /** Addresses of actors active within this session. */
   activeActors: string[];
@@ -140,4 +140,4 @@ export const AI_MESSAGE_TYPES = {
   AUDIO_FRAME: 'audio.frame',
 } as const;
 
-export type AiMessageType = (typeof AI_MESSAGE_TYPES)[keyof typeof AI_MESSAGE_TYPES];
+export type MessageType = (typeof AI_MESSAGE_TYPES)[keyof typeof AI_MESSAGE_TYPES];

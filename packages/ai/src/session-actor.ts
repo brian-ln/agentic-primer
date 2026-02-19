@@ -22,7 +22,7 @@
 import type { Message, MessageResponse, MessageHandler } from '@agentic-primer/actors';
 import { createResponse, createErrorResponse, address } from '@agentic-primer/actors';
 import { AI_MESSAGE_TYPES, AI_PREFIXES, inferenceAddress, ttsAddress, sttAddress } from './index.ts';
-import type { AiSessionCreatePayload, AiSessionStatePayload } from './types.ts';
+import type { SessionCreatePayload, SessionStatePayload } from './types.ts';
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -50,7 +50,7 @@ export class SessionActor implements MessageHandler {
   private readonly system: {
     send(to: ReturnType<typeof address>, type: string, payload: unknown): void;
   };
-  private state: AiSessionStatePayload;
+  private state: SessionStatePayload;
 
   constructor(
     actorAddress: string,
@@ -102,7 +102,7 @@ export class SessionActor implements MessageHandler {
   // --- Handlers ---
 
   private handleCreate(message: Message): MessageResponse {
-    const payload = (message.payload ?? {}) as AiSessionCreatePayload;
+    const payload = (message.payload ?? {}) as SessionCreatePayload;
     // Update metadata if provided
     if (payload.metadata) {
       this.state = { ...this.state, metadata: payload.metadata };
