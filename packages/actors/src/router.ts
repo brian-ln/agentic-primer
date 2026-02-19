@@ -286,16 +286,14 @@ export class MessageRouter implements IMessageRouter {
     }
 
     // 5. Virtual actor factory — provision on demand
-    if (this.factories.length > 0) {
-      for (const entry of this.factories) {
-        if (entry.prefix && !targetPath.startsWith(entry.prefix)) continue;
-        const actor = await entry.factory(targetPath);
-        if (actor) {
-          // Cache at the full address so future sends bypass factory lookup
-          this.actorRegistry.set(targetPath, actor);
-          this.pathCache.set(targetPath, actor);
-          return await actor.receive(message);
-        }
+    for (const entry of this.factories) {
+      if (entry.prefix && !targetPath.startsWith(entry.prefix)) continue;
+      const actor = await entry.factory(targetPath);
+      if (actor) {
+        // Cache at the full address so future sends bypass factory lookup
+        this.actorRegistry.set(targetPath, actor);
+        this.pathCache.set(targetPath, actor);
+        return await actor.receive(message);
       }
     }
 
