@@ -19,6 +19,8 @@ import {
   composeWsMiddleware,
   heartbeatMiddleware,
   actorRoutingMiddleware,
+  binaryChannelMiddleware,
+  handleBinaryFrame,
 } from '@agentic-primer/actors';
 
 /** Per-connection data attached at upgrade time. */
@@ -32,9 +34,15 @@ interface UpgradableServer {
 }
 
 export class BunWebSocketBridge {
+  private readonly system: ActorSystem;
   private readonly serde: ISerde | undefined;
+  private readonly extraMiddleware: WsMiddleware[];
   private readonly connections = new Set<Bun.ServerWebSocket<ConnectionData>>();
-  private readonly handle: ReturnType<typeof composeWsMiddleware>;
+  /**
+   * Per-connection binary channel maps: channelId → actor address.
+   * Populated by binaryChannelMiddleware on channel:open, cleared on channel:close.
+   */
+  private readonly channelMaps = new Map<Bun.ServerWebSocket<ConnectionData>, Map<number, string>>();
   /**
    * Per-connection drain queue for backpressure handling.
    *
@@ -51,12 +59,18 @@ export class BunWebSocketBridge {
   private readonly drainQueue = new Map<Bun.ServerWebSocket<ConnectionData>, string[]>();
 
   constructor(system: ActorSystem, serde?: ISerde, ...extraMiddleware: WsMiddleware[]) {
+    this.system = system;
     this.serde = serde;
-    this.handle = composeWsMiddleware(
-      heartbeatMiddleware,
-      actorRoutingMiddleware(system),
-      ...extraMiddleware,
-    );
+    this.extraMiddleware = extraMiddleware;
+  }
+
+  private getChannelMap(ws: Bun.ServerWebSocket<ConnectionData>): Map<number, string> {
+    let map = this.channelMaps.get(ws);
+    if (!map) {
+      map = new Map();
+      this.channelMaps.set(ws, map);
+    }
+    return map;
   }
 
   /**
@@ -78,15 +92,35 @@ export class BunWebSocketBridge {
     this.connections.add(ws);
   }
 
-  /** Routes the message through the middleware stack. */
+  /**
+   * Routes the message through the middleware stack.
+   *
+   * Binary frames (Uint8Array/Buffer): binary channel fast-path — look up the actor
+   * address from the per-connection channel map via the 4-byte channelId prefix,
+   * deliver as Message<Uint8Array> to the actor. Bypasses middleware entirely.
+   *
+   * Text/string frames: channel control (channel:open/close) and actor protocol
+   * messages are handled via the composable middleware stack.
+   */
   handleMessage(ws: Bun.ServerWebSocket<ConnectionData>, message: string | Uint8Array): void {
-    void this.handle(message, (json) => ws.send(json), this.serde);
+    if (message instanceof Uint8Array) {
+      handleBinaryFrame(message, this.getChannelMap(ws), this.system);
+      return;
+    }
+    const channelMap = this.getChannelMap(ws);
+    void composeWsMiddleware(
+      binaryChannelMiddleware(channelMap),
+      heartbeatMiddleware,
+      actorRoutingMiddleware(this.system),
+      ...this.extraMiddleware,
+    )(message, (json) => ws.send(json), this.serde);
   }
 
-  /** Removes the socket from the connection tracking Set and clears its drain queue. */
+  /** Removes the socket from the connection tracking Set and clears its drain queue and channel map. */
   handleClose(ws: Bun.ServerWebSocket<ConnectionData>, _code: number, _reason: string): void {
     this.connections.delete(ws);
     this.drainQueue.delete(ws);
+    this.channelMaps.delete(ws);
   }
 
   /**
