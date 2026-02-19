@@ -41,3 +41,8 @@ yarn-error.log*
 .env
 .env.local
 .env.*.local
+
+# Test runtime artifacts (GraphStore WAL/snapshots written during test runs)
+data-test-*/
+data/test-*/
+test-data/
