@@ -1,32 +1,32 @@
-{"id":"ap-bin-proto","title":"Binary channel protocol types: ChannelOpen/Opened/Close/Error","lifecycle":"completed","priority":"P1","assignee":"claude"}
-{"id":"ap-bin-fnv32a","title":"fnv32a hash utility in bridge-utils.ts","lifecycle":"completed","priority":"P1","assignee":"claude"}
-{"id":"ap-bin-serde","title":"PassthroughSerde: identity serde for binary payloads","lifecycle":"completed","priority":"P1","assignee":"claude"}
-{"id":"ap-bin-mw","title":"binaryChannelMiddleware: channel.open/close control plane","lifecycle":"completed","priority":"P1","depends-on":["ap-bin-proto","ap-bin-frame"],"assignee":"claude"}
-{"id":"ap-bin-frame","title":"handleBinaryFrame() utility: channelId lookup -> actor tell","lifecycle":"completed","priority":"P1","depends-on":["ap-bin-fnv32a","ap-bin-proto"],"assignee":"claude"}
-{"id":"ap-bin-client","title":"Client-side binary channel: channelOpen(), encodeBinaryFrame(), fnv32a for browser/Bun callers","lifecycle":"completed","priority":"P1","depends-on":["ap-bin-proto","ap-bin-fnv32a"],"assignee":"claude"}
-{"id":"ap-bin-cf","title":"CF WebSocketBridge: ArrayBuffer dispatch via channel map","lifecycle":"completed","priority":"P1","depends-on":["ap-bin-frame","ap-bin-mw"],"assignee":"system"}
-{"id":"ap-bin-bun","title":"Bun WebSocketBridge: Uint8Array dispatch via channel map","lifecycle":"completed","priority":"P1","depends-on":["ap-bin-frame","ap-bin-mw"],"assignee":"system"}
-{"id":"ap-bin-tests","title":"Binary channel protocol: integration tests","lifecycle":"completed","priority":"P1","depends-on":["ap-bin-cf","ap-bin-bun"],"assignee":"system"}
-{"id":"ap-virt-factory","title":"Virtual actor factory hook in MessageRouter (on address miss)","lifecycle":"completed","priority":"P1","assignee":"system"}
-{"id":"ai-scaffold","title":"@agentic-primer/ai package scaffold: tsconfig, package.json, index","lifecycle":"completed","priority":"P2","assignee":"system"}
-{"id":"ai-schema","title":"Provider config schema: Zod types for gateway/provider/model/credentials","lifecycle":"completed","priority":"P2","depends-on":["ai-scaffold"],"assignee":"system"}
-{"id":"ai-gateway","title":"GatewayActor: @(ai/gateway/*) — CF AI Gateway instance, health, discovery","lifecycle":"completed","priority":"P2","depends-on":["ai-schema","ai-creds","ai-protocol-types"],"assignee":"system"}
-{"id":"ai-inference","title":"InferenceActor: @(ai/inference/gateway/provider/model) — virtual LLM","lifecycle":"completed","priority":"P2","depends-on":["ai-gateway","ap-virt-factory","ai-protocol-types"],"assignee":"system"}
-{"id":"ai-tts","title":"TtsActor: @(ai/tts/gateway/provider/model) — virtual TTS","lifecycle":"completed","priority":"P2","depends-on":["ai-gateway","ap-virt-factory","ai-protocol-types"],"assignee":"system"}
-{"id":"ai-stt","title":"SttActor: @(ai/stt/gateway/provider/model) — virtual STT + binary channel","lifecycle":"completed","priority":"P2","depends-on":["ai-gateway","ap-virt-factory","ap-bin-proto","ai-protocol-types"],"assignee":"system"}
-{"id":"ai-session","title":"SessionActor: @(ai/session/user-id) — durable session, conversation history","lifecycle":"completed","priority":"P2","depends-on":["ai-inference","ai-tts","ai-stt","ai-embeddings","ai-protocol-types"],"assignee":"system"}
-{"id":"ai-protocol-types","title":"Canonical AI actor message type definitions: inference.request/response, tts.synthesize, stt.transcribe, audio.frame, ai.discover, ai.health, session.* etc.","lifecycle":"completed","priority":"P2","depends-on":["ai-scaffold"],"assignee":"system"}
-{"id":"ap-virt-hier","title":"Hierarchical routing: virtual actor creation at segment boundaries","lifecycle":"pending","priority":"P1","depends-on":["ap-virt-factory"]}
-{"id":"ai-creds","title":"CredentialsActor: @(ai/credentials/*) — CF AIG tokens, API keys","lifecycle":"pending","priority":"P2","depends-on":["ai-schema"]}
-{"id":"ap-virt-tests","title":"Virtual actor routing: tests","lifecycle":"pending","priority":"P1","depends-on":["ap-virt-hier"]}
-{"id":"bl-session","title":"agent-hub: wire SessionActor, replace SignalHubAgent impl","lifecycle":"pending","priority":"P3","depends-on":["ai-session","bl-flux-relay"]}
-{"id":"dm-embeddings","title":"daemon: EmbeddingsActor adapter wrapping embeddings handler","lifecycle":"pending","priority":"P3","depends-on":["dm-scaffold","ai-embeddings"]}
-{"id":"bl-flux-relay","title":"FluxRelayActor: replaces VoiceSession DO, uses SttActor + binary channel","lifecycle":"pending","priority":"P2","depends-on":["ai-stt","ap-bin-client"]}
-{"id":"dm-tts","title":"daemon: TtsActor adapter wrapping TTS handler","lifecycle":"pending","priority":"P3","depends-on":["dm-scaffold","ai-tts"]}
-{"id":"ai-embeddings","title":"EmbeddingsActor: @(ai/embeddings/*) — virtual embeddings with batching","lifecycle":"pending","priority":"P2","depends-on":["ai-gateway","ap-virt-factory","ai-protocol-types"]}
-{"id":"dm-stt","title":"daemon: SttActor adapter wrapping STT handler","lifecycle":"pending","priority":"P3","depends-on":["dm-scaffold","ai-stt"]}
-{"id":"dm-scaffold","title":"daemon: BunActorSystem scaffold alongside existing HTTP endpoints","lifecycle":"pending","priority":"P3","depends-on":["ai-scaffold"]}
-{"id":"bl-wrangler","title":"brianln.ai: wrangler.toml/jsonc updates for actor-based services","lifecycle":"pending","priority":"P3","depends-on":["bl-flux-relay","bl-session"]}
-{"id":"ai-tests","title":"@agentic-primer/ai: integration tests across all actor types","lifecycle":"pending","priority":"P2","depends-on":["ai-session","ai-discovery","ai-creds","ai-embeddings"]}
-{"id":"ai-discovery","title":"Discovery protocol: ai.discover and ai.health across all actors","lifecycle":"pending","priority":"P2","depends-on":["ai-gateway","ai-inference","ai-tts","ai-stt","ai-embeddings","ai-protocol-types","ai-creds"]}
-{"id":"dm-inference","title":"daemon: InferenceActor adapter wrapping chat/messages handlers","lifecycle":"pending","priority":"P3","depends-on":["dm-scaffold","ai-inference"]}
+{"id": "ap-bin-proto", "title": "Binary channel protocol types: ChannelOpen/Opened/Close/Error", "lifecycle": "completed", "priority": "P1", "assignee": "claude"}
+{"id": "ap-bin-fnv32a", "title": "fnv32a hash utility in bridge-utils.ts", "lifecycle": "completed", "priority": "P1", "assignee": "claude"}
+{"id": "ap-bin-serde", "title": "PassthroughSerde: identity serde for binary payloads", "lifecycle": "completed", "priority": "P1", "assignee": "claude"}
+{"id": "ap-bin-mw", "title": "binaryChannelMiddleware: channel.open/close control plane", "lifecycle": "completed", "priority": "P1", "depends-on": ["ap-bin-proto", "ap-bin-frame"], "assignee": "claude"}
+{"id": "ap-bin-frame", "title": "handleBinaryFrame() utility: channelId lookup -> actor tell", "lifecycle": "completed", "priority": "P1", "depends-on": ["ap-bin-fnv32a", "ap-bin-proto"], "assignee": "claude"}
+{"id": "ap-bin-client", "title": "Client-side binary channel: channelOpen(), encodeBinaryFrame(), fnv32a for browser/Bun callers", "lifecycle": "completed", "priority": "P1", "depends-on": ["ap-bin-proto", "ap-bin-fnv32a"], "assignee": "claude"}
+{"id": "ap-bin-cf", "title": "CF WebSocketBridge: ArrayBuffer dispatch via channel map", "lifecycle": "completed", "priority": "P1", "depends-on": ["ap-bin-frame", "ap-bin-mw"], "assignee": "system"}
+{"id": "ap-bin-bun", "title": "Bun WebSocketBridge: Uint8Array dispatch via channel map", "lifecycle": "completed", "priority": "P1", "depends-on": ["ap-bin-frame", "ap-bin-mw"], "assignee": "system"}
+{"id": "ap-bin-tests", "title": "Binary channel protocol: integration tests", "lifecycle": "completed", "priority": "P1", "depends-on": ["ap-bin-cf", "ap-bin-bun"], "assignee": "system"}
+{"id": "ap-virt-factory", "title": "Virtual actor factory hook in MessageRouter (on address miss)", "lifecycle": "completed", "priority": "P1", "assignee": "system"}
+{"id": "ai-scaffold", "title": "@agentic-primer/ai package scaffold: tsconfig, package.json, index", "lifecycle": "completed", "priority": "P2", "assignee": "system"}
+{"id": "ai-schema", "title": "Provider config schema: Zod types for gateway/provider/model/credentials", "lifecycle": "completed", "priority": "P2", "depends-on": ["ai-scaffold"], "assignee": "system"}
+{"id": "ai-gateway", "title": "GatewayActor: @(ai/gateway/*) \u2014 CF AI Gateway instance, health, discovery", "lifecycle": "completed", "priority": "P2", "depends-on": ["ai-schema", "ai-creds", "ai-protocol-types"], "assignee": "system"}
+{"id": "ai-inference", "title": "InferenceActor: @(ai/inference/gateway/provider/model) \u2014 virtual LLM", "lifecycle": "completed", "priority": "P2", "depends-on": ["ai-gateway", "ap-virt-factory", "ai-protocol-types"], "assignee": "system"}
+{"id": "ai-tts", "title": "TtsActor: @(ai/tts/gateway/provider/model) \u2014 virtual TTS", "lifecycle": "completed", "priority": "P2", "depends-on": ["ai-gateway", "ap-virt-factory", "ai-protocol-types"], "assignee": "system"}
+{"id": "ai-stt", "title": "SttActor: @(ai/stt/gateway/provider/model) \u2014 virtual STT + binary channel", "lifecycle": "completed", "priority": "P2", "depends-on": ["ai-gateway", "ap-virt-factory", "ap-bin-proto", "ai-protocol-types"], "assignee": "system"}
+{"id": "ai-session", "title": "SessionActor: @(ai/session/user-id) \u2014 durable session, conversation history", "lifecycle": "completed", "priority": "P2", "depends-on": ["ai-inference", "ai-tts", "ai-stt", "ai-embeddings", "ai-protocol-types"], "assignee": "system"}
+{"id": "ai-protocol-types", "title": "Canonical AI actor message type definitions: inference.request/response, tts.synthesize, stt.transcribe, audio.frame, ai.discover, ai.health, session.* etc.", "lifecycle": "completed", "priority": "P2", "depends-on": ["ai-scaffold"], "assignee": "system"}
+{"id": "ap-virt-hier", "title": "Hierarchical routing: virtual actor creation at segment boundaries", "lifecycle": "completed", "priority": "P1", "depends-on": ["ap-virt-factory"]}
+{"id": "ai-creds", "title": "CredentialsActor: @(ai/credentials/*) \u2014 CF AIG tokens, API keys", "lifecycle": "completed", "priority": "P2", "depends-on": ["ai-schema"]}
+{"id": "ap-virt-tests", "title": "Virtual actor routing: tests", "lifecycle": "completed", "priority": "P1", "depends-on": ["ap-virt-hier"]}
+{"id": "bl-session", "title": "agent-hub: wire SessionActor, replace SignalHubAgent impl", "lifecycle": "pending", "priority": "P3", "depends-on": ["ai-session", "bl-flux-relay"]}
+{"id": "dm-embeddings", "title": "daemon: EmbeddingsActor adapter wrapping embeddings handler", "lifecycle": "pending", "priority": "P3", "depends-on": ["dm-scaffold", "ai-embeddings"]}
+{"id": "bl-flux-relay", "title": "FluxRelayActor: replaces VoiceSession DO, uses SttActor + binary channel", "lifecycle": "pending", "priority": "P2", "depends-on": ["ai-stt", "ap-bin-client"]}
+{"id": "dm-tts", "title": "daemon: TtsActor adapter wrapping TTS handler", "lifecycle": "pending", "priority": "P3", "depends-on": ["dm-scaffold", "ai-tts"]}
+{"id": "ai-embeddings", "title": "EmbeddingsActor: @(ai/embeddings/*) \u2014 virtual embeddings with batching", "lifecycle": "completed", "priority": "P2", "depends-on": ["ai-gateway", "ap-virt-factory", "ai-protocol-types"]}
+{"id": "dm-stt", "title": "daemon: SttActor adapter wrapping STT handler", "lifecycle": "pending", "priority": "P3", "depends-on": ["dm-scaffold", "ai-stt"]}
+{"id": "dm-scaffold", "title": "daemon: BunActorSystem scaffold alongside existing HTTP endpoints", "lifecycle": "pending", "priority": "P3", "depends-on": ["ai-scaffold"]}
+{"id": "bl-wrangler", "title": "brianln.ai: wrangler.toml/jsonc updates for actor-based services", "lifecycle": "pending", "priority": "P3", "depends-on": ["bl-flux-relay", "bl-session"]}
+{"id": "ai-tests", "title": "@agentic-primer/ai: integration tests across all actor types", "lifecycle": "pending", "priority": "P2", "depends-on": ["ai-session", "ai-discovery", "ai-creds", "ai-embeddings"]}
+{"id": "ai-discovery", "title": "Discovery protocol: ai.discover and ai.health across all actors", "lifecycle": "completed", "priority": "P2", "depends-on": ["ai-gateway", "ai-inference", "ai-tts", "ai-stt", "ai-embeddings", "ai-protocol-types", "ai-creds"]}
+{"id": "dm-inference", "title": "daemon: InferenceActor adapter wrapping chat/messages handlers", "lifecycle": "pending", "priority": "P3", "depends-on": ["dm-scaffold", "ai-inference"]}
