@@ -9,7 +9,7 @@ import GraphStore from '@src/graph.ts';
 import { ProgramManager } from '@src/entities/program.ts';
 import type { Message, MessageResponse, Address } from '@agentic-primer/actors';
 import { address } from '@agentic-primer/actors';
-import type { Channel } from './channel.ts';
+import type { Channel } from '@agentic-primer/actors';
 
 // Test actor with reactive ports
 class ReactiveActor extends Actor {
