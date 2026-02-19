@@ -8,17 +8,17 @@
  *
  * Handles:
  * - WebSocket upgrade via Bun.serve()
- * - Actor message deserialization and routing to ActorSystem
- * - Heartbeat HEARTBEAT_PING/PONG (matching RemoteTransport protocol exactly)
+ * - Actor message routing via composable middleware stack
+ * - Heartbeat HEARTBEAT_PING/PONG (via heartbeatMiddleware)
  * - Broadcasting messages to all connected WebSockets
  * - Connection tracking via a Set (no DurableObjectState, no hibernation)
  */
 
-import type { ActorSystem, ISerde } from '@agentic-primer/actors';
+import type { ActorSystem, ISerde, WsMiddleware } from '@agentic-primer/actors';
 import {
-  deserializeWsMessage,
-  makeHeartbeatPong,
-  routeWsActorMessage,
+  composeWsMiddleware,
+  heartbeatMiddleware,
+  actorRoutingMiddleware,
 } from '@agentic-primer/actors';
 
 /** Per-connection data attached at upgrade time. */
@@ -32,13 +32,17 @@ interface UpgradableServer {
 }
 
 export class BunWebSocketBridge {
-  private readonly system: ActorSystem;
   private readonly serde: ISerde | undefined;
   private readonly connections = new Set<Bun.ServerWebSocket<ConnectionData>>();
+  private readonly handle: ReturnType<typeof composeWsMiddleware>;
 
-  constructor(system: ActorSystem, serde?: ISerde) {
-    this.system = system;
+  constructor(system: ActorSystem, serde?: ISerde, ...extraMiddleware: WsMiddleware[]) {
     this.serde = serde;
+    this.handle = composeWsMiddleware(
+      heartbeatMiddleware,
+      actorRoutingMiddleware(system),
+      ...extraMiddleware,
+    );
   }
 
   /**
@@ -55,63 +59,25 @@ export class BunWebSocketBridge {
     return new Response('Not a WebSocket request', { status: 400 });
   }
 
-  /**
-   * Handle a new WebSocket connection opening.
-   * Adds the socket to the connection tracking Set.
-   */
+  /** Adds the socket to the connection tracking Set. */
   handleOpen(ws: Bun.ServerWebSocket<ConnectionData>): void {
     this.connections.add(ws);
   }
 
-  /**
-   * Handle an incoming WebSocket message.
-   *
-   * Protocol:
-   * - HEARTBEAT_PING → reply with HEARTBEAT_PONG (same id, correct addressing)
-   * - Actor messages (to + type present) → route via system.send()
-   */
-  handleMessage(
-    ws: Bun.ServerWebSocket<ConnectionData>,
-    message: string | Uint8Array
-  ): void {
-    try {
-      const data = deserializeWsMessage(message, this.serde);
-
-      // Handle heartbeat — must match RemoteTransport.sendHeartbeat() exactly
-      if (data.type === 'HEARTBEAT_PING') {
-        ws.send(JSON.stringify(makeHeartbeatPong(data as { id: string })));
-        return;
-      }
-
-      routeWsActorMessage(data, this.system);
-    } catch (error) {
-      console.error('BunWebSocketBridge: Failed to handle message:', error);
-    }
+  /** Routes the message through the middleware stack. */
+  handleMessage(ws: Bun.ServerWebSocket<ConnectionData>, message: string | Uint8Array): void {
+    void this.handle(message, (json) => ws.send(json), this.serde);
   }
 
-  /**
-   * Handle a WebSocket connection closing.
-   * Removes the socket from the connection tracking Set.
-   */
-  handleClose(
-    ws: Bun.ServerWebSocket<ConnectionData>,
-    _code: number,
-    _reason: string
-  ): void {
+  /** Removes the socket from the connection tracking Set. */
+  handleClose(ws: Bun.ServerWebSocket<ConnectionData>, _code: number, _reason: string): void {
     this.connections.delete(ws);
   }
 
-  /**
-   * Handle WebSocket backpressure drain event.
-   * No-op — callers may override via subclass or composition if needed.
-   */
-  handleDrain(_ws: Bun.ServerWebSocket<ConnectionData>): void {
-    // no-op
-  }
+  /** No-op — override via extra middleware passed to the constructor. */
+  handleDrain(_ws: Bun.ServerWebSocket<ConnectionData>): void {}
 
-  /**
-   * Broadcast a message to all currently connected WebSockets.
-   */
+  /** Broadcasts a message to all currently connected WebSockets. */
   broadcast<T>(message: T): void {
     const serialized = JSON.stringify(message);
     for (const ws of this.connections) {
@@ -130,16 +96,13 @@ export class BunWebSocketBridge {
 
   /**
    * Returns an object suitable for the `websocket` key of Bun.serve().
-   * All handlers are bound to this BunWebSocketBridge instance.
    *
-   * Usage:
-   * ```typescript
+   * @example
    * const bridge = new BunWebSocketBridge(system);
    * Bun.serve({
    *   fetch: (req, server) => bridge.handleUpgrade(req, server),
    *   websocket: bridge.createWebSocketHandlers(),
    * });
-   * ```
    */
   createWebSocketHandlers(): {
     open(ws: Bun.ServerWebSocket<ConnectionData>): void;

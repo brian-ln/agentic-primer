@@ -6,28 +6,32 @@
  *
  * Handles:
  * - WebSocket upgrade with Hibernatable WebSocket API
- * - Actor message deserialization and routing to ActorSystem
- * - Heartbeat HEARTBEAT_PING/PONG (matching RemoteTransport protocol exactly)
+ * - Actor message routing via composable middleware stack
+ * - Heartbeat HEARTBEAT_PING/PONG (via heartbeatMiddleware)
  * - Broadcasting messages to all connected WebSockets
  * - Connection tracking via ctx.getWebSockets()
  */
 
-import type { ActorSystem, ISerde } from '@agentic-primer/actors';
+import type { ActorSystem, ISerde, WsMiddleware } from '@agentic-primer/actors';
 import {
-  deserializeWsMessage,
-  makeHeartbeatPong,
-  routeWsActorMessage,
+  composeWsMiddleware,
+  heartbeatMiddleware,
+  actorRoutingMiddleware,
 } from '@agentic-primer/actors';
 
 export class WebSocketBridge {
   private readonly ctx: DurableObjectState;
-  private readonly system: ActorSystem;
   private readonly serde: ISerde | undefined;
+  private readonly handle: ReturnType<typeof composeWsMiddleware>;
 
-  constructor(ctx: DurableObjectState, system: ActorSystem, serde?: ISerde) {
+  constructor(ctx: DurableObjectState, system: ActorSystem, serde?: ISerde, ...extraMiddleware: WsMiddleware[]) {
     this.ctx = ctx;
-    this.system = system;
     this.serde = serde;
+    this.handle = composeWsMiddleware(
+      heartbeatMiddleware,
+      actorRoutingMiddleware(system),
+      ...extraMiddleware,
+    );
   }
 
   /**
@@ -39,57 +43,27 @@ export class WebSocketBridge {
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
 
-    // Extract tags from URL params for WebSocket identification
     const url = new URL(request.url);
     const tag = url.searchParams.get('tag') || undefined;
     const tags = tag ? [tag] : [];
 
     this.ctx.acceptWebSocket(server, tags);
 
-    return new Response(null, {
-      status: 101,
-      webSocket: client,
-    });
+    return new Response(null, { status: 101, webSocket: client });
   }
 
-  /**
-   * Handle an incoming WebSocket message.
-   * Deserializes the message and routes actor protocol messages to the ActorSystem.
-   * Handles HEARTBEAT_PING/PONG matching RemoteTransport protocol exactly.
-   */
+  /** Routes the message through the middleware stack. */
   handleMessage(ws: WebSocket, message: string | ArrayBuffer): void {
-    try {
-      const data = deserializeWsMessage(message, this.serde);
-
-      // Handle heartbeat — must match RemoteTransport.sendHeartbeat() exactly
-      if (data.type === 'HEARTBEAT_PING') {
-        ws.send(JSON.stringify(makeHeartbeatPong(data as { id: string })));
-        return;
-      }
-
-      routeWsActorMessage(data, this.system);
-    } catch (error) {
-      console.error('WebSocketBridge: Failed to handle message:', error);
-    }
+    void this.handle(message, (json) => ws.send(json), this.serde);
   }
 
-  /**
-   * Handle WebSocket close event.
-   * Clean up is minimal since hibernation handles connection lifecycle.
-   */
-  handleClose(_ws: WebSocket): void {
-    // Connection cleanup is handled automatically by the hibernation API.
-    // Subclasses of DOActorSystem can override webSocketClose for custom logic.
-  }
+  /** No-op — hibernation handles connection lifecycle. */
+  handleClose(_ws: WebSocket): void {}
 
-  /**
-   * Broadcast a message to all connected WebSockets.
-   * Uses ctx.getWebSockets() for hibernation-aware connection tracking.
-   */
+  /** Broadcasts a message to all connected WebSockets. */
   broadcast<T>(message: T): void {
     const serialized = JSON.stringify(message);
-    const sockets = this.ctx.getWebSockets();
-    for (const ws of sockets) {
+    for (const ws of this.ctx.getWebSockets()) {
       try {
         ws.send(serialized);
       } catch {
@@ -98,9 +72,7 @@ export class WebSocketBridge {
     }
   }
 
-  /**
-   * Get the number of currently connected WebSockets.
-   */
+  /** Returns the number of currently connected WebSockets. */
   getConnectionCount(): number {
     return this.ctx.getWebSockets().length;
   }

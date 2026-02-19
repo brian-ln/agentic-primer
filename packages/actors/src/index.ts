@@ -186,8 +186,13 @@ export {
 export { LocalTransport } from './transport/local-transport.ts';
 export { JsonSerde } from './transport/serde.ts';
 
-// WebSocket bridge utilities — shared across Bun, Cloudflare, and future bridge targets
+// WebSocket bridge middleware — shared across Bun, Cloudflare, and future bridge targets
 export {
+  type WsContext,
+  type WsMiddleware,
+  composeWsMiddleware,
+  heartbeatMiddleware,
+  actorRoutingMiddleware,
   type HeartbeatPing,
   type HeartbeatPong,
   makeHeartbeatPong,
