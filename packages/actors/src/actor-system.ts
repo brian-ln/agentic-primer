@@ -25,7 +25,7 @@ import type {
   DeadLetterEntry,
 } from './types.ts';
 import type { ITransport } from './interfaces.ts';
-import { MessageRouter, type MessageRouterConfig } from './router.ts';
+import { MessageRouter, type MessageRouterConfig, type ActorFactoryEntry } from './router.ts';
 import {
   address,
   parseAddress,
@@ -170,10 +170,25 @@ export class ActorSystem {
     return response.payload as R;
   }
 
-  // --- Transport & Service Discovery (delegated to router) ---
+  // --- Transport, Factory & Service Discovery (delegated to router) ---
 
   registerTransport(protocol: string, transport: ITransport): void {
     this.router.registerTransport(protocol, transport);
+  }
+
+  /**
+   * Register a virtual actor factory.
+   * Called when an address is unresolvable through the normal registry.
+   * The factory may provision an actor on demand (Virtual Actor pattern).
+   *
+   * @example
+   * system.registerFactory({
+   *   prefix: 'ai/inference/',
+   *   factory: (addr) => new InferenceActor(addr, config),
+   * });
+   */
+  registerFactory(entry: ActorFactoryEntry): void {
+    this.router.registerFactory(entry);
   }
 
   registerService(serviceName: string, addr: Address): void {

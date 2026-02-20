@@ -29,6 +29,23 @@ import { parseAddressInfo, isHierarchicalPath } from './routing/address-parser.t
 import { PathCache, type PathCacheConfig } from './routing/path-cache.ts';
 import type { DeadLetterEntry } from './types.ts';
 
+/**
+ * A virtual actor factory.
+ *
+ * Called when an actor address cannot be resolved through the normal registry.
+ * If the factory returns a handler, the router registers it (auto-cached) and
+ * delivers the pending message. Return null to pass to the next factory.
+ */
+export type ActorFactory = (
+  address: string,
+) => Promise<MessageHandler | null> | MessageHandler | null;
+
+export interface ActorFactoryEntry {
+  /** Optional address prefix. If omitted, factory is tried for every unresolved address. */
+  prefix?: string;
+  factory: ActorFactory;
+}
+
 export interface MessageRouterConfig {
   /** Path cache configuration */
   cache?: PathCacheConfig;
@@ -36,6 +53,8 @@ export interface MessageRouterConfig {
   deadLetterQueueSize?: number;
   /** Default ask timeout in ms. @default 30000 */
   defaultTimeout?: number;
+  /** Virtual actor factories consulted when address resolution fails. */
+  factories?: ActorFactoryEntry[];
 }
 
 export class MessageRouter implements IMessageRouter {
@@ -60,10 +79,16 @@ export class MessageRouter implements IMessageRouter {
   private deadLetterQueueSize: number;
   private defaultTimeout: number;
 
+  // Virtual actor factories
+  private factories: ActorFactoryEntry[] = [];
+
   constructor(config: MessageRouterConfig = {}) {
     this.pathCache = new PathCache<MessageHandler>(config.cache);
     this.deadLetterQueueSize = config.deadLetterQueueSize ?? 100;
     this.defaultTimeout = config.defaultTimeout ?? 30000;
+    if (config.factories) {
+      this.factories = [...config.factories];
+    }
   }
 
   // --- Actor Management ---
@@ -84,6 +109,16 @@ export class MessageRouter implements IMessageRouter {
 
   listActors(): string[] {
     return Array.from(this.actorRegistry.keys());
+  }
+
+  /**
+   * Register a virtual actor factory.
+   * Called when an actor address cannot be resolved through the normal registry.
+   * The factory may create and return a MessageHandler for the address, or return
+   * null to pass control to the next registered factory.
+   */
+  registerFactory(entry: ActorFactoryEntry): void {
+    this.factories.push(entry);
   }
 
   cacheActor(path: string, actor: MessageHandler): void {
@@ -250,7 +285,21 @@ export class MessageRouter implements IMessageRouter {
       }
     }
 
-    // 5. Dead letter
+    // 5. Virtual actor factory — provision on demand
+    if (this.factories.length > 0) {
+      for (const entry of this.factories) {
+        if (entry.prefix && !targetPath.startsWith(entry.prefix)) continue;
+        const actor = await entry.factory(targetPath);
+        if (actor) {
+          // Cache at the full address so future sends bypass factory lookup
+          this.actorRegistry.set(targetPath, actor);
+          this.pathCache.set(targetPath, actor);
+          return await actor.receive(message);
+        }
+      }
+    }
+
+    // 6. Dead letter
     const error = new Error(`No actor found for address: ${targetPath}`);
     this.addToDeadLetterQueue(message.to, message, error);
     return createErrorResponse(message, error.message);

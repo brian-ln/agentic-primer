@@ -89,7 +89,7 @@ export {
 } from './validation/schema-validator.ts';
 
 // Message router
-export { MessageRouter, type MessageRouterConfig } from './router.ts';
+export { MessageRouter, type MessageRouterConfig, type ActorFactory, type ActorFactoryEntry } from './router.ts';
 
 // Supervisor
 export { SupervisorBase, LeafActor } from './supervisor.ts';
