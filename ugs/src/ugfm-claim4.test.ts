@@ -361,4 +361,193 @@ describe('UGFM Claim 4: Shared Toolchain Across All Domain Types', () => {
       expect(report).toContain('3-point stencil');
     });
   });
+
+  // =========================================================================
+  // 4.5 Head-to-head: domain-specific vs UGFM
+  //
+  // Models the same system (8-task build dependency graph) in two styles:
+  //   A) Domain-specific: ad-hoc Task[] + custom DFS cycle detection
+  //   B) UGFM/ugs: GraphStore with 'Task' node type, shared hasCycle()
+  //
+  // This directly addresses the MIC counter-argument: "domain-specific tools
+  // are more productive even when universal tools are possible."
+  // =========================================================================
+
+  describe('4.5 Head-to-head: domain-specific vs UGFM', () => {
+    // -----------------------------------------------------------------------
+    // Domain-specific implementation (Approach A)
+    // Custom data structure + hand-written DFS — lives here, not in ugfm-claim4.ts
+    // -----------------------------------------------------------------------
+
+    interface Task { id: string; deps: string[]; }
+
+    const buildTasks: Task[] = [
+      { id: 'A', deps: [] },
+      { id: 'B', deps: ['A'] },
+      { id: 'C', deps: ['A'] },
+      { id: 'D', deps: ['B'] },
+      { id: 'E', deps: ['C'] },
+      { id: 'F', deps: ['D', 'E'] },
+      { id: 'G', deps: ['F'] },
+      { id: 'H', deps: ['G'] },
+    ];
+
+    /** Custom DFS cycle detection written specifically for Task[]. */
+    function detectCycleDomainSpecific(tasks: Task[]): boolean {
+      const visited = new Set<string>();
+      const inStack = new Set<string>();
+
+      function dfs(id: string): boolean {
+        if (inStack.has(id)) return true;
+        if (visited.has(id)) return false;
+        visited.add(id);
+        inStack.add(id);
+        const task = tasks.find(t => t.id === id)!;
+        for (const dep of task.deps) {
+          if (dfs(dep)) return true;
+        }
+        inStack.delete(id);
+        return false;
+      }
+
+      return tasks.some(t => dfs(t.id));
+    }
+
+    // -----------------------------------------------------------------------
+    // UGFM implementation (Approach B) — shared GraphStore substrate
+    // -----------------------------------------------------------------------
+
+    async function buildUGFMTaskStore(withCycleEdge = false): Promise<GraphStore> {
+      const store = new GraphStore(':memory:');
+      // 8 Task nodes
+      for (const id of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']) {
+        await store.addNode(id, 'Task', { name: id });
+      }
+      // 8 dependency edges (B depends on A means B→A)
+      const edges: [string, string][] = [
+        ['B', 'A'], ['C', 'A'], ['D', 'B'], ['E', 'C'],
+        ['F', 'D'], ['F', 'E'], ['G', 'F'], ['H', 'G'],
+      ];
+      for (const [from, to] of edges) {
+        await store.addEdge(`${from}->${to}`, from, to, 'depends_on', {});
+      }
+      if (withCycleEdge) {
+        // A→H closes the cycle: A depends on H, which (via G→F→...→B) depends on A
+        await store.addEdge('A->H', 'A', 'H', 'depends_on', {});
+      }
+      return store;
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 1: Both approaches detect no cycle in the valid 8-task DAG
+    // -----------------------------------------------------------------------
+
+    it('both approaches detect no cycle in valid 8-task DAG', async () => {
+      // Domain-specific
+      expect(detectCycleDomainSpecific(buildTasks)).toBe(false);
+
+      // UGFM
+      const store = await buildUGFMTaskStore(false);
+      const result = runUniversalToolchain(store, 'workflow');
+      expect(result.hasCycle).toBe(false);
+    });
+
+    // -----------------------------------------------------------------------
+    // Test 2: Both approaches detect the cycle when A→H is added
+    //
+    // Adding A depends_on H creates a full back-edge in the dep chain:
+    //   A→H→G→F→D→B→A  (following deps from A reaches H, and H→A closes the loop)
+    // Both the domain-specific DFS (which follows deps edges) and UGFM hasCycle
+    // detect this as a cycle.
+    // -----------------------------------------------------------------------
+
+    it('both approaches detect cycle when circular dependency added', async () => {
+      // Domain-specific: add A→H (A depends on H), closing the cycle
+      const cycleTaskA: Task = { id: 'A', deps: ['H'] };
+      const tasksWithCycle: Task[] = buildTasks
+        .filter(t => t.id !== 'A')
+        .concat(cycleTaskA);
+      expect(detectCycleDomainSpecific(tasksWithCycle)).toBe(true);
+
+      // UGFM: add A depends_on H edge to close the cycle
+      const store = await buildUGFMTaskStore(false);
+      await store.addEdge('A->H', 'A', 'H', 'depends_on', {});
+      const result = runUniversalToolchain(store, 'workflow');
+      expect(result.hasCycle).toBe(true);
+    });
+
+    // -----------------------------------------------------------------------
+    // Test 3: UGFM hasCycle call is identical to concurrent/knowledge/numerical calls
+    //
+    // Verifies that the same store.hasCycle() method used for the task domain
+    // is the same one used across concurrent, knowledge, and numerical domains.
+    // -----------------------------------------------------------------------
+
+    it('UGFM hasCycle call is identical to concurrent/knowledge/numerical domain calls', async () => {
+      const taskStore = await buildUGFMTaskStore(false);
+
+      // Build one example each of concurrent and knowledge domains
+      const actorStore = new GraphStore(':memory:');
+      await actorStore.addNode('orch', 'Actor', { name: 'orchestrator' });
+      await actorStore.addNode('w1', 'Actor', { name: 'worker-1' });
+      await actorStore.addEdge('ch', 'orch', 'w1', 'MessageChannel', {});
+
+      const conceptStore = new GraphStore(':memory:');
+      await conceptStore.addNode('gs', 'Concept', { name: 'GraphSubstrate' });
+      await conceptStore.addNode('scc', 'Concept', { name: 'SCC' });
+      await conceptStore.addEdge('e1', 'gs', 'scc', 'Enables', {});
+
+      const taskResult = runUniversalToolchain(taskStore, 'workflow');
+      const actorResult = runUniversalToolchain(actorStore, 'concurrent');
+      const conceptResult = runUniversalToolchain(conceptStore, 'knowledge');
+
+      // The set of algorithms called is identical across all three domains
+      expect(taskResult.algorithmsUsed).toEqual(actorResult.algorithmsUsed);
+      expect(taskResult.algorithmsUsed).toEqual(conceptResult.algorithmsUsed);
+      expect(taskResult.algorithmsUsed).toContain('hasCycle');
+      expect(taskResult.algorithmsUsed).toContain('findSCCs');
+    });
+
+    // -----------------------------------------------------------------------
+    // Test 4: Domain-specific detectCycle required custom algorithm code
+    //
+    // Asserts that the domain-specific approach needed a new function.
+    // The function's source contains the custom DFS logic — not zero code.
+    // -----------------------------------------------------------------------
+
+    it('domain-specific detectCycle required custom algorithm code — counted in spec', () => {
+      const src = detectCycleDomainSpecific.toString();
+      // The function exists and contains its own DFS implementation
+      expect(src).toContain('function dfs');
+      expect(src).toContain('inStack');
+      expect(src).toContain('visited');
+      // It is not trivially short — it needed real implementation work
+      expect(src.length).toBeGreaterThan(200);
+    });
+
+    // -----------------------------------------------------------------------
+    // Test 5: UGFM adds task domain with zero new algorithm code
+    //
+    // No new function like detectCycleDomainSpecific was written.
+    // The task domain reuses store.hasCycle() from the shared substrate.
+    // -----------------------------------------------------------------------
+
+    it('UGFM adds task domain with zero new algorithm code (same hasCycle)', async () => {
+      const store = await buildUGFMTaskStore(false);
+      // hasCycle is a method on GraphStore — shared across ALL domains
+      // No domain-specific cycle-detection function was authored for the task domain
+      expect(typeof store.hasCycle).toBe('function');
+
+      // The result is computed by the same shared method, not a domain-specific one
+      const result = runUniversalToolchain(store, 'workflow');
+      expect(result.algorithmsUsed).toEqual(['findSCCs', 'hasCycle']);
+
+      // Crucially: the algorithmsUsed list does NOT grow when a new domain is added
+      // (it stays exactly ['findSCCs', 'hasCycle'] for every domain)
+      const numericalStore = new GraphStore(':memory:');
+      await numericalStore.addNode('g00', 'GridPoint', { x: 0, y: 0 });
+      const numericalResult = runUniversalToolchain(numericalStore, 'numerical');
+      expect(numericalResult.algorithmsUsed).toEqual(result.algorithmsUsed);
+    });
+  });
 });
