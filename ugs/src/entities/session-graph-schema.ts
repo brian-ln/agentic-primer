@@ -275,9 +275,18 @@ interface JsonlEnvelope {
   cwd?: string;
   slug?: string;
   requestId?: string;
+  /**
+   * True on daemon-injected rate-limit events ("You've hit your limit").
+   * These are not real API responses and must not become turn nodes.
+   */
+  isApiErrorMessage?: boolean;
   message?: {
     role?: string;
     content?: unknown;
+    /**
+     * '<synthetic>' on daemon-injected synthetic messages.
+     * These are not real API responses and must not become turn nodes.
+     */
     model?: string;
     usage?: {
       input_tokens?: number;
@@ -360,8 +369,15 @@ export function buildSessionGraph(
   }
 
   // --- Step 2: Split into user and assistant events ---
-  const userEvents = events.filter(e => e.type === 'user' && e.uuid);
-  const assistantEvents = events.filter(e => e.type === 'assistant' && e.uuid);
+  // Bug fix: skip daemon-injected synthetic events before any node is created.
+  // isApiErrorMessage === true  → rate-limit "You've hit your limit" messages
+  // message?.model === '<synthetic>' → daemon-synthesised assistant events
+  // Neither should become turn nodes in the graph.
+  const isSyntheticEvent = (e: JsonlEnvelope): boolean =>
+    e.isApiErrorMessage === true || e.message?.model === '<synthetic>';
+
+  const userEvents = events.filter(e => e.type === 'user' && e.uuid && !isSyntheticEvent(e));
+  const assistantEvents = events.filter(e => e.type === 'assistant' && e.uuid && !isSyntheticEvent(e));
 
   // --- Step 3: Build a parentUuid → assistant events index ---
   // Multiple assistant events share a requestId and form a chain. We index
@@ -407,8 +423,15 @@ export function buildSessionGraph(
   }
 
   const turns: ParsedTurn[] = [];
+  // Track which user event UUIDs we've already converted to turns, so that a
+  // JSONL file that contains the same event UUID more than once (possible after
+  // an interrupted compaction + resume) does not produce duplicate turn nodes
+  // or duplicate 'contains' / 'threads-to' edges.
+  const seenUserUuids = new Set<string>();
 
   for (const ue of userEvents) {
+    if (seenUserUuids.has(ue.uuid)) continue;
+    seenUserUuids.add(ue.uuid);
     const assistantChain = collectAssistantChain(ue.uuid);
 
     // Extract text content from user event
@@ -533,6 +556,14 @@ export function buildSessionGraph(
   }
 
   // --- Step 8: 'threads-to' edges from parentUuid chains ---
+  // Bug fix: after an interrupted compaction + session resume a user event can
+  // appear as the parentUuid of more than one child turn (resume-induced branch).
+  // We emit one threads-to edge per unique (from, to) pair only — duplicate pairs
+  // are silently dropped here. The fork-point detection in Step 9 then promotes
+  // any source node with >1 distinct outgoing edges into a fork-point, which is
+  // the correct representation of such a resume-induced branch.
+  const seenThreadsToEdges = new Set<string>();
+
   for (const turn of turns) {
     if (turn.parentUuid) {
       const fromTurnNodeId = uuidToTurnNodeId.get(turn.parentUuid);
@@ -541,6 +572,12 @@ export function buildSessionGraph(
       // Only emit if both ends are known turn nodes (skip edges to/from
       // non-turn events like system, progress, etc.)
       if (fromTurnNodeId && toTurnNodeId) {
+        const edgeKey = `${fromTurnNodeId}→${toTurnNodeId}`;
+        if (seenThreadsToEdges.has(edgeKey)) {
+          // Duplicate edge — skip to keep the graph a valid DAG
+          continue;
+        }
+        seenThreadsToEdges.add(edgeKey);
         edges.push({
           from: fromTurnNodeId,
           to: toTurnNodeId,
@@ -552,6 +589,11 @@ export function buildSessionGraph(
   }
 
   // --- Steps 9 & 10: Detect fork-points and join-points ---
+  // A source node with >1 outgoing 'threads-to' edges is a fork-point.  This
+  // happens legitimately when an interrupted compaction + session resume causes
+  // two distinct child turns to share the same parentUuid.  The fork-point node
+  // is inserted here and the outgoing edges are rewritten to 'forks-to', so the
+  // resulting graph is a valid DAG rather than a node with duplicate edges.
 
   // Build adjacency counts for 'threads-to' edges
   const outgoingCount = new Map<string, number>();
@@ -588,16 +630,19 @@ export function buildSessionGraph(
     };
     nodes.push(forkNode);
 
+    // Insert exactly ONE 'threads-to' edge from the original node to the fork node.
+    // (One edge regardless of how many children — emitting one per child would
+    // create duplicate edges for the same from→to pair.)
+    edges.push({
+      from: nodeId,
+      to: forkNodeId,
+      type: 'threads-to',
+      parentUuid: outgoingEdges[0]?.parentUuid,
+    });
+
     // Rewrite the outgoing 'threads-to' edges to 'forks-to' from the fork node
     for (const edge of outgoingEdges) {
       edge.type = 'forks-to';
-      // Insert a new 'threads-to' edge from the original node to the fork node
-      edges.push({
-        from: nodeId,
-        to: forkNodeId,
-        type: 'threads-to',
-        parentUuid: edge.parentUuid,
-      });
       // Update the fork edge's source to be the fork node
       edge.from = forkNodeId;
     }
