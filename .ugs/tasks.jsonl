@@ -42,3 +42,5 @@
 {"id":"dm-scaffold","title":"dm-scaffold: BunActorSystem scaffold in brianln.ai daemon","lifecycle":"pending","priority":"P3"}
 {"id":"ai-discovery","title":"ai-discovery: add ai.discover + ai.health handlers to all AI actors","lifecycle":"completed","priority":"P2","assignee":"bln"}
 {"id":"ai-tests","title":"ai-tests: integration tests for all packages/ai actors","lifecycle":"completed","priority":"P2","assignee":"bln"}
+{"id":"spec-expired-jwt","title":"Test: expired JWT on initial hub:connect","lifecycle":"completed","priority":"P1","assignee":"claude"}
+{"id":"spec-hibernation-wake","title":"Test: hibernation wake — session/registry state persists, message delivery works on wake","lifecycle":"completed","priority":"P1","assignee":"claude"}
