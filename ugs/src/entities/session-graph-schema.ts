@@ -527,12 +527,22 @@ export function buildSessionGraph(
   };
   nodes.push(sessionNode);
 
-  // Map from JSONL uuid → turn node ID, for edge construction
+  // Map from JSONL uuid → turn node ID, for edge construction.
+  // We register BOTH the user event uuid AND all assistant event uuids for each
+  // turn. This is required because the parentUuid of a subsequent user event
+  // points to an assistant event uuid (the last response in the chain), not
+  // directly to another user event uuid.
   const uuidToTurnNodeId = new Map<string, string>();
 
   for (const turn of turns) {
     const turnNodeId = `turn:${turn.uuid}`;
     uuidToTurnNodeId.set(turn.uuid, turnNodeId);
+    // Register all assistant uuids that belong to this turn so that the next
+    // user event's parentUuid (which references an assistant uuid) can be
+    // resolved back to this turn node.
+    for (const assistantUuid of turn.assistantUuids) {
+      uuidToTurnNodeId.set(assistantUuid, turnNodeId);
+    }
 
     const turnNode: SessionNode = {
       id: turnNodeId,
