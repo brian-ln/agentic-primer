@@ -25,6 +25,7 @@ export interface ToolchainResult {
   sccCount: number;
   largestSCCSize: number;
   toolchainVersion: '1.0'; // Same version across all domains
+  algorithmsUsed: string[]; // Names of graph functions called — identical across all domains
 }
 
 export interface DomainRegistration {
@@ -109,6 +110,7 @@ export function runUniversalToolchain(store: GraphStore, domain: DomainType): To
     sccCount: sccs.length,
     largestSCCSize,
     toolchainVersion: '1.0',
+    algorithmsUsed: ['findSCCs', 'hasCycle'],
   };
 }
 

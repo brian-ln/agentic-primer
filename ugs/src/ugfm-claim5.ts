@@ -64,10 +64,14 @@ export function orchestrate(question: string, store: GraphStore): OrchestrationR
       result = store.hasCycle();
       break;
     case 'traverse': {
-      // Use all nodes reachable via SCC coverage as a proxy for full traversal.
-      // A real LLM would extract entity names and call store.traverse(startId).
-      // Here we flatten SCCs to get all node IDs in the graph.
-      result = store.findSCCs().flat();
+      // Use the first node in the store as traversal root.
+      // A real LLM would extract entity names from the question to identify a specific
+      // start node. Here we use first node as a deterministic proxy, since the
+      // orchestrator's role is routing only — not graph reasoning.
+      const nodes = [...store.nodes.values()];
+      result = nodes.length > 0
+        ? store.traverse(nodes[0].id).map((entry) => entry.node.id)
+        : [];
       break;
     }
     case 'getByType': {
@@ -118,5 +122,91 @@ export function createOrchestratorTracker() {
     history(): OrchestrationResult[] {
       return [...calls];
     },
+  };
+}
+
+/**
+ * orchestrateWithLLM: use Claude Haiku to classify the question into an algorithm,
+ * then execute the deterministic graph algorithm.
+ *
+ * The LLM performs semantic routing; the graph tool does deterministic computation.
+ * This is the live demonstration of Claim 5's architecture with a real LLM.
+ *
+ * Requires ANTHROPIC_API_KEY in environment. Throws if not set.
+ */
+export async function orchestrateWithLLM(
+  question: string,
+  store: GraphStore
+): Promise<OrchestrationResult> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set');
+
+  const systemPrompt =
+    'You are a graph algorithm selector. Given a question about a graph system, ' +
+    'select exactly one algorithm. Reply with ONLY the algorithm name, nothing else. ' +
+    'Valid algorithms: findSCCs, hasCycle, traverse, getByType';
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 20,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: question }],
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Anthropic API error: ${response.status}`);
+  }
+
+  const data = await response.json() as { content: Array<{ text: string }> };
+  const rawAlgorithm = data.content[0]?.text?.trim() ?? 'unknown';
+
+  // Validate the LLM returned a known algorithm name
+  const validAlgorithms: AlgorithmName[] = ['findSCCs', 'hasCycle', 'traverse', 'getByType'];
+  const algorithm: AlgorithmName = validAlgorithms.includes(rawAlgorithm as AlgorithmName)
+    ? rawAlgorithm as AlgorithmName
+    : 'unknown';
+
+  // Execute the deterministic graph algorithm (same logic as orchestrate() switch statement)
+  let result: unknown;
+  switch (algorithm) {
+    case 'findSCCs':
+      result = store.findSCCs();
+      break;
+    case 'hasCycle':
+      result = store.hasCycle();
+      break;
+    case 'traverse': {
+      // Use first node as traversal root.
+      // Real LLM would extract entity names from question; here we use first node as proxy.
+      const nodes = [...store.nodes.values()];
+      result = nodes.length > 0
+        ? store.traverse(nodes[0].id).map((entry) => entry.node.id)
+        : [];
+      break;
+    }
+    case 'getByType': {
+      const typeMatch = question.match(/actor|worker|task|concept|knowledge/i);
+      const nodeType = typeMatch ? capitalize(typeMatch[0]) : 'Actor';
+      result = store.getByType(nodeType).map(n => n.id);
+      break;
+    }
+    default:
+      result = null;
+  }
+
+  return {
+    question,
+    algorithm,
+    result,
+    deterministic: true,  // Graph algorithm is deterministic; LLM routing is best-effort
+    routingPattern: `llm-selected:${rawAlgorithm}`,
   };
 }

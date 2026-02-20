@@ -17,7 +17,7 @@
 
 import { describe, it, expect, beforeEach } from 'bun:test';
 import GraphStore from './graph';
-import { orchestrate, createOrchestratorTracker } from './ugfm-claim5';
+import { orchestrate, orchestrateWithLLM, createOrchestratorTracker } from './ugfm-claim5';
 
 describe('UGFM Claim 5: LLM-Orchestrated Deterministic Graph Tools', () => {
   let store: GraphStore;
@@ -182,6 +182,44 @@ describe('UGFM Claim 5: LLM-Orchestrated Deterministic Graph Tools', () => {
       expect(stats.algorithmDistribution.traverse).toBe(0);
       expect(stats.algorithmDistribution.getByType).toBe(0);
       expect(stats.algorithmDistribution.unknown).toBe(0);
+    });
+  });
+
+  // ==========================================================================
+  // 5.5 Live LLM Integration (skips if ANTHROPIC_API_KEY not set)
+  // ==========================================================================
+
+  describe('5.5 Live LLM Integration (skips if ANTHROPIC_API_KEY not set)', () => {
+    it('LLM correctly routes deadlock question to findSCCs algorithm', async () => {
+      if (!process.env.ANTHROPIC_API_KEY) {
+        console.log('  [SKIP] ANTHROPIC_API_KEY not set — skipping live LLM test');
+        return;
+      }
+      const result = await orchestrateWithLLM(
+        'Is there a deadlock in this actor system?',
+        store
+      );
+      // LLM should route to findSCCs or hasCycle for deadlock questions
+      expect(['findSCCs', 'hasCycle']).toContain(result.algorithm);
+      expect(result.deterministic).toBe(true);
+      expect(result.routingPattern).toContain('llm-selected');
+      // The result must be a real graph computation, not null
+      expect(result.result).not.toBeNull();
+    });
+
+    it('LLM-routed result is deterministic — calling findSCCs twice gives identical output', async () => {
+      if (!process.env.ANTHROPIC_API_KEY) {
+        console.log('  [SKIP] ANTHROPIC_API_KEY not set — skipping live LLM test');
+        return;
+      }
+      // This tests the architectural claim: LLM selects, graph computes deterministically
+      const result1 = await orchestrateWithLLM('Find strongly connected components', store);
+      // The graph result must be identical regardless of how many times we call the algorithm
+      const directResult = store.findSCCs();
+      if (result1.algorithm === 'findSCCs') {
+        expect(JSON.stringify(result1.result)).toBe(JSON.stringify(directResult));
+      }
+      expect(result1.deterministic).toBe(true);
     });
   });
 });

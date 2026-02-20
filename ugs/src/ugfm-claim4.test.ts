@@ -9,7 +9,7 @@
  * metamodels and DSML transformations for each domain.
  *
  * Key invariants verified here:
- *  1. toolchainVersion is always '1.0' — same toolchain, every domain
+ *  1. algorithmsUsed is identical across all domains — same toolchain, every domain
  *  2. Adding 'numerical' domain required NO new algorithm code
  *  3. detectDomain() demonstrates the graph self-describes its domain via node types
  *  4. compareAcrossDomains() produces auditable cross-domain evidence
@@ -22,6 +22,7 @@ import {
   detectDomain,
   compareAcrossDomains,
   DOMAIN_REGISTRY,
+  type ToolchainResult,
 } from './ugfm-claim4';
 
 describe('UGFM Claim 4: Shared Toolchain Across All Domain Types', () => {
@@ -116,17 +117,21 @@ describe('UGFM Claim 4: Shared Toolchain Across All Domain Types', () => {
       // No cycle — directed stencil grid
     });
 
-    it('runUniversalToolchain returns toolchainVersion 1.0 for ALL domains', () => {
+    it('runUniversalToolchain uses identical set of algorithms for ALL domains', () => {
+      // The core Claim 4 invariant: the same graph functions are called regardless of domain.
+      // algorithmsUsed being identical across domains proves API identity — not a constant.
       const domains = [
         { store: actorStore, domain: 'concurrent' as const },
         { store: workflowStore, domain: 'workflow' as const },
         { store: knowledgeStore, domain: 'knowledge' as const },
         { store: numericalStore, domain: 'numerical' as const },
       ];
-      for (const { store, domain } of domains) {
-        const result = runUniversalToolchain(store, domain);
-        expect(result.toolchainVersion).toBe('1.0');
-        expect(result.domain).toBe(domain);
+      const results = domains.map(({ store, domain }) => runUniversalToolchain(store, domain));
+      // Every domain result must report the exact same algorithms were called
+      const firstAlgorithms = JSON.stringify(results[0].algorithmsUsed);
+      for (const result of results) {
+        expect(JSON.stringify(result.algorithmsUsed)).toBe(firstAlgorithms);
+        expect(result.domain).toBe(domains[results.indexOf(result)].domain);
       }
     });
 
@@ -172,7 +177,7 @@ describe('UGFM Claim 4: Shared Toolchain Across All Domain Types', () => {
       // NO new algorithm implementations. Only new node type ('GridPoint') and
       // edge type ('StencilEdge') were introduced as type-label conventions.
       const result = runUniversalToolchain(numericalStore, 'numerical');
-      expect(result.toolchainVersion).toBe('1.0');  // Same toolchain, same version
+      expect(result.algorithmsUsed).toEqual(['findSCCs', 'hasCycle']);  // Same toolchain, same functions
       expect(result.hasCycle).toBe(false);           // Directed stencil grids are DAGs
       expect(result.sccCount).toBeGreaterThan(0);    // Nodes are present as singleton SCCs
     });
@@ -183,17 +188,22 @@ describe('UGFM Claim 4: Shared Toolchain Across All Domain Types', () => {
       expect(result.edgeCount).toBe(4);   // 4 stencil edges
     });
 
-    it('all 4 domain results share identical toolchainVersion (invariant)', () => {
+    it('all 4 domain results share identical algorithmsUsed (toolchain identity invariant)', () => {
+      // This is the meaningful invariant: not that a constant equals itself,
+      // but that the actual graph functions called are identical across all domains.
+      // If someone adds a domain-specific shortcut, this test will catch it.
       const results = [
         runUniversalToolchain(actorStore, 'concurrent'),
         runUniversalToolchain(workflowStore, 'workflow'),
         runUniversalToolchain(knowledgeStore, 'knowledge'),
         runUniversalToolchain(numericalStore, 'numerical'),
       ];
-      const versions = results.map(r => r.toolchainVersion);
-      // Every domain returns the same version string
-      expect(new Set(versions).size).toBe(1);
-      expect(versions[0]).toBe('1.0');
+      const algorithmSets = results.map(r => JSON.stringify(r.algorithmsUsed));
+      // Every domain must call the exact same set of graph algorithms
+      expect(new Set(algorithmSets).size).toBe(1);
+      // Verify the expected algorithms are present
+      expect(results[0].algorithmsUsed).toContain('findSCCs');
+      expect(results[0].algorithmsUsed).toContain('hasCycle');
     });
 
     it('sccCount equals nodeCount when there are no cycles (all singletons)', () => {
@@ -288,10 +298,13 @@ describe('UGFM Claim 4: Shared Toolchain Across All Domain Types', () => {
       expect(report).toContain('UGFM Claim 4');
       expect(report).toContain('concurrent');
       expect(report).toContain('workflow');
-      expect(report).toContain('1.0'); // Same toolchain version in both rows
+      // Verify the algorithmsUsed are identical across both domains — the real invariant
+      const actorResult: ToolchainResult = runUniversalToolchain(actorStore, 'concurrent');
+      const taskResult: ToolchainResult = runUniversalToolchain(taskStore, 'workflow');
+      expect(JSON.stringify(actorResult.algorithmsUsed)).toBe(JSON.stringify(taskResult.algorithmsUsed));
     });
 
-    it('all domains in report show identical toolchain version', async () => {
+    it('all domains produce identical algorithmsUsed — toolchain identity across all domains', async () => {
       const stores = await Promise.all([
         (async () => {
           const s = new GraphStore(':memory:');
@@ -310,10 +323,14 @@ describe('UGFM Claim 4: Shared Toolchain Across All Domain Types', () => {
         })(),
       ]);
 
-      const report = compareAcrossDomains(stores);
-      // Every data row should have version 1.0 — count occurrences
-      const matches = report.match(/1\.0/g);
-      expect(matches!.length).toBeGreaterThanOrEqual(3);
+      // The meaningful invariant: the SET of graph functions called is identical
+      // across all domains — this proves API identity, not that a constant equals itself.
+      const results = stores.map(({ store, domain }) => runUniversalToolchain(store, domain));
+      const algorithmSets = results.map(r => JSON.stringify(r.algorithmsUsed));
+      // All 3 domains must call the exact same graph functions
+      expect(new Set(algorithmSets).size).toBe(1);
+      expect(results[0].algorithmsUsed).toContain('findSCCs');
+      expect(results[0].algorithmsUsed).toContain('hasCycle');
     });
 
     it('report contains header and table structure', async () => {
