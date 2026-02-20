@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
+import { writeFile } from 'node:fs/promises';
 import GraphStore from './graph';
 import { generateActorBoilerplate } from './ugfm-claim3';
 import { writeFileSync, readFileSync } from 'node:fs';
@@ -53,7 +54,7 @@ describe('UGFM Claim 3 (generation): Actor Graph → TypeScript Boilerplate', ()
       const result = generateActorBoilerplate(store);
       expect(result.combinedSource).toContain('export class OrchestratorActor');
       expect(result.combinedSource).toContain('export class WorkerActor');
-      expect(result.combinedSource).toContain('handleMessage(type: string');
+      expect(result.combinedSource).toContain('handleMessage(message: Message)');
     });
 
     it('can write generated source to disk (projection produces real file artifacts)', () => {
@@ -149,6 +150,63 @@ describe('UGFM Claim 3 (generation): Actor Graph → TypeScript Boilerplate', ()
       const a = result.actors.find(ac => ac.className === 'AActor')!;
       expect(a.messageTypes).toHaveLength(1);
       expect(a.messageTypes).toContain('Data');
+    });
+  });
+
+  describe('3.5 Runnable generation', () => {
+    beforeEach(async () => {
+      await store.addNode('runner', 'Actor', { name: 'runner', role: 'executor' });
+      await store.addNode('scheduler', 'Actor', { name: 'scheduler', role: 'coordinator' });
+      await store.addEdge('chan-run', 'runner', 'scheduler', 'MessageChannel', { messageType: 'RunTask' });
+    });
+
+    it('generated file executes cleanly with bun', async () => {
+      // 1. Generate the actors file
+      const result = generateActorBoilerplate(store);
+      await writeFile('/tmp/ugfm-generated-actors.ts', result.combinedSource, 'utf-8');
+
+      // 2. Create a small runner script that imports and instantiates the actors
+      const stubRouter = `{
+        tell: async () => {},
+        ask: async () => ({ id: crypto.randomUUID(), correlationId: 'c', from: '@(stub)', to: undefined, success: true, timestamp: Date.now() }),
+        registerActor: () => {},
+        unregisterActor: () => {},
+        getActor: () => undefined,
+        listActors: () => [],
+        cacheActor: () => {},
+        invalidatePath: () => {},
+      }`;
+
+      const runnerScript = `
+import { RunnerActor } from '/tmp/ugfm-generated-actors.ts';
+const actor = new RunnerActor('runner', ${stubRouter});
+const resp = await actor.handleMessage({
+  id: 'msg-1',
+  pattern: 'tell',
+  type: 'RunTask',
+  payload: {},
+  correlationId: 'c-1',
+  from: '@(test)',
+  to: '@(runner)',
+  timestamp: Date.now(),
+});
+if (!resp.success) throw new Error('Actor returned failure');
+console.log('Actor executed successfully');
+`;
+      await writeFile('/tmp/ugfm-runner-test.ts', runnerScript, 'utf-8');
+
+      // 3. Execute with bun
+      const proc = Bun.spawn(['bun', '/tmp/ugfm-runner-test.ts'], {
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const exitCode = await proc.exited;
+      if (exitCode !== 0) {
+        const stderr = await new Response(proc.stderr).text();
+        const stdout = await new Response(proc.stdout).text();
+        throw new Error(`bun exited with code ${exitCode}\nstdout: ${stdout}\nstderr: ${stderr}`);
+      }
+      expect(exitCode).toBe(0);
     });
   });
 });
