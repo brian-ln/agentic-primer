@@ -289,6 +289,134 @@ describe('UGFM Claim 2: Knowledge-DAG Acyclicity Verification', () => {
 });
 
 // ============================================================================
+// SUITE 2.5: GF-liveness verification via SCC (Büchi acceptance condition)
+// ============================================================================
+
+/**
+ * Helper: check GF-liveness (persistence liveness) using SCC analysis.
+ *
+ * GF P holds iff every terminal SCC reachable from the initial state
+ * contains at least one node of acceptingType.  This is exactly the
+ * Büchi acceptance condition: every infinite run eventually revisits an
+ * accepting state — which for finite Kripke structures is equivalent to
+ * every bottom SCC containing an accepting state.
+ *
+ * A terminal SCC is one where every outgoing adjacency entry points back
+ * into the same SCC (no edge leaves to a different SCC).
+ */
+function checkGFLiveness(store: GraphStore, acceptingType: string, initialId: string): boolean {
+  const sccs = store.findSCCs();
+
+  // Reachable set: traverse returns entries excluding the start node itself
+  const reachable = new Set(store.traverse(initialId, { direction: 'out', maxDepth: 100 }).map(e => e.node.id));
+  reachable.add(initialId);
+
+  // Find terminal SCCs: all outgoing edges from every node in the SCC stay inside the SCC
+  const terminalSCCs = sccs.filter(scc => {
+    const sccSet = new Set(scc);
+    return scc.every(nodeId => {
+      const outEntries = store.adjacencyOut.get(nodeId) ?? [];
+      return outEntries.every(entry => sccSet.has(entry.to));
+    });
+  });
+
+  // Keep only terminal SCCs that are reachable from the initial state
+  const reachableTerminalSCCs = terminalSCCs.filter(scc =>
+    scc.some(id => reachable.has(id))
+  );
+
+  // GF P holds iff every reachable terminal SCC contains at least one accepting state
+  return reachableTerminalSCCs.every(scc =>
+    scc.some(id => {
+      const node = store.nodes.get(id);
+      return node?.type === acceptingType;
+    })
+  );
+}
+
+describe('2.5 GF-liveness verification via SCC (Büchi acceptance)', () => {
+  /**
+   * Vending-machine Kripke structure:
+   *
+   *   idle ──(insert_coin)──► coin_inserted ──(dispense)──► item_dispensed ──(reset)──► idle
+   *                                                │
+   *                                          (jam)─┘
+   *                                                ▼
+   *                                             error ──(self_loop)──► error
+   *
+   * Accepting type: 'ServiceState' — marks states representing successful service.
+   * The node item_dispensed has type 'ServiceState'; the others are 'MachineState'.
+   * error has type 'MachineState' and self-loops, forming a terminal SCC with no
+   * accepting state.
+   *
+   * Happy-path store:  idle → coin_inserted → item_dispensed → idle  (no error trap)
+   * Error-trap store:  same + error self-loop reachable from coin_inserted
+   */
+  let store: GraphStore;       // happy path — no error trap
+  let errorStore: GraphStore;  // includes reachable error trap
+
+  beforeEach(async () => {
+    // --- Happy-path store ---
+    store = new GraphStore(':memory:');
+
+    await store.addNode('idle',          'MachineState',  { label: 'Idle' });
+    await store.addNode('coin_inserted', 'MachineState',  { label: 'CoinInserted' });
+    await store.addNode('item_dispensed','ServiceState',  { label: 'ItemDispensed' });
+
+    // Happy-path cycle: idle → coin_inserted → item_dispensed → idle
+    await store.addEdge('e-ic',  'idle',          'coin_inserted',  'insert_coin', {});
+    await store.addEdge('e-cd',  'coin_inserted', 'item_dispensed', 'dispense',    {});
+    await store.addEdge('e-di',  'item_dispensed','idle',           'reset',       {});
+
+    // --- Error-trap store ---
+    errorStore = new GraphStore(':memory:');
+
+    await errorStore.addNode('idle',          'MachineState',  { label: 'Idle' });
+    await errorStore.addNode('coin_inserted', 'MachineState',  { label: 'CoinInserted' });
+    await errorStore.addNode('item_dispensed','ServiceState',  { label: 'ItemDispensed' });
+    await errorStore.addNode('error',         'MachineState',  { label: 'Error' });
+
+    // Happy-path cycle
+    await errorStore.addEdge('e-ic',  'idle',          'coin_inserted',  'insert_coin', {});
+    await errorStore.addEdge('e-cd',  'coin_inserted', 'item_dispensed', 'dispense',    {});
+    await errorStore.addEdge('e-di',  'item_dispensed','idle',           'reset',       {});
+    // Error trap: coin_inserted can jam → error, and error loops to itself
+    await errorStore.addEdge('e-jam', 'coin_inserted', 'error',          'jam',         {});
+    await errorStore.addEdge('e-err', 'error',         'error',          'self_loop',   {});
+  });
+
+  test('GF-liveness holds when all terminal SCCs contain accepting states', () => {
+    // Happy path: the only terminal SCC is {idle, coin_inserted, item_dispensed}
+    // which contains item_dispensed (ServiceState) — GF(ServiceState) holds
+    expect(checkGFLiveness(store, 'ServiceState', 'idle')).toBe(true);
+  });
+
+  test('GF-liveness fails when error trap has no accepting state', () => {
+    // error-trap SCC {error} is terminal, reachable, and contains no ServiceState
+    // GF(ServiceState) does NOT hold for all runs — the error path never dispenses
+    expect(checkGFLiveness(errorStore, 'ServiceState', 'idle')).toBe(false);
+  });
+
+  test('SCC analysis implements Büchi acceptance condition directly', () => {
+    // The happy-path graph has exactly one SCC that contains 3 nodes (the main cycle).
+    // This verifies that findSCCs correctly identifies the cycle used for GF checking.
+    const sccs = store.findSCCs();
+    expect(sccs.length).toBeGreaterThan(0);
+
+    // The main cycle SCC must contain all three vending-machine states
+    const mainCycle = sccs.find(scc => scc.length >= 3);
+    expect(mainCycle).toBeDefined();
+
+    // That SCC must include the accepting (ServiceState) node
+    const hasAccepting = mainCycle!.some(id => {
+      const node = store.nodes.get(id);
+      return node?.type === 'ServiceState';
+    });
+    expect(hasAccepting).toBe(true);
+  });
+});
+
+// ============================================================================
 // SUITE 4: Scalability — 150-node concurrent actor graph
 // ============================================================================
 
