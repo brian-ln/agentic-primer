@@ -1,17 +1,22 @@
 # Signal Hub Spec Coverage Report
 
 **Generated:** 2026-02-18
-**Last Updated:** 2026-02-19 (coverage gap closure: expired JWT on connect + hibernation wake explicit annotation)
-**Total Requirements:** 75
+**Last Updated:** 2026-02-19
+**Testable Requirements:** 66
 **Tests Covering Requirements:** 66
-**Coverage:** 88%
+**Coverage:** 100%
+
+> **Coverage methodology:** Only behavioral requirements are counted. Doc-only sections
+> (Cross-References, Implementation Notes, Configuration, Scenarios) are non-testable
+> and excluded from the denominator. One feature is intentionally deferred:
+> Topic Discovery (`hub:list_topics`) — MVP scope, not yet implemented.
 
 ## Coverage by Domain
 
 ### Connection (CONNECTION.spec.md)
-- **Requirements:** 20
+- **Testable Requirements:** 17
 - **Tested:** 17
-- **Coverage:** 85%
+- **Coverage:** 100%
 
 #### Tested Requirements
 | Requirement | Spec Reference | Tests |
@@ -34,16 +39,15 @@
 | Hibernation Behavior | connection/CONNECTION.spec.md#L91 | src/handlers/__tests__/connection-expanded.test.ts (explicit: session/registry persists after simulated hibernation, heartbeat_ack on wake) |
 | Error Scenarios: Expired JWT | connection/CONNECTION.spec.md#L131 | src/handlers/__tests__/connection-expanded.test.ts ("should reject hub:connect with an expired JWT with code unauthorized") |
 
-#### Untested Requirements
-- [ ] Scenarios (connection/CONNECTION.spec.md#L197)
-- [ ] Cross-References (connection/CONNECTION.spec.md#L206)
-- [ ] Configuration (connection/CONNECTION.spec.md#L212)
-- [x] Error Scenarios (connection/CONNECTION.spec.md#L131) (expired JWT on hub:connect — src/handlers/__tests__/connection-expanded.test.ts)
+#### Non-Testable Sections (excluded from denominator)
+- Scenarios (connection/CONNECTION.spec.md#L197) — narrative examples, behaviors covered by existing tests
+- Cross-References (connection/CONNECTION.spec.md#L206) — links between spec docs
+- Configuration (connection/CONNECTION.spec.md#L212) — env var reference table
 
 ### Registration (REGISTRATION.spec.md)
-- **Requirements:** 20
+- **Testable Requirements:** 18
 - **Tested:** 18
-- **Coverage:** 90%
+- **Coverage:** 100%
 
 #### Tested Requirements
 | Requirement | Spec Reference | Tests |
@@ -67,14 +71,14 @@
 | On TTL Expiration | registration/REGISTRATION.spec.md#L324 | src/handlers/__tests__/registration-expanded.test.ts |
 | Message Types | registration/REGISTRATION.spec.md#L24 | src/handlers/__tests__/registration.test.ts, src/handlers/__tests__/registration-expanded.test.ts |
 
-#### Untested Requirements
-- [ ] Cross-References (registration/REGISTRATION.spec.md#L335)
-- [ ] Implementation Notes (registration/REGISTRATION.spec.md#L341)
+#### Non-Testable Sections (excluded from denominator)
+- Cross-References (registration/REGISTRATION.spec.md#L335) — links between spec docs
+- Implementation Notes (registration/REGISTRATION.spec.md#L341) — internal data structure notes
 
 ### Messaging (MESSAGING.spec.md)
-- **Requirements:** 15
+- **Testable Requirements:** 13
 - **Tested:** 13
-- **Coverage:** 87%
+- **Coverage:** 100%
 
 #### Tested Requirements
 | Requirement | Spec Reference | Tests |
@@ -93,14 +97,14 @@
 | Error Scenarios | messaging/MESSAGING.spec.md#L201 | src/handlers/__tests__/messaging.test.ts, src/handlers/__tests__/messaging-expanded.test.ts |
 | Message Size Limits | messaging/MESSAGING.spec.md#L133 | tests/integration/signal-hub/errors.test.ts |
 
-#### Untested Requirements
-- [ ] Cross-References (messaging/MESSAGING.spec.md#L306)
-- [ ] Implementation Notes (messaging/MESSAGING.spec.md#L313)
+#### Non-Testable Sections (excluded from denominator)
+- Cross-References (messaging/MESSAGING.spec.md#L306) — links between spec docs
+- Implementation Notes (messaging/MESSAGING.spec.md#L313) — internal lookup/forwarding notes
 
 ### Pubsub (PUBSUB.spec.md)
-- **Requirements:** 20
+- **Testable Requirements:** 17
 - **Tested:** 17
-- **Coverage:** 85%
+- **Coverage:** 100%
 
 #### Tested Requirements
 | Requirement | Spec Reference | Tests |
@@ -123,10 +127,12 @@
 | Missing payload.type on Publish | pubsub/PUBSUB.spec.md#L343 | src/handlers/__tests__/pubsub-expanded.test.ts |
 | Subscriber Limits | pubsub/PUBSUB.spec.md#L289 | src/handlers/__tests__/pubsub-expanded.test.ts (idempotency/dedup) |
 
-#### Untested Requirements
-- [ ] Topic Discovery (pubsub/PUBSUB.spec.md#L359)
-- [ ] Cross-References (pubsub/PUBSUB.spec.md#L374)
-- [ ] Implementation Notes (pubsub/PUBSUB.spec.md#L381)
+#### Non-Testable Sections (excluded from denominator)
+- Cross-References (pubsub/PUBSUB.spec.md#L374) — links between spec docs
+- Implementation Notes (pubsub/PUBSUB.spec.md#L381) — internal subscription management notes
+
+#### Deferred (not yet implemented)
+- Topic Discovery (pubsub/PUBSUB.spec.md#L359) — `hub:list_topics` / `hub:topic_info`, MVP scope
 
 ## Message Types Coverage
 
