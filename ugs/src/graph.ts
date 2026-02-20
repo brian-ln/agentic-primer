@@ -604,7 +604,7 @@ export class GraphStore {
   
   // === PATHFINDING ===
   
-  findShortestPath(fromId: string, toId: string, options: any = {}): { path: string[]; distance: number; nodes: Node[] } | null {
+  findShortestPath(fromId: string, toId: string, _options: any = {}): { path: string[]; distance: number; nodes: Node[] } | null {
     if (fromId === toId) {
       return { path: [fromId], distance: 0, nodes: [this.nodes.get(fromId)!] };
     }
