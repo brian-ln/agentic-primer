@@ -168,7 +168,7 @@ export class GraphStore {
   };
 
   // Persistence
-  private dataDir: string;
+  protected dataDir: string;
   private walFile: string;
   private snapshotFile: string;
   private eventCounter: number = 0;
@@ -263,6 +263,7 @@ export class GraphStore {
   }
   
   private async persistEvent(event: GraphEvent): Promise<void> {
+    if (this.dataDir === ':memory:') return;
     const eventLine = JSON.stringify(event) + '\n';
     
     try {
@@ -478,7 +479,7 @@ export class GraphStore {
   
   // === INDEXING SYSTEM ===
   
-  private _indexNode(node: Node): void {
+  protected _indexNode(node: Node): void {
     if (node.type) {
       if (!this.typeIndex.has(node.type)) {
         this.typeIndex.set(node.type, new Set());
@@ -527,7 +528,7 @@ export class GraphStore {
     }
   }
   
-  private _indexEdge(edge: Edge): void {
+  protected _indexEdge(edge: Edge): void {
     if (!this.adjacencyOut.has(edge.from)) {
       this.adjacencyOut.set(edge.from, []);
     }
@@ -563,7 +564,7 @@ export class GraphStore {
     }
   }
   
-  private _updateStats(): void {
+  protected _updateStats(): void {
     this.stats = {
       nodeCount: this.nodes.size,
       edgeCount: this.edges.size,
@@ -744,7 +745,164 @@ export class GraphStore {
       .sort((a, b) => b.total - a.total)
       .slice(0, limit);
   }
-  
+
+  /**
+   * Compute all strongly connected components using iterative Tarjan's algorithm.
+   * Returns an array of SCCs, each SCC being an array of node IDs.
+   * SCCs are in reverse topological order (sink SCCs first).
+   */
+  findSCCs(): string[][] {
+    const index = new Map<string, number>();
+    const lowlink = new Map<string, number>();
+    const onStack = new Set<string>();
+    const stack: string[] = [];
+    const sccs: string[][] = [];
+    let counter = 0;
+
+    const strongconnect = (root: string) => {
+      // callStack entries: { nodeId, neighborIdx }
+      const callStack: Array<{ nodeId: string; neighborIdx: number }> = [];
+
+      index.set(root, counter);
+      lowlink.set(root, counter);
+      counter++;
+      stack.push(root);
+      onStack.add(root);
+      callStack.push({ nodeId: root, neighborIdx: 0 });
+
+      while (callStack.length > 0) {
+        const frame = callStack[callStack.length - 1];
+        const { nodeId } = frame;
+        const neighbors = this.adjacencyOut.get(nodeId) ?? [];
+
+        if (frame.neighborIdx < neighbors.length) {
+          const w = neighbors[frame.neighborIdx].to;
+          frame.neighborIdx++;
+
+          if (!index.has(w)) {
+            // Tree edge — recurse into w
+            index.set(w, counter);
+            lowlink.set(w, counter);
+            counter++;
+            stack.push(w);
+            onStack.add(w);
+            callStack.push({ nodeId: w, neighborIdx: 0 });
+          } else if (onStack.has(w)) {
+            // Back edge — update lowlink
+            lowlink.set(nodeId, Math.min(lowlink.get(nodeId)!, index.get(w)!));
+          }
+        } else {
+          // Done with nodeId — pop and propagate lowlink to parent
+          callStack.pop();
+          if (callStack.length > 0) {
+            const parent = callStack[callStack.length - 1].nodeId;
+            lowlink.set(
+              parent,
+              Math.min(lowlink.get(parent)!, lowlink.get(nodeId)!)
+            );
+          }
+
+          // Check if nodeId is an SCC root
+          if (lowlink.get(nodeId) === index.get(nodeId)) {
+            const scc: string[] = [];
+            let w: string;
+            do {
+              w = stack.pop()!;
+              onStack.delete(w);
+              scc.push(w);
+            } while (w !== nodeId);
+            sccs.push(scc);
+          }
+        }
+      }
+    };
+
+    for (const nodeId of this.nodes.keys()) {
+      if (!index.has(nodeId)) {
+        strongconnect(nodeId);
+      }
+    }
+
+    return sccs;
+  }
+
+  /**
+   * Returns true if the graph contains at least one cycle.
+   * If startId is provided, only checks nodes reachable from startId.
+   */
+  hasCycle(startId?: string): boolean {
+    let nodesToCheck: Set<string>;
+
+    if (startId) {
+      const reachable = this.traverse(startId, { direction: 'out', maxDepth: 100000 });
+      nodesToCheck = new Set(reachable.map((r: any) => r.node.id));
+      nodesToCheck.add(startId);
+    } else {
+      nodesToCheck = new Set(this.nodes.keys());
+    }
+
+    const sccs = this.findSCCs();
+
+    for (const scc of sccs) {
+      const relevant = scc.filter(id => nodesToCheck.has(id));
+      if (relevant.length > 1) return true;
+      if (relevant.length === 1) {
+        const id = relevant[0];
+        const outgoing = this.adjacencyOut.get(id) ?? [];
+        if (outgoing.some(e => e.to === id)) return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Return a new in-memory GraphStore containing only nodes and edges
+   * satisfying the given predicates. Both endpoints of a retained edge
+   * must satisfy nodePredicate. The returned store is ':memory:' —
+   * no WAL, no persistence.
+   */
+  project(
+    nodePredicate?: (node: any) => boolean,
+    edgePredicate?: (edge: any) => boolean
+  ): GraphStore {
+    const projected = new GraphStore(':memory:');
+
+    const includedNodeIds = new Set<string>();
+
+    for (const [id, node] of this.nodes) {
+      if (!nodePredicate || nodePredicate(node)) {
+        includedNodeIds.add(id);
+        projected.nodes.set(id, node);
+      }
+    }
+
+    // Rebuild adjacency for projected nodes
+    for (const id of includedNodeIds) {
+      projected.adjacencyOut.set(id, []);
+      projected.adjacencyIn.set(id, []);
+    }
+
+    for (const [id, edge] of this.edges) {
+      if (
+        includedNodeIds.has(edge.from) &&
+        includedNodeIds.has(edge.to) &&
+        (!edgePredicate || edgePredicate(edge))
+      ) {
+        projected.edges.set(id, edge);
+
+        const outList = projected.adjacencyOut.get(edge.from) ?? [];
+        outList.push({ to: edge.to, edgeId: id, type: edge.type, weight: edge.weight });
+        projected.adjacencyOut.set(edge.from, outList);
+
+        const inList = projected.adjacencyIn.get(edge.to) ?? [];
+        inList.push({ from: edge.from, edgeId: id, type: edge.type, weight: edge.weight });
+        projected.adjacencyIn.set(edge.to, inList);
+      }
+    }
+
+    return projected;
+  }
+
   // === UTILITIES ===
   
   async shutdown(): Promise<void> {
