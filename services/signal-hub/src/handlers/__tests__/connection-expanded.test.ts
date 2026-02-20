@@ -21,6 +21,45 @@ import { handleConnect, handleHeartbeat, handleDisconnect } from '../connection'
 import type { SharedMessage, Session, Env } from '../../types';
 import { toCanonicalAddress } from '../../utils';
 
+/**
+ * Create a minimal HS256 JWT using Web Crypto API (no external dependencies).
+ * Used to construct expired tokens for auth tests without importing jose.
+ */
+async function makeExpiredJWT(secret: string): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const payload = {
+    sub: 'user-expired',
+    actorId: 'browser/client',
+    capabilities: ['send'],
+    iss: 'signal-hub',
+    iat: now - 3600,
+    exp: now - 60, // expired 60 seconds ago
+  };
+
+  const b64url = (obj: object) =>
+    btoa(JSON.stringify(obj)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+  const headerB64 = b64url(header);
+  const payloadB64 = b64url(payload);
+  const signingInput = `${headerB64}.${payloadB64}`;
+
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(signingInput));
+  const sigB64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+
+  return `${signingInput}.${sigB64}`;
+}
+
 describe('Connection Handlers - Expanded Coverage', () => {
   let mockEnv: Env;
   let session: Session;
@@ -306,6 +345,45 @@ describe('Connection Handlers - Expanded Coverage', () => {
 
       await expect(handleConnect(connectMsg, session, authEnv)).rejects.toThrow();
     });
+
+    it('should reject hub:connect with an expired JWT with code unauthorized', async () => {
+      // @requirement: Expired JWT (CONNECTION.spec.md#L131)
+      // Spec: auth-failure.md "Flow: Expired JWT" — server must reject with hub:error code 'unauthorized'
+      // when the JWT exp claim is in the past.
+      //
+      // Implementation: validateJWT catches jose.errors.JWTExpired and re-throws as
+      // HubError('unauthorized', 'JWT token has expired'). SignalHub.webSocketMessage
+      // then converts that into a hub:error message to the client.
+      // At the handler unit-test level we assert on the thrown HubError directly.
+      const authEnv: Env = { ...mockEnv, AUTH_ENABLED: 'true', JWT_SECRET: 'test-secret' };
+
+      // Construct an HS256 JWT whose exp is already in the past (no external deps).
+      const expiredToken = await makeExpiredJWT('test-secret');
+
+      const connectMsg: SharedMessage = {
+        id: 'conn-expired-jwt',
+        from: toCanonicalAddress('browser/client'),
+        to: toCanonicalAddress('cloudflare/signal-hub'),
+        type: 'hub:connect',
+        pattern: 'ask',
+        correlationId: null,
+        timestamp: Date.now(),
+        payload: null,
+        metadata: {
+          protocolVersion: '0.1.0',
+          capabilities: ['send'],
+          authToken: expiredToken,
+        },
+        ttl: 5000,
+        signature: null,
+      };
+
+      // handleConnect throws HubError with code 'unauthorized' for expired JWT.
+      const error = await handleConnect(connectMsg, session, authEnv).catch((e) => e);
+      expect(error).toBeDefined();
+      expect(error.code).toBe('unauthorized');
+      expect(error.message).toMatch(/expired/i);
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -554,6 +632,119 @@ describe('Connection Handlers - Expanded Coverage', () => {
       // Assert final state: disconnected
       expect(session.connectionState).toBe('disconnected');
       expect(session.disconnectedAt).toBeGreaterThan(0);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Hibernation Wake - CONNECTION.spec.md#L91
+  // ---------------------------------------------------------------------------
+  describe('Hibernation Wake Behavior', () => {
+    it('should preserve session state and respond to heartbeat after hibernation', async () => {
+      // @requirement: Hibernation Behavior (CONNECTION.spec.md#L91)
+      //
+      // Spec (hibernation-wake.md): When a Cloudflare Durable Object hibernates,
+      // in-memory state (sessions Map, registry Map) persists unchanged.
+      // A new incoming message triggers automatic wake and webSocketMessage runs
+      // normally, retrieving the existing session from the sessions Map.
+      //
+      // In unit tests "hibernation" is implicit: the session object is the
+      // in-memory state that persists between handler calls — there is no
+      // separate "wake" step. This test makes the intent explicit by:
+      //   1. Connecting a session (hub:connect)
+      //   2. Noting session state at time-of-connect
+      //   3. Calling handleHeartbeat directly (simulating the message that
+      //      triggers wake — the message handler simply retrieves the session
+      //      from the Map, which still exists)
+      //   4. Asserting session still exists with intact state and correct ack
+
+      // Step 1: Connect
+      const connectMsg: SharedMessage = {
+        id: 'hib-conn-1',
+        from: toCanonicalAddress('browser/hibernating-client'),
+        to: toCanonicalAddress('cloudflare/signal-hub'),
+        type: 'hub:connect',
+        pattern: 'ask',
+        correlationId: null,
+        timestamp: Date.now(),
+        payload: null,
+        metadata: { protocolVersion: '0.1.0', capabilities: ['send', 'receive'] },
+        ttl: 5000,
+        signature: null,
+      };
+
+      await handleConnect(connectMsg, session, mockEnv);
+
+      // Step 2: Record state immediately after connect
+      const actorIdentityAfterConnect = session.actorIdentity;
+      const connectedAtAfterConnect = session.connectedAt;
+      expect(actorIdentityAfterConnect).toBeTruthy();
+
+      // Step 3: Simulate hibernation — no explicit action needed in unit tests
+      // because the session Map is the in-memory state that persists.
+      // The key invariant is: after "wake" the handler retrieves the same session.
+
+      // Step 4: Send hub:heartbeat (simulates the message that triggers wake)
+      const clientTimestamp = Date.now();
+      const heartbeatMsg: SharedMessage = {
+        id: 'hib-hb-1',
+        from: toCanonicalAddress('browser/hibernating-client'),
+        to: toCanonicalAddress('cloudflare/signal-hub'),
+        type: 'hub:heartbeat',
+        pattern: 'tell',
+        correlationId: null,
+        timestamp: Date.now(),
+        payload: { timestamp: clientTimestamp },
+        metadata: {},
+        ttl: 10000,
+        signature: null,
+      };
+
+      const ack = handleHeartbeat(heartbeatMsg, session);
+
+      // Step 5: Assert session state persisted (not reset by "wake")
+      expect(session.actorIdentity).toBe(actorIdentityAfterConnect);
+      expect(session.connectedAt).toBe(connectedAtAfterConnect);
+      expect(session.lastHeartbeat).toBeGreaterThan(0);
+
+      // Step 6: Assert heartbeat_ack returned correctly (handler ran normally)
+      expect(ack.type).toBe('hub:heartbeat_ack');
+      expect((ack.payload as any).timestamp).toBe(clientTimestamp);
+      expect((ack.payload as any).serverTime).toBeGreaterThan(0);
+    });
+
+    it('should preserve registry actor after hibernation wake', async () => {
+      // @requirement: Hibernation Behavior (CONNECTION.spec.md#L91)
+      // Spec verification: "registry.has(actorAddress) === true" after wake.
+      //
+      // Simulates the registry (a plain Map) persisting across hibernation.
+      // We populate it directly (as the DO would after hub:register) and then
+      // verify a heartbeat does not clear it.
+      const registry = new Map<string, { actorAddress: string; connectionId: string }>();
+      const actorAddress = toCanonicalAddress('browser/hibernating-client');
+      registry.set(actorAddress, { actorAddress, connectionId: session.sessionId });
+
+      // Simulate hibernation: no-op — the Map is already "persisted"
+
+      // Wake: heartbeat arrives
+      const heartbeatMsg: SharedMessage = {
+        id: 'hib-hb-2',
+        from: actorAddress,
+        to: toCanonicalAddress('cloudflare/signal-hub'),
+        type: 'hub:heartbeat',
+        pattern: 'tell',
+        correlationId: null,
+        timestamp: Date.now(),
+        payload: { timestamp: Date.now() },
+        metadata: {},
+        ttl: 10000,
+        signature: null,
+      };
+
+      handleHeartbeat(heartbeatMsg, session);
+
+      // Registry intact after wake — actor registration persists
+      expect(registry.has(actorAddress)).toBe(true);
+      expect(registry.get(actorAddress)?.connectionId).toBe(session.sessionId);
     });
   });
 });

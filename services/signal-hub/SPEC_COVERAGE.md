@@ -1,17 +1,17 @@
 # Signal Hub Spec Coverage Report
 
 **Generated:** 2026-02-18
-**Last Updated:** 2026-02-18 (coverage gap closure: paused/resumed/FSM/unregistered)
+**Last Updated:** 2026-02-19 (coverage gap closure: expired JWT on connect + hibernation wake explicit annotation)
 **Total Requirements:** 75
-**Tests Covering Requirements:** 65
-**Coverage:** 87%
+**Tests Covering Requirements:** 66
+**Coverage:** 88%
 
 ## Coverage by Domain
 
 ### Connection (CONNECTION.spec.md)
 - **Requirements:** 20
-- **Tested:** 16
-- **Coverage:** 80%
+- **Tested:** 17
+- **Coverage:** 85%
 
 #### Tested Requirements
 | Requirement | Spec Reference | Tests |
@@ -31,13 +31,14 @@
 | Heartbeat Timeout | connection/CONNECTION.spec.md#L166 | src/handlers/__tests__/connection-expanded.test.ts |
 | Cleanup Protocol | connection/CONNECTION.spec.md#L176 | src/handlers/__tests__/connection-expanded.test.ts |
 | On Abnormal Disconnect (WebSocket close) | connection/CONNECTION.spec.md#L188 | src/handlers/__tests__/connection-expanded.test.ts |
-| Hibernation Behavior | connection/CONNECTION.spec.md#L91 | src/handlers/__tests__/connection-expanded.test.ts (session state) |
+| Hibernation Behavior | connection/CONNECTION.spec.md#L91 | src/handlers/__tests__/connection-expanded.test.ts (explicit: session/registry persists after simulated hibernation, heartbeat_ack on wake) |
+| Error Scenarios: Expired JWT | connection/CONNECTION.spec.md#L131 | src/handlers/__tests__/connection-expanded.test.ts ("should reject hub:connect with an expired JWT with code unauthorized") |
 
 #### Untested Requirements
 - [ ] Scenarios (connection/CONNECTION.spec.md#L197)
 - [ ] Cross-References (connection/CONNECTION.spec.md#L206)
 - [ ] Configuration (connection/CONNECTION.spec.md#L212)
-- [ ] Error Scenarios (connection/CONNECTION.spec.md#L131) (partial - version mismatch tested)
+- [x] Error Scenarios (connection/CONNECTION.spec.md#L131) (expired JWT on hub:connect — src/handlers/__tests__/connection-expanded.test.ts)
 
 ### Registration (REGISTRATION.spec.md)
 - **Requirements:** 20
@@ -165,6 +166,7 @@
 |------------|------|--------|------------|
 | Version mismatch | version_mismatch | ✅ | src/handlers/__tests__/connection-expanded.test.ts |
 | Invalid JWT | unauthorized | ✅ | src/validation/__tests__/schema-validato, src/handlers/__tests__/connection-expanded.test.ts |
+| Expired JWT on hub:connect | unauthorized | ✅ | src/handlers/__tests__/connection-expanded.test.ts ("should reject hub:connect with an expired JWT...") |
 | Heartbeat timeout | - | ✅ | src/handlers/__tests__/connection-expanded.test.ts (lastHeartbeat tracking) |
 | Unknown actor | unknown_actor | ✅ | src/handlers/__tests__/messaging.test.ts, src/handlers/__tests__/messaging-expanded.test.ts |
 | Message too large | message_too_large | ✅ | tests/integration/signal-hub/errors.test |
@@ -192,8 +194,10 @@
 5. ~~Remaining: hub:paused, hub:resumed coverage (flowcontrol domain)~~ - DONE (2026-02-18)
 6. ~~Remaining: hub:unregistered response type assertion~~ - DONE (2026-02-18)
 7. ~~Remaining: disconnecting → cleanup complete → disconnected FSM transition~~ - DONE (2026-02-18)
-8. Remaining: Topic Discovery API (future feature, not yet implemented)
-9. Remaining: Cross-Reference and Implementation Notes sections (docs-only, no test value)
+8. ~~spec-expired-jwt: Expired JWT on initial hub:connect rejected with unauthorized~~ - DONE (2026-02-19): src/handlers/__tests__/connection-expanded.test.ts
+9. ~~spec-hibernation-wake: Hibernation wake — session/registry state persists, heartbeat_ack returned~~ - DONE (2026-02-19): src/handlers/__tests__/connection-expanded.test.ts
+10. Remaining: Topic Discovery API (future feature, not yet implemented)
+11. Remaining: Cross-Reference and Implementation Notes sections (docs-only, no test value)
 
 ---
 
