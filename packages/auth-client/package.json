@@ -1,0 +1,39 @@
+{
+  "name": "@agentic-primer/auth-client",
+  "version": "0.1.0",
+  "description": "Device flow OAuth client for brianln.ai auth service",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "bun": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "auth",
+    "oauth",
+    "device-flow",
+    "jwt",
+    "brianln.ai"
+  ],
+  "author": "Brian Lloyd-Newberry",
+  "license": "MIT",
+  "dependencies": {
+    "jose": "^5.9.6"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}

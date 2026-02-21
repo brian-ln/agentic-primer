@@ -21,6 +21,16 @@
         "typescript": "^5.9.3",
       },
     },
+    "packages/auth-client": {
+      "name": "@agentic-primer/auth-client",
+      "version": "0.1.0",
+      "dependencies": {
+        "jose": "^5.9.6",
+      },
+      "devDependencies": {
+        "typescript": "^5.3.3",
+      },
+    },
     "packages/browser": {
       "name": "@agentic-primer/browser",
       "version": "0.1.0",
@@ -154,6 +164,8 @@
   },
   "packages": {
     "@agentic-primer/actors": ["@agentic-primer/actors@workspace:packages/actors"],
+
+    "@agentic-primer/auth-client": ["@agentic-primer/auth-client@workspace:packages/auth-client"],
 
     "@agentic-primer/browser": ["@agentic-primer/browser@workspace:packages/browser"],
 
