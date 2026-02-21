@@ -2527,13 +2527,13 @@ class UGSCLI {
         schema: named.schema,
         sources: named.sources ? named.sources.split(',').map((s: string) => s.trim()) : undefined
       });
-      this.success(`Created information: ${info.id} (${info.state})`, {
+      this.success(`Created information: ${info.id} (${info.lifecycle})`, {
         operation: 'info-create',
         id: info.id,
-        infoType: info.data.infoType,
-        state: info.state,
+        infoType: info.config.infoType,
+        lifecycle: info.lifecycle,
         version: info.version,
-        tags: info.data.tags
+        tags: info.config.tags
       });
     } catch (error: any) {
       this.error(error.message);
@@ -2553,12 +2553,12 @@ class UGSCLI {
         id: info.id,
         type: info.type,
         programType: info.programType,
-        state: info.state,
-        data: info.data,
+        lifecycle: info.lifecycle,
+        config: info.config,
         version: info.version,
         created: info.created,
         modified: info.modified
-      }, `Information: ${info.id} (${info.data.infoType}, ${info.state})`);
+      }, `Information: ${info.id} (${info.config.infoType}, ${info.lifecycle})`);
     } else {
       if (this.outputFormat.isAgent) {
         this.output({ found: false, id });
@@ -2627,7 +2627,7 @@ class UGSCLI {
       this.success(`Validated information: ${info.id}`, {
         operation: 'info-validate',
         id: info.id,
-        state: info.state
+        lifecycle: info.lifecycle
       });
     } catch (error: any) {
       this.error(error.message);
@@ -2646,7 +2646,7 @@ class UGSCLI {
       this.success(`Activated information: ${info.id}`, {
         operation: 'info-activate',
         id: info.id,
-        state: info.state
+        lifecycle: info.lifecycle
       });
     } catch (error: any) {
       this.error(error.message);
@@ -2665,7 +2665,7 @@ class UGSCLI {
       this.success(`Archived information: ${info.id}`, {
         operation: 'info-archive',
         id: info.id,
-        state: info.state
+        lifecycle: info.lifecycle
       });
     } catch (error: any) {
       this.error(error.message);
@@ -2689,7 +2689,7 @@ class UGSCLI {
 
     // Filter by type if specified
     if (infoType) {
-      infos = infos.filter(i => i.data.infoType === infoType);
+      infos = infos.filter(i => i.config.infoType === infoType);
     }
 
     if (this.outputFormat.isAgent) {
@@ -2699,11 +2699,11 @@ class UGSCLI {
         filterType: infoType || 'all',
         information: infos.map(i => ({
           id: i.id,
-          infoType: i.data.infoType,
-          state: i.state,
+          infoType: i.config.infoType,
+          lifecycle: i.lifecycle,
           version: i.version,
-          tags: i.data.tags,
-          description: i.data.description
+          tags: i.config.tags,
+          description: i.config.description
         })),
         count: infos.length
       });
@@ -2715,10 +2715,10 @@ class UGSCLI {
 
       console.log(`Found ${infos.length} information entries${filterStr}:\n`);
       for (const info of infos) {
-        const tagsStr = info.data.tags ? ` [${info.data.tags.join(', ')}]` : '';
-        console.log(`  ${info.id} (${info.data.infoType}, ${info.state}, v${info.version})${tagsStr}`);
-        if (info.data.description) {
-          console.log(`    ${info.data.description}`);
+        const tagsStr = info.config.tags ? ` [${info.config.tags.join(', ')}]` : '';
+        console.log(`  ${info.id} (${info.config.infoType}, ${info.lifecycle}, v${info.version})${tagsStr}`);
+        if (info.config.description) {
+          console.log(`    ${info.config.description}`);
         }
       }
     }
@@ -2739,21 +2739,21 @@ class UGSCLI {
         queryTag: named.tag,
         results: infos.map(i => ({
           id: i.id,
-          infoType: i.data.infoType,
-          state: i.state,
+          infoType: i.config.infoType,
+          lifecycle: i.lifecycle,
           version: i.version,
-          tags: i.data.tags,
-          description: i.data.description
+          tags: i.config.tags,
+          description: i.config.description
         })),
         count: infos.length
       });
     } else {
       console.log(`Found ${infos.length} information entries with tag "${named.tag}":\n`);
       for (const info of infos) {
-        const tagsStr = info.data.tags ? ` [${info.data.tags.join(', ')}]` : '';
-        console.log(`  ${info.id} (${info.data.infoType}, ${info.state})${tagsStr}`);
-        if (info.data.description) {
-          console.log(`    ${info.data.description}`);
+        const tagsStr = info.config.tags ? ` [${info.config.tags.join(', ')}]` : '';
+        console.log(`  ${info.id} (${info.config.infoType}, ${info.lifecycle})${tagsStr}`);
+        if (info.config.description) {
+          console.log(`    ${info.config.description}`);
         }
       }
     }
