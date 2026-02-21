@@ -1014,7 +1014,7 @@ class UGSCLI {
 
     // Tag command for managing node tags
     this.commands.set('tag', {
-      description: 'Manage node tags: tag <add|remove|list> <node-id> [tags...]',
+      description: 'Manage node tags: tag <add|remove|list|find|backfill> <node-id|tag> [tags...]',
       handler: async (args: string[]) => {
         if (args.length === 0) {
           this.showTagHelp();
@@ -1033,6 +1033,12 @@ class UGSCLI {
             break;
           case 'list':
             await this.handleTagList(subArgs);
+            break;
+          case 'find':
+            await this.handleTagFind(subArgs);
+            break;
+          case 'backfill':
+            await this.handleTagBackfill(subArgs);
             break;
           default:
             this.error(`Unknown tag subcommand: ${subcommand}. Use 'tag' for help.`);
@@ -1623,6 +1629,26 @@ class UGSCLI {
       }
     });
 
+    // Ontology command
+    this.commands.set('ontology', {
+      description: 'Ontology tools: ontology <gen> [--format ts|zod|jsonschema|sql] [--out <dir>]',
+      handler: async (args: string[]) => {
+        if (args.length === 0) {
+          this.showOntologyHelp();
+          return;
+        }
+        const subcommand = args[0];
+        const subArgs = args.slice(1);
+        switch (subcommand) {
+          case 'gen':
+            await this.handleOntologyGen(subArgs);
+            break;
+          default:
+            this.error(`Unknown ontology subcommand: ${subcommand}. Use 'ontology' for help.`);
+        }
+      }
+    });
+
     // Auth command
     this.commands.set('auth', {
       description: 'Manage brianln.ai authentication: auth <login|status|token|logout>',
@@ -1915,17 +1941,36 @@ class UGSCLI {
 
     const result = await this.store.addTags(nodeId, tags);
 
-    if (result) {
-      const currentTags = result.properties.get('tags') || [];
-      this.success(`Added tags to ${nodeId}: ${tags.join(', ')}`, {
-        operation: 'tag-add',
-        id: nodeId,
-        addedTags: tags,
-        allTags: currentTags
-      });
-    } else {
+    if (!result) {
       this.error(`Failed to add tags to ${nodeId}`);
+      return;
     }
+
+    // Make tags first-class graph nodes with is-a edges
+    const createdTagNodes: string[] = [];
+    const createdEdges: string[] = [];
+    for (const tag of tags) {
+      const tagNodeId = `tag:${tag}`;
+      if (!this.store.nodes.has(tagNodeId)) {
+        await this.store.addNode(tagNodeId, 'tag', { label: tag, name: tag });
+        createdTagNodes.push(tagNodeId);
+      }
+      const edgeId = `${nodeId}--is-a--${tagNodeId}`;
+      if (!this.store.edges.has(edgeId)) {
+        await this.store.addEdge(edgeId, nodeId, tagNodeId, 'is-a');
+        createdEdges.push(edgeId);
+      }
+    }
+
+    const currentTags = this.store.getNodeTags(nodeId);
+    this.success(`Added tags to ${nodeId}: ${tags.join(', ')}`, {
+      operation: 'tag-add',
+      id: nodeId,
+      addedTags: tags,
+      allTags: currentTags,
+      tagNodesCreated: createdTagNodes,
+      edgesCreated: createdEdges
+    });
   }
 
   private async handleTagRemove(args: string[]): Promise<void> {
@@ -1943,7 +1988,7 @@ class UGSCLI {
     const result = await this.store.removeTags(nodeId, tags);
 
     if (result) {
-      const currentTags = result.properties.get('tags') || [];
+      const currentTags = this.store.getNodeTags(nodeId);
       this.success(`Removed tags from ${nodeId}: ${tags.join(', ')}`, {
         operation: 'tag-remove',
         id: nodeId,
@@ -1967,23 +2012,398 @@ class UGSCLI {
       this.error(`Node not found: ${nodeId}`);
     }
 
-    const tags = this.store.getNodeTags(nodeId);
+    // Primary: graph traversal via is-a edges to tag nodes
+    const outgoing = this.store.adjacencyOut.get(nodeId) || [];
+    const graphTags = outgoing
+      .filter((e: any) => e.type === 'is-a' && e.to.startsWith('tag:'))
+      .map((e: any) => e.to.slice(4));
+
+    // Fallback: property-based tags (for nodes not yet backfilled)
+    const propTags: string[] = this.store.getNodeTags(nodeId);
+
+    // Merge: graph tags are authoritative, prop tags fill gaps
+    const allTags = Array.from(new Set([...graphTags, ...propTags]));
 
     if (this.outputFormat.isAgent) {
       this.output({
         operation: 'tag-list',
         id: nodeId,
-        tags,
-        count: tags.length
+        tags: allTags,
+        graphTags,
+        propTags,
+        count: allTags.length
       });
     } else {
-      if (tags.length === 0) {
+      if (allTags.length === 0) {
         console.log(`Node ${nodeId} has no tags`);
       } else {
-        console.log(`\n🏷️  Tags for ${nodeId}:\n`);
-        tags.forEach(tag => console.log(`  • ${tag}`));
-        console.log(`\nTotal: ${tags.length} tags`);
+        console.log(`\nTags for ${nodeId}:\n`);
+        allTags.forEach(tag => {
+          const src = graphTags.includes(tag) ? ' (graph)' : ' (prop)';
+          console.log(`  * ${tag}${src}`);
+        });
+        console.log(`\nTotal: ${allTags.length} tags`);
       }
+    }
+  }
+
+  private async handleTagFind(args: string[]): Promise<void> {
+    if (args.length < 1) {
+      this.error('Usage: tag find <tag>');
+    }
+
+    const [tag] = args;
+    const tagNodeId = `tag:${tag}`;
+
+    // Graph traversal: find all nodes with is-a edge pointing to this tag node
+    const incoming = this.store.adjacencyIn.get(tagNodeId) || [];
+    const graphNodes = incoming
+      .filter((e: any) => e.type === 'is-a')
+      .map((e: any) => this.store.nodes.get(e.from))
+      .filter((n: any): n is Node => n !== undefined);
+
+    // Fallback: property-based scan for nodes not yet backfilled
+    const propNodes = this.store.getByTag(tag).filter(
+      (n: Node) => !graphNodes.some((g: Node) => g.id === n.id)
+    );
+
+    const allNodes = [...graphNodes, ...propNodes];
+
+    if (this.outputFormat.isAgent) {
+      this.output({
+        operation: 'tag-find',
+        tag,
+        tagNodeExists: this.store.nodes.has(tagNodeId),
+        nodes: allNodes.map((n: Node) => ({
+          id: n.id,
+          type: n.type,
+          source: graphNodes.includes(n) ? 'graph' : 'prop'
+        })),
+        count: allNodes.length
+      });
+    } else {
+      if (allNodes.length === 0) {
+        console.log(`No nodes found with tag: ${tag}`);
+      } else {
+        console.log(`\nNodes tagged "${tag}" (${allNodes.length}):\n`);
+        graphNodes.forEach((n: Node) => {
+          const label = n.properties.get('name') || n.properties.get('title') || n.id;
+          console.log(`  * ${n.id} (${n.type || 'untyped'}): ${label} [graph]`);
+        });
+        propNodes.forEach((n: Node) => {
+          const label = n.properties.get('name') || n.properties.get('title') || n.id;
+          console.log(`  * ${n.id} (${n.type || 'untyped'}): ${label} [prop]`);
+        });
+      }
+    }
+  }
+
+  private async handleTagBackfill(_args: string[]): Promise<void> {
+    let tagNodesCreated = 0;
+    let edgesCreated = 0;
+    let nodesScanned = 0;
+
+    for (const node of this.store.nodes.values()) {
+      if (node.type === 'tag') continue;
+
+      const rawTags = node.properties.get('tags');
+      // Tags may be stored as a JSON string (e.g. '["foo","bar"]') or already an array
+      let tags: string[] = [];
+      if (Array.isArray(rawTags)) {
+        tags = rawTags;
+      } else if (typeof rawTags === 'string' && rawTags.length > 0) {
+        try { tags = JSON.parse(rawTags); } catch { /* skip unparseable */ }
+      }
+      if (!Array.isArray(tags) || tags.length === 0) continue;
+
+      nodesScanned++;
+      for (const tag of tags) {
+        const tagNodeId = `tag:${tag}`;
+        if (!this.store.nodes.has(tagNodeId)) {
+          await this.store.addNode(tagNodeId, 'tag', { label: tag, name: tag });
+          tagNodesCreated++;
+        }
+        const edgeId = `${node.id}--is-a--${tagNodeId}`;
+        if (!this.store.edges.has(edgeId)) {
+          await this.store.addEdge(edgeId, node.id, tagNodeId, 'is-a');
+          edgesCreated++;
+        }
+      }
+    }
+
+    this.success(`Tag backfill complete`, {
+      operation: 'tag-backfill',
+      nodesScanned,
+      tagNodesCreated,
+      edgesCreated
+    });
+  }
+
+  // === ONTOLOGY COMMAND ===
+
+  private showOntologyHelp(): void {
+    if (this.outputFormat.isAgent) {
+      this.output({
+        command: 'ontology',
+        description: 'Ontology tools: generate code from UGS schema nodes',
+        subcommands: {
+          gen: 'Generate code from schema nodes: ontology gen [--format ts|zod|jsonschema|sql] [--out <dir>] [--ids id1,id2,...]'
+        },
+        notes: 'Reads info nodes with infoType=schema from graph. Outputs to stdout or --out directory. Formats: ts (TypeScript interfaces), zod (Zod schemas), jsonschema (JSON Schema), sql (SQL DDL).'
+      });
+    } else {
+      console.log('\nOntology Tools\n');
+      console.log('Subcommands:');
+      console.log('  gen [--format ts|zod|jsonschema|sql] [--out <dir>] [--ids id1,id2,...]');
+      console.log('      Generate code from schema info nodes (default: --format ts)');
+      console.log('\nExamples:');
+      console.log('  ./ugs ontology gen --format ts');
+      console.log('  ./ugs ontology gen --format zod --out ./generated');
+      console.log('  ./ugs ontology gen --format jsonschema --ids ontology-schema-claim,ontology-schema-evidence');
+    }
+  }
+
+  private _schemaIdToTypeName(id: string): string {
+    // Convert kebab-case schema id to PascalCase type name
+    // e.g. ontology-schema-claim -> Claim, cos-handoff-schema -> CosHandoff
+    return id
+      .replace(/^ontology-schema-/, '')
+      .replace(/^(.*)-schema$/, '$1')
+      .split('-')
+      .map((part: string) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join('');
+  }
+
+  private _fieldTypeToTs(fieldType: string): string {
+    if (fieldType === 'string' || fieldType === 'ISO8601') return 'string';
+    if (fieldType === 'string[]') return 'string[]';
+    if (fieldType === 'number') return 'number';
+    if (fieldType === 'boolean') return 'boolean';
+    if (fieldType === 'object[]') return 'Record<string, any>[]';
+    if (fieldType.includes('|')) {
+      return fieldType.split('|').map((v: string) => `'${v.trim()}'`).join(' | ');
+    }
+    return 'unknown';
+  }
+
+  private _fieldTypeToZod(fieldType: string): string {
+    if (fieldType === 'string' || fieldType === 'ISO8601') return 'z.string()';
+    if (fieldType === 'string[]') return 'z.array(z.string())';
+    if (fieldType === 'number') return 'z.number()';
+    if (fieldType === 'boolean') return 'z.boolean()';
+    if (fieldType === 'object[]') return 'z.array(z.record(z.unknown()))';
+    if (fieldType.includes('|')) {
+      const variants = fieldType.split('|').map((v: string) => `'${v.trim()}'`);
+      return `z.enum([${variants.join(', ')}])`;
+    }
+    return 'z.unknown()';
+  }
+
+  private _fieldTypeToJsonSchema(fieldType: string): any {
+    if (fieldType === 'string' || fieldType === 'ISO8601') return { type: 'string' };
+    if (fieldType === 'string[]') return { type: 'array', items: { type: 'string' } };
+    if (fieldType === 'number') return { type: 'number' };
+    if (fieldType === 'boolean') return { type: 'boolean' };
+    if (fieldType === 'object[]') return { type: 'array', items: { type: 'object' } };
+    if (fieldType.includes('|')) {
+      return { enum: fieldType.split('|').map((v: string) => v.trim()) };
+    }
+    return {};
+  }
+
+  private _fieldTypeToSqlType(fieldType: string): string {
+    if (fieldType === 'string' || fieldType === 'ISO8601') return 'TEXT';
+    if (fieldType === 'string[]') return 'TEXT'; // JSON array stored as TEXT
+    if (fieldType === 'number') return 'REAL';
+    if (fieldType === 'boolean') return 'INTEGER'; // SQLite boolean
+    if (fieldType === 'object[]') return 'TEXT'; // JSON stored as TEXT
+    if (fieldType.includes('|')) return 'TEXT'; // enum stored as TEXT
+    return 'TEXT';
+  }
+
+  private _generateTypeScript(schemas: any[]): string {
+    const lines: string[] = [
+      '// Generated by ugs ontology gen --format ts',
+      `// Date: ${new Date().toISOString().slice(0, 10)}`,
+      `// Schema count: ${schemas.length}`,
+      ''
+    ];
+
+    for (const schema of schemas) {
+      const typeName = this._schemaIdToTypeName(schema.id);
+      const fields: Record<string, string> = schema.config?.content?.fields || {};
+      const description = schema.config?.description || '';
+
+      if (description) lines.push(`/** ${description} */`);
+      lines.push(`export interface ${typeName} {`);
+      for (const [fieldName, fieldType] of Object.entries(fields)) {
+        const tsType = this._fieldTypeToTs(String(fieldType));
+        // Fields with '?' in original type hint are optional
+        lines.push(`  ${fieldName}: ${tsType};`);
+      }
+      lines.push('}');
+      lines.push('');
+    }
+
+    return lines.join('\n');
+  }
+
+  private _generateZod(schemas: any[]): string {
+    const lines: string[] = [
+      '// Generated by ugs ontology gen --format zod',
+      `// Date: ${new Date().toISOString().slice(0, 10)}`,
+      `// Schema count: ${schemas.length}`,
+      '',
+      'import { z } from "zod";',
+      ''
+    ];
+
+    for (const schema of schemas) {
+      const typeName = this._schemaIdToTypeName(schema.id);
+      const fields: Record<string, string> = schema.config?.content?.fields || {};
+      const description = schema.config?.description || '';
+
+      if (description) lines.push(`// ${description}`);
+      lines.push(`export const ${typeName}Schema = z.object({`);
+      for (const [fieldName, fieldType] of Object.entries(fields)) {
+        const zodType = this._fieldTypeToZod(String(fieldType));
+        lines.push(`  ${fieldName}: ${zodType},`);
+      }
+      lines.push('});');
+      lines.push(`export type ${typeName} = z.infer<typeof ${typeName}Schema>;`);
+      lines.push('');
+    }
+
+    return lines.join('\n');
+  }
+
+  private _generateJsonSchema(schemas: any[]): string {
+    const definitions: Record<string, any> = {};
+
+    for (const schema of schemas) {
+      const typeName = this._schemaIdToTypeName(schema.id);
+      const fields: Record<string, string> = schema.config?.content?.fields || {};
+      const description = schema.config?.description || '';
+
+      const properties: Record<string, any> = {};
+      for (const [fieldName, fieldType] of Object.entries(fields)) {
+        properties[fieldName] = this._fieldTypeToJsonSchema(String(fieldType));
+      }
+
+      definitions[typeName] = {
+        type: 'object',
+        ...(description ? { description } : {}),
+        properties,
+        required: Object.keys(fields)
+      };
+    }
+
+    return JSON.stringify({
+      '$schema': 'http://json-schema.org/draft-07/schema#',
+      title: 'UGS Ontology',
+      description: `Generated by ugs ontology gen --format jsonschema on ${new Date().toISOString().slice(0, 10)}`,
+      definitions
+    }, null, 2);
+  }
+
+  private _generateSql(schemas: any[]): string {
+    const lines: string[] = [
+      '-- Generated by ugs ontology gen --format sql',
+      `-- Date: ${new Date().toISOString().slice(0, 10)}`,
+      `-- Schema count: ${schemas.length}`,
+      ''
+    ];
+
+    for (const schema of schemas) {
+      const typeName = this._schemaIdToTypeName(schema.id);
+      const tableName = typeName.replace(/([A-Z])/g, (m: string, c: string, i: number) => (i > 0 ? '_' : '') + c.toLowerCase());
+      const fields: Record<string, string> = schema.config?.content?.fields || {};
+      const description = schema.config?.description || '';
+
+      if (description) lines.push(`-- ${description}`);
+      lines.push(`CREATE TABLE IF NOT EXISTS ${tableName} (`);
+      const columns = ['  id TEXT PRIMARY KEY'];
+      for (const [fieldName, fieldType] of Object.entries(fields)) {
+        if (fieldName === 'id') continue;
+        const sqlType = this._fieldTypeToSqlType(String(fieldType));
+        columns.push(`  ${fieldName} ${sqlType}`);
+      }
+      columns.push('  created_at INTEGER DEFAULT (unixepoch())');
+      lines.push(columns.join(',\n'));
+      lines.push(');');
+      lines.push('');
+    }
+
+    return lines.join('\n');
+  }
+
+  private async handleOntologyGen(args: string[]): Promise<void> {
+    const { named } = this.parseNamedArgs(args);
+    const format = named['format'] || 'ts';
+    const outDir = named['out'] || null;
+    const idsFilter = named['ids'] ? named['ids'].split(',').map((s: string) => s.trim()) : null;
+
+    const validFormats = ['ts', 'zod', 'jsonschema', 'sql'];
+    if (!validFormats.includes(format)) {
+      this.error(`Invalid format: ${format}. Valid: ${validFormats.join('|')}`);
+      return;
+    }
+
+    // Collect all schema info nodes
+    const allInfos = this.informationManager.listInformation();
+    let schemas = allInfos.filter((info: any) => info.config.infoType === 'schema');
+
+    if (idsFilter) {
+      schemas = schemas.filter((info: any) => idsFilter.includes(info.id));
+      if (schemas.length === 0) {
+        this.error(`No schema nodes found for ids: ${idsFilter.join(', ')}`);
+        return;
+      }
+    }
+
+    if (schemas.length === 0) {
+      this.error('No schema info nodes found in graph. Seed some with infoType=schema first.');
+      return;
+    }
+
+    // Sort deterministically by id
+    schemas.sort((a: any, b: any) => a.id.localeCompare(b.id));
+
+    let output: string;
+    switch (format) {
+      case 'ts':
+        output = this._generateTypeScript(schemas);
+        break;
+      case 'zod':
+        output = this._generateZod(schemas);
+        break;
+      case 'jsonschema':
+        output = this._generateJsonSchema(schemas);
+        break;
+      case 'sql':
+        output = this._generateSql(schemas);
+        break;
+      default:
+        output = this._generateTypeScript(schemas);
+    }
+
+    if (outDir) {
+      const { mkdir, writeFile } = await import('node:fs/promises');
+      await mkdir(outDir, { recursive: true });
+      const ext = format === 'ts' ? 'ts' : format === 'zod' ? 'ts' : format === 'jsonschema' ? 'json' : 'sql';
+      const filename = `ontology.${ext}`;
+      const outPath = `${outDir}/${filename}`;
+      await writeFile(outPath, output, 'utf-8');
+      this.success(`Generated ${format} output to ${outPath}`, {
+        operation: 'ontology-gen',
+        format,
+        schemaCount: schemas.length,
+        outPath,
+        schemas: schemas.map((s: any) => s.id)
+      });
+    } else {
+      // Output to stdout directly
+      process.stdout.write(output + '\n');
     }
   }
 
@@ -6378,7 +6798,7 @@ Before ending a session:
     const clientId = 'brainstorm-daemon';
     process.stderr.write(`Initiating device authorization for client "${clientId}"...\n`);
     try {
-      await runDeviceFlow(clientId, ['write']);
+      await getToken({ clientId, scopes: ['write'] });
       if (this.outputFormat.isAgent) {
         console.log(JSON.stringify({ ok: true, clientId, message: 'Logged in successfully' }));
       } else {
