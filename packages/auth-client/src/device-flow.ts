@@ -47,13 +47,29 @@ export async function runDeviceFlow(clientId: string, scopes: string[]): Promise
 
   const device = await deviceRes.json() as DeviceAuthResponse;
 
-  // Step 2: Print instructions to stderr (stdout must stay clean for piping)
+  // Step 2: Open browser and print instructions to stderr
+  // Use verification_uri_complete (code pre-filled) if available — RFC 8628 §3.3
+  const approveUrl = device.verification_uri_complete ?? `${device.verification_uri}?code=${device.user_code}`;
+
+  // OSC 8 hyperlink — works in iTerm2, Warp, VSCode terminal, etc.
+  const hyperlink = `\x1b]8;;${approveUrl}\x1b\\${approveUrl}\x1b]8;;\x1b\\`;
+
   process.stderr.write(
     `\n[auth] Login required for ${clientId}\n` +
-    `[auth] Visit: ${device.verification_uri}\n` +
-    `[auth] Enter code: ${device.user_code}\n` +
+    `[auth] Opening browser...\n` +
+    `[auth] URL: ${hyperlink}\n` +
+    `[auth] Code: ${device.user_code} (pre-filled)\n` +
     `[auth] Waiting for approval...\n`
   );
+
+  // Auto-open browser (best-effort, non-fatal)
+  try {
+    const open = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+    const { spawn } = await import('child_process');
+    spawn(open, [approveUrl], { detached: true, stdio: 'ignore' }).unref();
+  } catch {
+    // Ignore — user can click the link above
+  }
 
   // Step 3: Poll for token
   const pollIntervalMs = (device.interval ?? 5) * 1000;

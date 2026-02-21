@@ -15,6 +15,7 @@ export interface DeviceAuthResponse {
   device_code: string;
   user_code: string;
   verification_uri: string;
+  verification_uri_complete?: string;  // RFC 8628 §3.3 — URI with user_code pre-filled
   expires_in: number;  // seconds
   interval: number;    // seconds to wait between polls
 }
