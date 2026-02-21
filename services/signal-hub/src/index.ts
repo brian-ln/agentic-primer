@@ -43,6 +43,9 @@ export default {
 
     // AgentHub — AI session and flux relay actor mesh
     if (url.pathname === '/agent-ws') {
+      if (!env.AGENT_HUB) {
+        return new Response('AgentHub binding not configured', { status: 503 });
+      }
       // One AgentHub per namespace (namespace-keyed for sharding)
       const namespace = url.searchParams.get('ns') ?? 'default';
       const id = env.AGENT_HUB.idFromName(namespace);
