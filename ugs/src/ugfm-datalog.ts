@@ -418,6 +418,37 @@ export function checkAU(store: GraphStore, pPred: Predicate, qPred: Predicate): 
   return sat;
 }
 
+/**
+ * checkResponseLiveness — G(p → F q) = AG(¬p ∨ AF q)
+ *
+ * "Whenever p holds, q will eventually hold on ALL paths."
+ *
+ * This is a CTL formula (not LTL-only), so no product automaton is required.
+ * The computation is a two-pass fixed-point:
+ *   1. afQ  = checkAF(store, q_pred)   — nodes from which q is inevitable
+ *   2. result = checkAG(store, s => !p_pred(s) || afQ.has(s))
+ *              — nodes where ¬p holds OR q is inevitable
+ *
+ * Theoretical basis:
+ *   - G(p→Fq) = AG(¬p ∨ AFq)  (CTL equivalence, Emerson & Clarke 1982)
+ *   - This is verifiable via fixed-point iteration without LTL product automaton
+ *   - The product automaton construction is only needed for LTL properties
+ *     not expressible in CTL (past operators, non-CTL path nesting)
+ *
+ * Returns the set of nodes at which G(p→Fq) holds.
+ * Call .has('initialNodeId') to check if the property holds from a given start.
+ */
+export function checkResponseLiveness(
+  store: GraphStore,
+  p_pred: Predicate,
+  q_pred: Predicate
+): CTLResult {
+  // Step 1: AF q — set of nodes from which q is inevitably reached on all paths
+  const afQ = checkAF(store, q_pred);
+  // Step 2: AG(¬p ∨ AFq) — everywhere: whenever p holds, q is inevitable
+  return checkAG(store, (id) => !p_pred(id) || afQ.has(id));
+}
+
 // ---------------------------------------------------------------------------
 // Convenience wrapper
 // ---------------------------------------------------------------------------
@@ -425,7 +456,8 @@ export function checkAU(store: GraphStore, pPred: Predicate, qPred: Predicate): 
 /**
  * CTL formula specification for the checkCTL convenience wrapper.
  *
- * Supports all six operators implemented above plus the compound GF and until.
+ * Supports all six operators implemented above plus the compound GF, until,
+ * and the response liveness operator.
  */
 export type CTLFormula =
   | { op: 'EF'; pred: Predicate }
@@ -433,6 +465,7 @@ export type CTLFormula =
   | { op: 'EG'; pred: Predicate }
   | { op: 'AG'; pred: Predicate }
   | { op: 'GF'; pred: Predicate }
+  | { op: 'RESPONSE'; pPred: Predicate; qPred: Predicate }
   | { op: 'EU'; pPred: Predicate; qPred: Predicate }
   | { op: 'AU'; pPred: Predicate; qPred: Predicate }
   | { op: 'NOT'; inner: CTLFormula }
@@ -469,6 +502,9 @@ export function checkCTL(store: GraphStore, formula: CTLFormula): CTLResult {
 
     case 'GF':
       return checkGF(store, formula.pred);
+
+    case 'RESPONSE':
+      return checkResponseLiveness(store, formula.pPred, formula.qPred);
 
     case 'EU':
       return checkEU(store, formula.pPred, formula.qPred);
