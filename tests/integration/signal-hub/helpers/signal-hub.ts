@@ -48,77 +48,71 @@ export async function startSignalHub(): Promise<SignalHubInstance> {
   wranglerProcess.stdout?.setEncoding('utf8');
   wranglerProcess.stderr?.setEncoding('utf8');
 
-  // Wait for server to be ready
-  await new Promise<void>((resolve, reject) => {
-    let outputReceived = false;
-    const outputChunks: string[] = [];
-    let resolved = false;
-
-    const timeout = setTimeout(() => {
-      if (resolved) return;
-      console.error('[startSignalHub] TIMEOUT - Process did not emit "Ready on" within 10 seconds');
-      console.error('[startSignalHub] Output received:', outputReceived);
-      console.error('[startSignalHub] Total chunks:', outputChunks.length);
-      console.error('[startSignalHub] Combined output:', outputChunks.join('').substring(0, 500));
-      reject(new Error('Signal Hub failed to start within 10 seconds'));
-    }, 10000);
-
-    const checkReady = (source: string) => (data: Buffer | string) => {
-      outputReceived = true;
-      const output = typeof data === 'string' ? data : data.toString();
-      outputChunks.push(output);
-
-      // Check for port conflict error
-      if (output.includes('Address already in use')) {
-        clearTimeout(timeout);
-        resolved = true;
-        reject(new Error(`Port ${TEST_PORT} is already in use. Please stop any existing wrangler instances.`));
-        return;
-      }
-
-      // Check for any other error messages (only log actual errors)
-      if (output.includes('ERROR') && !resolved) {
-        console.error(`[startSignalHub] [${source}] Error detected:`, output.substring(0, 200));
-      }
-
-      if (output.includes('Ready on') || output.includes(`localhost:${TEST_PORT}`)) {
-        console.log(`[startSignalHub] ✓ Server ready on port ${TEST_PORT}`);
-        clearTimeout(timeout);
-        resolved = true;
-        resolve();
-      }
-    };
-
-    wranglerProcess.stdout.on('data', checkReady('stdout'));
-    wranglerProcess.stderr.on('data', checkReady('stderr'));
-
-    wranglerProcess.on('error', (error) => {
-      if (resolved) return;
-      console.error('[startSignalHub] Process error:', error);
-      clearTimeout(timeout);
-      resolved = true;
-      reject(error);
-    });
-
-    wranglerProcess.on('exit', (code, signal) => {
-      if (resolved) return;
-      if (code !== null && code !== 0) {
-        const combinedOutput = outputChunks.join('');
-        const errorMsg = combinedOutput.includes('Address already in use')
-          ? `Port ${TEST_PORT} is already in use`
-          : `Wrangler process exited with code ${code}`;
-
-        console.error('[startSignalHub] Process exited prematurely:', { code, signal });
-        console.error('[startSignalHub] Output:', combinedOutput.substring(0, 500));
-        clearTimeout(timeout);
-        resolved = true;
-        reject(new Error(errorMsg));
-      }
-    });
+  // Collect stderr for error detection
+  const outputChunks: string[] = [];
+  wranglerProcess.stderr.on('data', (data: Buffer | string) => {
+    const text = typeof data === 'string' ? data : data.toString();
+    outputChunks.push(text);
+    if (text.includes('Address already in use')) {
+      console.error(`[startSignalHub] Port ${TEST_PORT} is already in use`);
+    }
+  });
+  wranglerProcess.stdout.on('data', (data: Buffer | string) => {
+    const text = typeof data === 'string' ? data : data.toString();
+    outputChunks.push(text);
   });
 
-  // Give it a moment to fully initialize
-  await new Promise(resolve => setTimeout(resolve, 1000));
+  wranglerProcess.on('error', (error) => {
+    console.error('[startSignalHub] Process error:', error);
+  });
+
+  // Wait for server to be ready by polling the health endpoint.
+  // wrangler prints "Ready on" BEFORE Miniflare actually binds the port, so
+  // we can't rely on stdout. Instead, poll HTTP until we get a 200 response.
+  // This also triggers the "⎔ Reloading local server" compile cycle, so
+  // WebSocket upgrades succeed immediately after this completes.
+  const STARTUP_TIMEOUT_MS = 30_000;
+  const POLL_INTERVAL_MS = 500;
+  const startTime = Date.now();
+
+  console.log(`[startSignalHub] Polling http://localhost:${TEST_PORT}/health until ready...`);
+
+  while (true) {
+    const elapsed = Date.now() - startTime;
+
+    if (elapsed >= STARTUP_TIMEOUT_MS) {
+      const combinedOutput = outputChunks.join('');
+      if (combinedOutput.includes('Address already in use')) {
+        throw new Error(`Port ${TEST_PORT} is already in use. Please stop any existing wrangler instances.`);
+      }
+      throw new Error(`Signal Hub failed to start within ${STARTUP_TIMEOUT_MS / 1000}s`);
+    }
+
+    // Check if wrangler process exited early
+    if (wranglerProcess.exitCode !== null && wranglerProcess.exitCode !== 0) {
+      const combinedOutput = outputChunks.join('');
+      const errorMsg = combinedOutput.includes('Address already in use')
+        ? `Port ${TEST_PORT} is already in use`
+        : `Wrangler process exited with code ${wranglerProcess.exitCode}`;
+      throw new Error(errorMsg);
+    }
+
+    try {
+      const resp = await fetch(`http://localhost:${TEST_PORT}/health`);
+      if (resp.ok) {
+        console.log(`[startSignalHub] ✓ Server ready and warmed up on port ${TEST_PORT}`);
+        break;
+      }
+    } catch {
+      // Not ready yet — connection refused or network error
+    }
+
+    await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+  }
+
+  // Extra settle time: after the health check triggers the Miniflare "Reloading"
+  // cycle, wait for it to fully stabilize before WebSocket connections are attempted.
+  await new Promise(resolve => setTimeout(resolve, 2000));
 
   return {
     url: `ws://localhost:${TEST_PORT}/ws`,
