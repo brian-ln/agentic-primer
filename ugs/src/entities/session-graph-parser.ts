@@ -347,7 +347,7 @@ export async function discoverSessionFiles(
   for (const entry of entries) {
     const fullPath = join(claudeProjectsDir, entry);
 
-    let stat;
+    let stat: ReturnType<typeof statSync>;
     try {
       stat = statSync(fullPath);
     } catch {
@@ -373,7 +373,7 @@ export async function discoverSessionFiles(
         if (!subentry.endsWith('.jsonl')) continue;
 
         const subPath = join(subagentsDir, subentry);
-        let subStat;
+        let subStat: ReturnType<typeof statSync>;
         try {
           subStat = statSync(subPath);
         } catch {
