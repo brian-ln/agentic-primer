@@ -193,7 +193,7 @@ export class AliasResolver {
 
     // Create alias node
     const aliasId = `alias-${aliasPath.replace(/\//g, '-')}`;
-    this.graph.addNode(aliasId, 'alias', {
+    await this.graph.addNode(aliasId, 'alias', {
       alias_path: aliasPath,
       canonical_path: canonicalPath,
       priority: options.priority ?? 0,
@@ -205,7 +205,7 @@ export class AliasResolver {
     // Note: We don't need to link to actual actor node, just store canonical path
     // Router will resolve canonical path separately
     const edgeId = `${aliasId}-resolves`;
-    this.graph.addEdge(edgeId, aliasId, canonicalPath, 'resolves_to', {
+    await this.graph.addEdge(edgeId, aliasId, canonicalPath, 'resolves_to', {
       created: Date.now(),
     });
   }

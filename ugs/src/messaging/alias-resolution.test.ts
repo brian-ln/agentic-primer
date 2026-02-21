@@ -29,6 +29,7 @@ describe('Alias Resolver', () => {
   });
 
   afterEach(async () => {
+    await graph.shutdown();
     await rm(testDir, { recursive: true, force: true });
   });
 
