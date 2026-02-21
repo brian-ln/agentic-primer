@@ -12,6 +12,7 @@ import type {
   CanonicalAddress,
   QueueStats,
   HubMetrics,
+  ConnectionState,
 } from '../types';
 import { HubError } from '../types';
 import {
@@ -113,6 +114,14 @@ export class SignalHub implements DurableObject {
         JSON.stringify({ type: 'pong' })
       )
     );
+
+    // Schedule per-minute TTL cleanup alarm if not already set.
+    // Non-blocking; alarm() re-schedules itself on each invocation.
+    void state.storage.getAlarm().then(scheduled => {
+      if (scheduled === null) {
+        void state.storage.setAlarm(Date.now() + 60_000);
+      }
+    });
 
     // Log validation mode on startup (lifecycle event — always emit)
     const validator = getValidator();
@@ -476,12 +485,12 @@ export class SignalHub implements DurableObject {
     }
 
     if (messageType === 'hub:unregister') {
-      handleUnregister(msg, this.registry);
+      handleUnregister(msg, this.registry, this.env);
       return null; // Fire-and-forget
     }
 
     if (messageType === 'hub:discover') {
-      return handleDiscover(msg, this.registry);
+      return handleDiscover(msg, this.registry, this.env);
     }
 
     if (messageType === 'hub:list_actors') {
@@ -689,6 +698,7 @@ export class SignalHub implements DurableObject {
 
   /**
    * Alarm handler — resets per-minute metrics window and cleans up expired registrations.
+   * Re-schedules itself for the next minute so cleanup fires continuously.
    */
   async alarm(): Promise<void> {
     // Reset metrics for the new window
@@ -701,5 +711,8 @@ export class SignalHub implements DurableObject {
         this.registry.delete(address);
       }
     }
+
+    // Re-schedule for the next minute
+    await this.ctx.storage.setAlarm(Date.now() + 60_000);
   }
 }

@@ -173,7 +173,7 @@ export class GraphStore {
   private snapshotFile: string;
   private eventCounter: number = 0;
   private lastSnapshot: number = 0;
-  private snapshotInterval: number = 1000;
+  private snapshotInterval: number = 100;
   
   stats = {
     nodeCount: 0,
@@ -287,6 +287,7 @@ export class GraphStore {
     };
     
     await writeFile(this.snapshotFile, JSON.stringify(snapshot, null, 2));
+    await writeFile(this.walFile, '');
     this.lastSnapshot = this.eventCounter;
   }
   

@@ -17,6 +17,7 @@ import {
   generateRenewalToken,
   matchPattern,
   isExpired,
+  log,
 } from '../utils';
 
 const SIGNAL_HUB_ADDRESS = toCanonicalAddress('cloudflare/signal-hub');
@@ -91,9 +92,12 @@ export function handleRegister(
   // Store in registry (last-write-wins)
   registry.set(payload.actorAddress, registration);
 
-  console.log(
-    `[handleRegister] Actor registered: ${payload.actorAddress} (version=${version}, capabilities=${JSON.stringify(payload.capabilities)}, registry size=${registry.size})`
-  );
+  log(env, 'actor_registered', {
+    actorAddress: payload.actorAddress,
+    version,
+    capabilities: payload.capabilities,
+    registrySize: registry.size,
+  });
 
   // Send hub:registered response
   const responsePayload = {
@@ -111,7 +115,8 @@ export function handleRegister(
  */
 export function handleUnregister(
   msg: SharedMessage,
-  registry: Map<string, ActorRegistration>
+  registry: Map<string, ActorRegistration>,
+  env: Env
 ): void {
   const payload = msg.payload as { actorAddress: CanonicalAddress };
 
@@ -121,7 +126,7 @@ export function handleUnregister(
 
   const deleted = registry.delete(payload.actorAddress);
   if (deleted) {
-    console.log(`Actor unregistered: ${payload.actorAddress}`);
+    log(env, 'actor_unregistered', { actorAddress: payload.actorAddress });
   }
 }
 
@@ -130,7 +135,8 @@ export function handleUnregister(
  */
 export function handleDiscover(
   msg: SharedMessage,
-  registry: Map<string, ActorRegistration>
+  registry: Map<string, ActorRegistration>,
+  env: Env
 ): SharedMessage {
   const payload = msg.payload as {
     pattern: string;
@@ -144,7 +150,7 @@ export function handleDiscover(
 
   const limit = Math.min(payload.limit ?? 100, 100);
 
-  console.log(`[handleDiscover] pattern=${payload.pattern}, capability=${payload.capability}, registry size=${registry.size}`);
+  log(env, 'handle_discover', { pattern: payload.pattern, capability: payload.capability, registrySize: registry.size });
 
   // Filter actors matching pattern and capability
   const matches: ActorRegistration[] = [];
@@ -172,7 +178,7 @@ export function handleDiscover(
     }
   }
 
-  console.log(`[handleDiscover] Found ${matches.length} matches`);
+  log(env, 'discover_results', { matchCount: matches.length, hasMore: matches.length === limit });
 
   // Map to client-expected format: { address, capabilities }
   const actors = matches.map(registration => ({
@@ -267,9 +273,11 @@ export function handleRenew(
 
   registry.set(targetActor.actorAddress, targetActor);
 
-  console.log(
-    `Actor renewed: ${targetActor.actorAddress} (version=${targetActor.version}, expires at ${newExpiresAt})`
-  );
+  log(env, 'actor_renewed', {
+    actorAddress: targetActor.actorAddress,
+    version: targetActor.version,
+    expiresAt: newExpiresAt,
+  });
 
   // Send hub:renewed response
   const responsePayload = {

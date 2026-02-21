@@ -142,7 +142,7 @@ describe('Registration Handlers', () => {
         signature: null,
       };
 
-      handleUnregister(unregisterMsg, registry);
+      handleUnregister(unregisterMsg, registry, mockEnv);
 
       expect(registry.size).toBe(0);
     });
@@ -203,7 +203,7 @@ describe('Registration Handlers', () => {
         signature: null,
       };
 
-      const response = handleDiscover(discoverMsg, registry);
+      const response = handleDiscover(discoverMsg, registry, mockEnv);
 
       expect(response.type).toBe('hub:discovered');
       expect(response.payload).toHaveProperty('actors');
@@ -229,7 +229,7 @@ describe('Registration Handlers', () => {
         signature: null,
       };
 
-      const response = handleDiscover(discoverMsg, registry);
+      const response = handleDiscover(discoverMsg, registry, mockEnv);
 
       expect((response.payload as any).actors).toHaveLength(1);
       expect((response.payload as any).hasMore).toBe(true);

@@ -99,7 +99,7 @@ export function handleSend(
       );
     }
     // For tell pattern, silently drop
-    console.warn(`Target actor not found: ${targetAddress}`);
+    log(env, 'send_dropped_unknown_actor', { targetAddress });
     return null;
   }
 

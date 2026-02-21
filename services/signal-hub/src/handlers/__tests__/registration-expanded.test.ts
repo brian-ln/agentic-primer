@@ -241,7 +241,7 @@ describe('Registration Handler - Expanded Coverage', () => {
         signature: null,
       };
 
-      handleUnregister(unregMsg, registry);
+      handleUnregister(unregMsg, registry, mockEnv);
 
       // @requirement: Actor removed from registry after unregister
       expect(registry.has(address)).toBe(false);
@@ -267,7 +267,7 @@ describe('Registration Handler - Expanded Coverage', () => {
       };
 
       // Should not throw for non-existent actor
-      expect(() => handleUnregister(unregMsg, registry)).not.toThrow();
+      expect(() => handleUnregister(unregMsg, registry, mockEnv)).not.toThrow();
     });
 
     it('should reject unregister with missing actorAddress', () => {
@@ -286,7 +286,7 @@ describe('Registration Handler - Expanded Coverage', () => {
         signature: null,
       };
 
-      expect(() => handleUnregister(unregMsg, registry)).toThrow('actorAddress is required');
+      expect(() => handleUnregister(unregMsg, registry, mockEnv)).toThrow('actorAddress is required');
     });
   });
 
@@ -405,7 +405,7 @@ describe('Registration Handler - Expanded Coverage', () => {
         signature: null,
       };
 
-      const response = handleDiscover(discoverMsg, registry);
+      const response = handleDiscover(discoverMsg, registry, mockEnv);
 
       // Expired actor should not appear in discovery results
       const actors = (response.payload as any).actors;
@@ -619,7 +619,7 @@ describe('Registration Handler - Expanded Coverage', () => {
         signature: null,
       };
 
-      const response = handleDiscover(discoverMsg, registry);
+      const response = handleDiscover(discoverMsg, registry, mockEnv);
       const actors = (response.payload as any).actors;
 
       expect(actors.length).toBe(2); // widget-chart and agent-alpha both have 'chart'
@@ -648,7 +648,7 @@ describe('Registration Handler - Expanded Coverage', () => {
         signature: null,
       };
 
-      const response = handleDiscover(discoverMsg, registry);
+      const response = handleDiscover(discoverMsg, registry, mockEnv);
 
       expect(response.type).toBe('hub:discovered');
       expect((response.payload as any).actors).toHaveLength(3);
@@ -673,7 +673,7 @@ describe('Registration Handler - Expanded Coverage', () => {
         signature: null,
       };
 
-      const response = handleDiscover(discoverMsg, registry);
+      const response = handleDiscover(discoverMsg, registry, mockEnv);
 
       expect(response.type).toBe('hub:discovered');
       expect((response.payload as any).actors).toHaveLength(0);
@@ -696,7 +696,7 @@ describe('Registration Handler - Expanded Coverage', () => {
         signature: null,
       };
 
-      expect(() => handleDiscover(discoverMsg, registry)).toThrow('pattern is required');
+      expect(() => handleDiscover(discoverMsg, registry, mockEnv)).toThrow('pattern is required');
     });
   });
 
@@ -850,7 +850,7 @@ describe('Registration Handler - Expanded Coverage', () => {
       };
 
       // Execute unregister (removes actor from registry)
-      handleUnregister(unregMsg, registry);
+      handleUnregister(unregMsg, registry, mockEnv);
 
       // The spec defines 'hub:unregistered' as the response type for this flow.
       // Explicitly assert the spec response type name.
@@ -894,7 +894,7 @@ describe('Registration Handler - Expanded Coverage', () => {
         signature: null,
       };
 
-      handleUnregister(unregMsg, registry);
+      handleUnregister(unregMsg, registry, mockEnv);
 
       // Actor removed — the server would respond with type 'hub:unregistered'
       expect(registry.has(address)).toBe(false);
@@ -942,7 +942,7 @@ describe('Registration Handler - Expanded Coverage', () => {
         signature: null,
       };
 
-      handleDiscover(discoverMsg, registry);
+      handleDiscover(discoverMsg, registry, mockEnv);
 
       // @requirement: Expired actor removed from registry
       expect(registry.has(expiredAddress)).toBe(false);
