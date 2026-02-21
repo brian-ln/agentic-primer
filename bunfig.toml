@@ -4,6 +4,10 @@
 # - tests/integration/signal-hub/: needs running wrangler dev server + broken pnpm symlinks
 # - services/signal-hub/: vitest + cloudflare workers pool (needs wrangler)
 # - cloudflare __tests__ (except types): cloudflare:test / miniflare (needs wrangler)
+#
+# NOTE: Use `bun run test` (not bare `bun test`) — the package.json test script
+# explicitly lists the correct directories. Bare `bun test` ignores these excludes
+# in bun 1.2.x and picks up archive/ and services/ causing spurious failures.
 exclude = [
   "archive/**",
   "tests/integration/**",
