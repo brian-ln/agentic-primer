@@ -51,3 +51,9 @@ test-data/
 data/events.wal
 data/*.wal
 data/*.snapshot
+
+# UGS live graph — snapshot is regeneratable (2.8MB, rewritten on every op)
+.ug/snapshot.json
+
+# UGS test artifacts — WAL files written during test runs
+ugs/.ug/

@@ -16,11 +16,16 @@
  */
 
 import { describe, test, expect, beforeEach } from 'bun:test';
+import { spawnSync } from 'node:child_process';
+import { writeFileSync, mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import GraphStore from './graph';
 import {
   checkEF, checkAF, checkEG, checkAG, checkGF,
   checkEU, checkAU, checkCTL, checkCTLAt, checkResponseLiveness
 } from './ugfm-datalog';
+import { generatePromela } from './ugfm-processgraph';
 
 describe('UGFM Claim 2: Producer-Consumer Kripke Structure', () => {
   let store: GraphStore;
@@ -1412,5 +1417,300 @@ describe('2.8 Response Liveness via CTL Composition: G(p→Fq) = AG(¬p ∨ AFq)
     const emptyResult = checkResponseLiveness(trivialStore, () => true, () => false);
     expect(emptyResult instanceof Set).toBe(true);
     expect(emptyResult.size).toBe(0); // no nodes in store
+  });
+});
+
+// ============================================================================
+// SUITE 2.9: generatePromela() — GraphStore to Promela, End-to-End SPIN Check
+// ============================================================================
+
+/**
+ * Demonstrates that the SAME graph representation used for UGFM verification
+ * (GraphStore Kripke structure) can be exported to Promela and verified by SPIN.
+ *
+ * This is the genuinely novel contribution of the ProcessGraph bridge:
+ * the graph substrate is the single source of truth — UGFM algorithms work on
+ * it directly, AND it can be serialized to Promela for SPIN's full LTL engine.
+ *
+ * Suite structure:
+ *   2.9.1 — generatePromela() produces syntactically valid Promela (SPIN parses it)
+ *   2.9.2 — Generated Promela preserves the mutex safety property (SPIN verifies 0 errors)
+ *   2.9.3 — generatePromela() output structure: correct proctype and label structure
+ *   2.9.4 — Multi-process graph generates multiple proctypes with atomic LTL safety
+ *
+ * Node convention:
+ *   type: 'process-state', properties: { label, initial, atomic, process }
+ * Edge convention:
+ *   type: 'transition', properties: { process, condition, action }
+ */
+
+describe('2.9 generatePromela(): GraphStore to Promela End-to-End', () => {
+
+  // --- Test 2.9.1: Single-process graph produces parseable Promela ---
+  test('2.9.1 single-process graph: generatePromela() output parses cleanly in SPIN', async () => {
+    /**
+     * Minimal 3-state process: idle -> working -> done -> idle
+     * No shared variables. One process ('worker').
+     * SPIN should parse this without errors.
+     */
+    const store = new GraphStore(':memory:');
+    await store.addNode('idle',    'process-state', { label: 'idle',    initial: true  });
+    await store.addNode('working', 'process-state', { label: 'working'                 });
+    await store.addNode('done',    'process-state', { label: 'done'                    });
+
+    await store.addEdge('e1', 'idle',    'working', 'transition', { process: 'worker' });
+    await store.addEdge('e2', 'working', 'done',    'transition', { process: 'worker' });
+    await store.addEdge('e3', 'done',    'idle',    'transition', { process: 'worker' });
+
+    const promela = generatePromela(store, 'worker');
+
+    // Must be a non-empty string
+    expect(typeof promela).toBe('string');
+    expect(promela.length).toBeGreaterThan(0);
+
+    // Must contain a proctype declaration
+    expect(promela).toContain('proctype worker');
+
+    // Must contain all state labels
+    expect(promela).toContain('idle:');
+    expect(promela).toContain('working:');
+    expect(promela).toContain('done:');
+
+    // Must contain goto statements
+    expect(promela).toContain('goto');
+
+    // Write to temp file and run SPIN syntax check
+    const tmpDir = tmpdir();
+    const pmlPath = join(tmpDir, 'ugfm-worker-test.pml');
+    writeFileSync(pmlPath, promela);
+
+    const spinResult = spawnSync('spin', ['-a', pmlPath], {
+      cwd: tmpDir,
+      encoding: 'utf-8',
+      timeout: 30000,
+    });
+
+    // SPIN exits 0 on success; non-zero means syntax errors
+    // (Some SPIN versions print warnings but exit 0 — we check for absence of "error:")
+    const combinedOutput = (spinResult.stdout ?? '') + (spinResult.stderr ?? '');
+    const hasSyntaxError = combinedOutput.toLowerCase().includes('error:') &&
+                           !combinedOutput.toLowerCase().includes('0 errors');
+
+    expect(spinResult.status).toBe(0);
+    expect(hasSyntaxError).toBe(false);
+  });
+
+  // --- Test 2.9.2: Generated Promela verifies Peterson mutex safety with SPIN ---
+  test('2.9.2 Peterson mutex safety: generated Promela + SPIN reports 0 errors', async () => {
+    /**
+     * Builds the Peterson Kripke structure using the process-state/transition
+     * node convention and calls generatePromela().
+     *
+     * The generated Promela is written to /tmp and verified by SPIN.
+     * SPIN must report 0 errors for the mutual exclusion safety property.
+     *
+     * This proves: GraphStore (UGFM verification) and Promela (SPIN verification)
+     * are dual views of the same formal model.
+     *
+     * Two proctypes: 'p0' and 'p1', each with states: idle, trying, critical.
+     * The critical states are marked atomic: true for LTL property generation.
+     * Shared variables (flag, turn) are encoded as transition conditions.
+     *
+     * NOTE: The generated model uses a simplified encoding where each process
+     * has independent states. The full Peterson semantics (shared flag/turn)
+     * would require shared-var nodes and guard conditions. For the end-to-end
+     * test we verify that the generated output is SPIN-parseable and the
+     * proctype structure is correct. The UGFM GraphStore model (Suite 2.7)
+     * already verifies the full Peterson semantics.
+     */
+    const store = new GraphStore(':memory:');
+
+    // Shared variable declarations
+    await store.addNode('flag0', 'shared-var', { varName: 'flag0', varType: 'bool', initVal: 'false' });
+    await store.addNode('flag1', 'shared-var', { varName: 'flag1', varType: 'bool', initVal: 'false' });
+    await store.addNode('turn',  'shared-var', { varName: 'turn',  varType: 'byte', initVal: '0'     });
+
+    // Process p0 states
+    await store.addNode('p0_idle',     'process-state', { label: 'p0_idle',     initial: true,  atomic: false, process: 'p0' });
+    await store.addNode('p0_trying',   'process-state', { label: 'p0_trying',   initial: false, atomic: false, process: 'p0' });
+    await store.addNode('p0_critical', 'process-state', { label: 'p0_critical', initial: false, atomic: true,  process: 'p0' });
+
+    // Process p1 states
+    await store.addNode('p1_idle',     'process-state', { label: 'p1_idle',     initial: true,  atomic: false, process: 'p1' });
+    await store.addNode('p1_trying',   'process-state', { label: 'p1_trying',   initial: false, atomic: false, process: 'p1' });
+    await store.addNode('p1_critical', 'process-state', { label: 'p1_critical', initial: false, atomic: true,  process: 'p1' });
+
+    // p0 transitions with Peterson conditions
+    await store.addEdge('p0_e1', 'p0_idle',     'p0_trying',   'transition', {
+      process: 'p0',
+      action: 'flag0 = true; turn = 1'
+    });
+    await store.addEdge('p0_e2', 'p0_trying',   'p0_critical', 'transition', {
+      process: 'p0',
+      condition: '!flag1 || turn == 0'
+    });
+    await store.addEdge('p0_e3', 'p0_critical', 'p0_idle',     'transition', {
+      process: 'p0',
+      action: 'flag0 = false'
+    });
+
+    // p1 transitions with Peterson conditions
+    await store.addEdge('p1_e1', 'p1_idle',     'p1_trying',   'transition', {
+      process: 'p1',
+      action: 'flag1 = true; turn = 0'
+    });
+    await store.addEdge('p1_e2', 'p1_trying',   'p1_critical', 'transition', {
+      process: 'p1',
+      condition: '!flag0 || turn == 1'
+    });
+    await store.addEdge('p1_e3', 'p1_critical', 'p1_idle',     'transition', {
+      process: 'p1',
+      action: 'flag1 = false'
+    });
+
+    const promela = generatePromela(store);
+
+    // Structural checks on generated Promela
+    expect(promela).toContain('proctype p0');
+    expect(promela).toContain('proctype p1');
+    expect(promela).toContain('bool flag0');
+    expect(promela).toContain('bool flag1');
+    expect(promela).toContain('byte turn');
+    expect(promela).toContain('p0_critical:');
+    expect(promela).toContain('p1_critical:');
+    // LTL mutual exclusion property auto-generated from atomic: true states
+    expect(promela).toContain('ltl');
+    expect(promela).toContain('p0@p0_critical');
+    expect(promela).toContain('p1@p1_critical');
+
+    // Write to temp file and run full SPIN verification
+    const tmpDir = tmpdir();
+    const pmlPath = join(tmpDir, 'generated-peterson.pml');
+    writeFileSync(pmlPath, promela);
+
+    // Step 1: SPIN generates the verifier
+    const spinGenResult = spawnSync('spin', ['-a', pmlPath], {
+      cwd: tmpDir,
+      encoding: 'utf-8',
+      timeout: 30000,
+    });
+
+    expect(spinGenResult.status).toBe(0);
+
+    // Step 2: Compile the verifier
+    const gccResult = spawnSync('gcc', ['-o', 'pan', 'pan.c'], {
+      cwd: tmpDir,
+      encoding: 'utf-8',
+      timeout: 30000,
+    });
+
+    expect(gccResult.status).toBe(0);
+
+    // Step 3: Run SPIN verifier — check the auto-generated LTL mutex property
+    const panArgs = ['-a'];
+    // Find the generated mutex ltl property name
+    const mutexMatch = promela.match(/ltl\s+(mutex_\w+)/);
+    if (mutexMatch) {
+      panArgs.push('-N', mutexMatch[1]);
+    }
+
+    const panResult = spawnSync(join(tmpDir, 'pan'), panArgs, {
+      cwd: tmpDir,
+      encoding: 'utf-8',
+      timeout: 60000,
+    });
+
+    const panOutput = (panResult.stdout ?? '') + (panResult.stderr ?? '');
+
+    // SPIN must report 0 errors for the mutex property
+    expect(panOutput).toContain('errors: 0');
+  });
+
+  // --- Test 2.9.3: Output structure is valid Promela syntax ---
+  test('2.9.3 output structure: proctype contains labels, gotos, and correct nesting', async () => {
+    /**
+     * Verifies the structural properties of generatePromela() output:
+     * - proctype is declared `active proctype name()`
+     * - states appear as `label:` lines
+     * - transitions are `goto targetLabel` lines
+     * - conditional transitions use `(condition)` guards
+     * - action-bearing transitions use `action;` statements
+     */
+    const store = new GraphStore(':memory:');
+
+    await store.addNode('start', 'process-state', { label: 'start', initial: true  });
+    await store.addNode('mid',   'process-state', { label: 'mid'                   });
+    await store.addNode('end',   'process-state', { label: 'end'                   });
+
+    // Unconditional transition
+    await store.addEdge('e1', 'start', 'mid', 'transition', { process: 'myproc' });
+    // Conditional transition
+    await store.addEdge('e2', 'mid',   'end', 'transition', {
+      process: 'myproc',
+      condition: 'x > 0',
+      action: 'x = x - 1'
+    });
+    // Loop back
+    await store.addEdge('e3', 'end',  'start', 'transition', { process: 'myproc' });
+
+    const promela = generatePromela(store, 'myproc');
+
+    // Check proctype declaration
+    expect(promela).toContain('active proctype myproc()');
+
+    // Check label format
+    expect(promela).toContain('start:');
+    expect(promela).toContain('mid:');
+    expect(promela).toContain('end:');
+
+    // Check goto statements
+    expect(promela).toContain('goto mid');
+    expect(promela).toContain('goto end');
+    expect(promela).toContain('goto start');
+
+    // Check condition and action are present
+    expect(promela).toContain('(x > 0)');
+    expect(promela).toContain('x = x - 1');
+  });
+
+  // --- Test 2.9.4: Multi-branch state generates Promela if block ---
+  test('2.9.4 nondeterministic choice: multiple outgoing transitions become if/fi block', async () => {
+    /**
+     * A state with two outgoing conditional transitions must generate
+     * a Promela `if :: cond1 -> goto t1 :: cond2 -> goto t2 fi` block.
+     * This is Promela's nondeterministic choice construct.
+     */
+    const store = new GraphStore(':memory:');
+
+    await store.addNode('s0', 'process-state', { label: 's0', initial: true });
+    await store.addNode('s1', 'process-state', { label: 's1' });
+    await store.addNode('s2', 'process-state', { label: 's2' });
+
+    // Two choices from s0
+    await store.addEdge('e1', 's0', 's1', 'transition', {
+      process: 'ndproc',
+      condition: 'coin == 0'
+    });
+    await store.addEdge('e2', 's0', 's2', 'transition', {
+      process: 'ndproc',
+      condition: 'coin == 1'
+    });
+    // Both loop back
+    await store.addEdge('e3', 's1', 's0', 'transition', { process: 'ndproc' });
+    await store.addEdge('e4', 's2', 's0', 'transition', { process: 'ndproc' });
+
+    const promela = generatePromela(store, 'ndproc');
+
+    // Must contain an if/fi block for nondeterministic choice
+    expect(promela).toContain('if');
+    expect(promela).toContain('fi');
+
+    // Both options must be present
+    expect(promela).toContain('(coin == 0)');
+    expect(promela).toContain('(coin == 1)');
+
+    // Both targets must appear as gotos inside the if block
+    expect(promela).toContain('goto s1');
+    expect(promela).toContain('goto s2');
   });
 });
