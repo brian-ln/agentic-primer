@@ -149,6 +149,12 @@ export interface SessionNode {
   tools?: string[];
 
   /**
+   * Tool calls with inputs, in invocation order (may have duplicates for repeated tools).
+   * Present on assistant turns when type === 'turn' and tools were used.
+   */
+  toolCalls?: Array<{ name: string; input: Record<string, unknown> }>;
+
+  /**
    * Token usage for this turn's API call.
    * Present on assistant turns when type === 'turn'.
    */
@@ -307,6 +313,7 @@ interface ParsedTurn {
   assistantUuids: string[];
   model?: string;
   tools: string[];
+  toolCalls: Array<{ name: string; input: Record<string, unknown> }>;
   tokenUsage?: { input: number; output: number };
 }
 
@@ -460,6 +467,7 @@ export function buildSessionGraph(
     // Aggregate model, tools, and token usage from assistant chain
     let model: string | undefined;
     const toolNames = new Set<string>();
+    const toolCallsList: Array<{ name: string; input: Record<string, unknown> }> = [];
     let inputTokens = 0;
     let outputTokens = 0;
 
@@ -483,6 +491,10 @@ export function buildSessionGraph(
             const b = block as Record<string, unknown>;
             if (b.type === 'tool_use' && typeof b.name === 'string') {
               toolNames.add(b.name as string);
+              const input = (b.input && typeof b.input === 'object')
+                ? b.input as Record<string, unknown>
+                : {};
+              toolCallsList.push({ name: b.name as string, input });
             }
           }
         }
@@ -502,6 +514,7 @@ export function buildSessionGraph(
       assistantUuids: assistantChain.map(ae => ae.uuid),
       model,
       tools: Array.from(toolNames),
+      toolCalls: toolCallsList,
       tokenUsage,
     });
   }
@@ -553,6 +566,7 @@ export function buildSessionGraph(
       content: turn.content,
       ...(turn.model !== undefined && { model: turn.model }),
       ...(turn.tools.length > 0 && { tools: turn.tools }),
+      ...(turn.toolCalls.length > 0 && { toolCalls: turn.toolCalls }),
       ...(turn.tokenUsage !== undefined && { tokenUsage: turn.tokenUsage }),
     };
     nodes.push(turnNode);
