@@ -29,6 +29,10 @@ describe('Workflow 1: Extract Knowledge → Verify Storage', () => {
   let db: Client;
   let extractor: KnowledgeExtractor;
 
+  // LLM-dependent tests require LM Studio to be running.
+  // Skip unless RUN_SLOW_TESTS is set.
+  const testOrSkip = process.env.RUN_SLOW_TESTS ? test : test.skip;
+
   beforeAll(() => {
     db = createClient({ url: `file:${DB_PATH}` });
     extractor = new KnowledgeExtractor();
@@ -39,7 +43,7 @@ describe('Workflow 1: Extract Knowledge → Verify Storage', () => {
     await extractor.close();
   });
 
-  test('should extract decisions from a session and store them', async () => {
+  testOrSkip('should extract decisions from a session and store them', async () => {
     // Get a real session ID with data
     const sessionsResult = await db.execute({
       sql: 'SELECT id FROM sessions WHERE message_count > 5 LIMIT 1'
