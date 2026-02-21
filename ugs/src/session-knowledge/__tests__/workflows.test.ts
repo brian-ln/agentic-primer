@@ -145,6 +145,10 @@ describe('Workflow 2: Search Across Knowledge Types', () => {
   let db: Client;
   let embedder: EmbeddingGenerator;
 
+  // LLM-dependent tests require an embedding service (LM Studio) to be running.
+  // Skip unless RUN_SLOW_TESTS is set, matching the pattern used in integration tests.
+  const testOrSkip = process.env.RUN_SLOW_TESTS ? test : test.skip;
+
   beforeAll(() => {
     db = createClient({ url: `file:${DB_PATH}` });
     embedder = new EmbeddingGenerator();
@@ -154,7 +158,7 @@ describe('Workflow 2: Search Across Knowledge Types', () => {
     db.close();
   });
 
-  test('should search decisions semantically', async () => {
+  testOrSkip('should search decisions semantically', async () => {
     // Check if we have any decisions with embeddings
     const checkResult = await db.execute({
       sql: 'SELECT COUNT(*) as count FROM session_decisions WHERE embedding IS NOT NULL'
@@ -197,7 +201,7 @@ describe('Workflow 2: Search Across Knowledge Types', () => {
     }
   });
 
-  test('should search across all knowledge types', async () => {
+  testOrSkip('should search across all knowledge types', async () => {
     const query = 'error handling';
     let queryEmbedding;
     try {

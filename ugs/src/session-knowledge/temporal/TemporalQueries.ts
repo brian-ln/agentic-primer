@@ -85,14 +85,14 @@ export class TemporalQueries {
                  valid_from, valid_to, transaction_from, transaction_to,
                  base_confidence, domain, reasoning, alternatives, context
           FROM session_decisions
-          WHERE (valid_from IS NULL OR valid_from <= ?)
+          WHERE (valid_from <= ? OR (valid_from IS NULL AND timestamp <= ?))
             AND (valid_to IS NULL OR valid_to > ?)
             AND (transaction_from IS NULL OR transaction_from <= ?)
             AND (transaction_to IS NULL OR transaction_to > ?)
             AND (decision LIKE '%' || ? || '%' ESCAPE '\\' OR reasoning LIKE '%' || ? || '%' ESCAPE '\\')
           ORDER BY timestamp DESC
         `,
-        args: [asOfMs, asOfMs, asOfMs, asOfMs, sanitizedQuery, sanitizedQuery]
+        args: [asOfMs, asOfMs, asOfMs, asOfMs, asOfMs, sanitizedQuery, sanitizedQuery]
       });
     }, dbRateLimiter);
 
@@ -125,14 +125,14 @@ export class TemporalQueries {
                  valid_from, valid_to, transaction_from, transaction_to,
                  base_confidence, domain, category, evidence, application, context, actionable
           FROM session_learnings
-          WHERE (valid_from IS NULL OR valid_from <= ?)
+          WHERE (valid_from <= ? OR (valid_from IS NULL AND timestamp <= ?))
             AND (valid_to IS NULL OR valid_to > ?)
             AND (transaction_from IS NULL OR transaction_from <= ?)
             AND (transaction_to IS NULL OR transaction_to > ?)
             AND (learning LIKE '%' || ? || '%' ESCAPE '\\' OR context LIKE '%' || ? || '%' ESCAPE '\\')
           ORDER BY timestamp DESC
         `,
-        args: [asOfMs, asOfMs, asOfMs, asOfMs, sanitizedQuery, sanitizedQuery]
+        args: [asOfMs, asOfMs, asOfMs, asOfMs, asOfMs, sanitizedQuery, sanitizedQuery]
       });
     }, dbRateLimiter);
 
@@ -167,14 +167,14 @@ export class TemporalQueries {
                  valid_from, valid_to, transaction_from, transaction_to,
                  base_confidence, domain, error_type, tool_name, root_cause, suggested_fix, resolution, prevention
           FROM session_errors
-          WHERE (valid_from IS NULL OR valid_from <= ?)
+          WHERE (valid_from <= ? OR (valid_from IS NULL AND timestamp <= ?))
             AND (valid_to IS NULL OR valid_to > ?)
             AND (transaction_from IS NULL OR transaction_from <= ?)
             AND (transaction_to IS NULL OR transaction_to > ?)
             AND (error_message LIKE '%' || ? || '%' ESCAPE '\\' OR root_cause LIKE '%' || ? || '%' ESCAPE '\\')
           ORDER BY timestamp DESC
         `,
-        args: [asOfMs, asOfMs, asOfMs, asOfMs, sanitizedQuery, sanitizedQuery]
+        args: [asOfMs, asOfMs, asOfMs, asOfMs, asOfMs, sanitizedQuery, sanitizedQuery]
       });
     }, dbRateLimiter);
 
@@ -210,7 +210,7 @@ export class TemporalQueries {
                  valid_from, valid_to, transaction_from, transaction_to,
                  base_confidence, domain, workflow_type, effectiveness, context, tools_involved, outcome, lessons
           FROM session_workflows
-          WHERE (valid_from IS NULL OR valid_from <= ?)
+          WHERE (valid_from <= ? OR (valid_from IS NULL AND timestamp <= ?))
             AND (valid_to IS NULL OR valid_to > ?)
             AND (transaction_from IS NULL OR transaction_from <= ?)
             AND (transaction_to IS NULL OR transaction_to > ?)
@@ -218,7 +218,7 @@ export class TemporalQueries {
           ORDER BY timestamp DESC
           LIMIT 20
         `,
-        args: [asOfMs, asOfMs, asOfMs, asOfMs, sanitizedQuery, sanitizedQuery]
+        args: [asOfMs, asOfMs, asOfMs, asOfMs, asOfMs, sanitizedQuery, sanitizedQuery]
       });
     }, dbRateLimiter);
 
