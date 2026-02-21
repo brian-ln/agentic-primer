@@ -1,19 +1,26 @@
 /**
  * Signal Hub - Cloudflare Workers Entry Point
  *
- * WebSocket-based message router on Cloudflare Durable Objects
+ * WebSocket-based message router on Cloudflare Durable Objects.
+ * Hosts two Durable Objects:
+ *
+ *   SignalHub  (/ws, /)       — actor registration, discovery, pub/sub message routing
+ *   AgentHub   (/agent-ws)    — AI capability actor mesh (SessionActor, FluxRelayActor)
  */
 
 import type { Env } from './types';
 import { SignalHub } from './durable-objects/SignalHub';
+import { AgentHub } from './durable-objects/AgentHub';
 
-// Export Durable Object class for Cloudflare Workers
-export { SignalHub };
+// Export Durable Object classes for Cloudflare Workers
+export { SignalHub, AgentHub };
 
 /**
  * Worker fetch handler
  *
- * Routes WebSocket upgrade requests to SignalHub Durable Object
+ * Routes WebSocket upgrade requests to the appropriate Durable Object:
+ *   /ws or /      → SignalHub (actor registry + message routing)
+ *   /agent-ws     → AgentHub  (AI session + flux relay actors)
  */
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -34,15 +41,21 @@ export default {
       );
     }
 
-    // WebSocket upgrade
+    // AgentHub — AI session and flux relay actor mesh
+    if (url.pathname === '/agent-ws') {
+      // One AgentHub per namespace (namespace-keyed for sharding)
+      const namespace = url.searchParams.get('ns') ?? 'default';
+      const id = env.AGENT_HUB.idFromName(namespace);
+      const stub = env.AGENT_HUB.get(id);
+      return stub.fetch(request);
+    }
+
+    // SignalHub — actor registry and message routing
     if (url.pathname === '/ws' || url.pathname === '/') {
-      // Get or create Durable Object instance
       // For MVP, use a single instance (hardcoded ID)
       // In production, you might shard by user ID or region
       const id = env.SIGNAL_HUB.idFromName('default');
       const stub = env.SIGNAL_HUB.get(id);
-
-      // Forward request to Durable Object
       return stub.fetch(request);
     }
 

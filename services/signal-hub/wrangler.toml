@@ -3,16 +3,21 @@ main = "src/index.ts"
 compatibility_date = "2024-12-01"
 compatibility_flags = ["nodejs_compat"]
 
-# Durable Object binding
+# Durable Object bindings
 [durable_objects]
 bindings = [
-  { name = "SIGNAL_HUB", class_name = "SignalHub" }
+  { name = "SIGNAL_HUB", class_name = "SignalHub" },
+  { name = "AGENT_HUB",  class_name = "AgentHub"  },
 ]
 
-# Migration for Durable Object
+# Migrations
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["SignalHub"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["AgentHub"]
 
 # Environment variables
 [vars]
@@ -25,14 +30,29 @@ DEFAULT_ACTOR_TTL = "300000"  # 5 minutes
 MAX_ACTOR_TTL = "3600000"  # 1 hour
 BROADCAST_SYNC_THRESHOLD = "100"
 
+# AI Actor namespace defaults (overridden per environment)
+AI_NAMESPACE = "bln_ai"
+DEFAULT_INFERENCE = "nim/kimi-k2.5"
+DEFAULT_TTS_VOICE = "deepgram/aura-2-en-us"
+DEFAULT_STT_MODEL = "deepgram/nova-3"
+
 # Development environment
 [env.development]
 [env.development.vars]
 JWT_SECRET = "dev-secret-change-in-production"
 AUTH_ENABLED = "false"
+CF_ACCOUNT_ID = "dev-account-id"
+CF_GATEWAY_NAME = "dev-gateway"
+# CF_AIG_TOKEN — set via: wrangler secret put CF_AIG_TOKEN --env development
 
 # Production environment
 [env.production]
 [env.production.vars]
 AUTH_ENABLED = "true"
-# JWT_SECRET should be set via wrangler secret put JWT_SECRET
+AI_NAMESPACE = "bln_ai"
+# Secrets (set via wrangler secret put):
+#   JWT_SECRET
+#   CF_AIG_TOKEN
+# Vars (set per account):
+#   CF_ACCOUNT_ID
+#   CF_GATEWAY_NAME
