@@ -21,18 +21,28 @@ const AUTH_BASE = process.env.BLN_AUTH_ISSUER ?? 'https://brianln.ai';
  */
 export async function runDeviceFlow(clientId: string, scopes: string[]): Promise<string> {
   // Step 1: Request device code
-  const deviceRes = await fetch(`${AUTH_BASE}/device`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: clientId,
-      scope: scopes.join(' '),
-    }),
-  });
+  const deviceEndpoint = `${AUTH_BASE}/device`;
+  let deviceRes: Response;
+  try {
+    deviceRes = await fetch(deviceEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: clientId,
+        scope: scopes.join(' '),
+      }),
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Cannot reach auth service at ${deviceEndpoint}: ${msg}\n` +
+      `  If testing locally, start wrangler dev and set BLN_AUTH_ISSUER=http://localhost:8787`
+    );
+  }
 
   if (!deviceRes.ok) {
     const text = await deviceRes.text();
-    throw new Error(`Device authorization request failed (${deviceRes.status}): ${text}`);
+    throw new Error(`Device authorization request failed (${deviceRes.status}) at ${deviceEndpoint}: ${text}`);
   }
 
   const device = await deviceRes.json() as DeviceAuthResponse;
