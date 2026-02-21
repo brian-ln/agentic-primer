@@ -456,7 +456,7 @@ export class TaskManager {
     // Handle legacy 'state' property for backwards compatibility
     const currentLifecycle = (node.properties.get('lifecycle') || node.properties.get('state') || 'pending') as TaskLifecycle;
     if (currentLifecycle !== 'assigned') {
-      throw new Error(`Cannot start task in ${currentLifecycle} lifecycle. Only assigned tasks can be started.`);
+      throw new Error(`Cannot start task in ${currentLifecycle} lifecycle. Only assigned tasks can be started.\n  Fix: ugs task assign ${id} --to claude && ugs task start ${id}`);
     }
 
     // Persist the lifecycle change
