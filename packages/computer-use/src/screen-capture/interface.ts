@@ -23,8 +23,8 @@ export interface CaptureParams {
 
 export interface ScreenshotArtifact {
   id: string;             // "shot-<timestamp>"
-  localPath?: string;     // filesystem path (local actors only)
-  r2Key?: string;         // "screenshots/YYYY/MM/DD/<filename>.png"
+  localPath?: string | null;  // filesystem path (local actors only); null in Workers
+  r2Key?: string | null;  // "screenshots/YYYY/MM/DD/<filename>.png"; null before upload
   r2Bucket: string;       // "knowledge"
   r2Account: string;      // Cloudflare account ID
   capturedAt: string;     // ISO8601 UTC
@@ -33,6 +33,7 @@ export interface ScreenshotArtifact {
   presignedUrl?: string;  // 24h expiry
   mimeType: string;       // "image/png"
   bytes?: number;         // file size if known
+  data?: Uint8Array;      // raw PNG bytes (Cloudflare Workers / headless actors)
 }
 
 export interface ScreenCaptureActor {

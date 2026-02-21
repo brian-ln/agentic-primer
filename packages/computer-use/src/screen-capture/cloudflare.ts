@@ -5,68 +5,92 @@ import type { ScreenCaptureActor, CaptureParams, ScreenshotArtifact } from "./in
  *
  * Requires:
  *   - Cloudflare Worker with browser binding
- *   - wrangler.toml: [[browser]] binding named "browser"
+ *   - wrangler.toml: [[browser]] binding named "browser" (BrowserWorker)
  *
  * See: https://developers.cloudflare.com/browser-rendering/
  *
  * Usage in a Worker:
  *   const actor = new CloudflareScreenCaptureActor(env.browser);
  *   const artifact = await actor.capture({ url: "https://example.com" });
+ *
+ * Notes:
+ *   - Only "fullscreen" mode is supported (no interactive/window/region in headless).
+ *   - `data` on the returned artifact contains the raw PNG bytes.
+ *   - `r2Key` is null — upload to R2 is handled by the Worker endpoint, not here.
+ *   - `localPath` is null — no filesystem in Workers.
  */
 export class CloudflareScreenCaptureActor implements ScreenCaptureActor {
   readonly platform = "cloudflare";
 
-  constructor(private readonly browser: any) {}
+  constructor(private readonly browserBinding: unknown) {}
 
   async capture(params: CaptureParams): Promise<ScreenshotArtifact> {
     if (!params.url) {
       throw new Error(
-        "CloudflareScreenCaptureActor requires params.url — headless capture of a specific page"
+        "CloudflareScreenCaptureActor requires a url in CaptureParams"
       );
     }
 
-    const id = `shot-${Date.now()}`;
-    const capturedAt = new Date().toISOString();
-    const note = params.note ?? "";
-
-    // Launch browser page via Cloudflare Browser Rendering API
-    const page = await this.browser.newPage();
-
-    if (params.viewport) {
-      await page.setViewport(params.viewport);
+    const { mode } = params;
+    if (mode === "interactive" || mode === "window" || mode === "region") {
+      throw new Error(
+        "CloudflareScreenCaptureActor only supports fullscreen mode"
+      );
     }
 
-    await page.goto(params.url, { waitUntil: "networkidle0" });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const puppeteer = await import("@cloudflare/puppeteer") as any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const browser = await puppeteer.launch(this.browserBinding as any);
 
-    // Take screenshot as PNG — Puppeteer returns Buffer in Node, Uint8Array in Workers
-    const screenshotBuffer: Uint8Array = await page.screenshot({
-      type: "png",
-      fullPage: !params.selector,
-      ...(params.selector
-        ? { clip: await page.$eval(params.selector, (el: Element) => el.getBoundingClientRect()) }
-        : {}),
-    });
+    try {
+      const page = await browser.newPage();
 
-    await page.close();
+      await page.setViewport(
+        params.viewport ?? { width: 1280, height: 720 }
+      );
 
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-    const filename = note
-      ? `screenshot_${timestamp}_${note}.png`
-      : `screenshot_${timestamp}.png`;
+      await page.goto(params.url, { waitUntil: "networkidle0" });
 
-    const r2Key = `screenshots/${capturedAt.slice(0, 4)}/${capturedAt.slice(5, 7)}/${capturedAt.slice(8, 10)}/${filename}`;
+      let screenshotData: Buffer | Uint8Array;
 
-    return {
-      id,
-      r2Bucket: "knowledge",
-      r2Account: "8d78f1135e2ebd70b5c8f5dee9d519ff",
-      capturedAt,
-      note,
-      sourceActor: "cloudflare",
-      mimeType: "image/png",
-      bytes: screenshotBuffer.byteLength,
-      r2Key,
-      // presignedUrl set after upload to R2
-    };
+      if (params.selector) {
+        const element = await page.$(params.selector);
+        if (!element) {
+          throw new Error(`Selector not found: ${params.selector}`);
+        }
+        screenshotData = await element.screenshot({ type: "png" }) as Buffer;
+      } else {
+        screenshotData = await page.screenshot({
+          type: "png",
+          fullPage: true,
+        }) as Buffer;
+      }
+
+      const id = `shot-${Date.now()}`;
+      const capturedAt = new Date().toISOString();
+      const note = params.note ?? "";
+
+      const data =
+        screenshotData instanceof Uint8Array
+          ? screenshotData
+          : new Uint8Array(screenshotData);
+
+      return {
+        id,
+        capturedAt,
+        note,
+        localPath: null,
+        r2Key: null,
+        r2Bucket: "knowledge",
+        r2Account: "8d78f1135e2ebd70b5c8f5dee9d519ff",
+        sourceActor: "cloudflare",
+        mimeType: "image/png",
+        bytes: data.byteLength,
+        data,
+      };
+    } finally {
+      await browser.close();
+    }
   }
 }
