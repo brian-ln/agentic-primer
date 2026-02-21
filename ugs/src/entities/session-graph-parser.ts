@@ -149,8 +149,13 @@ export async function parseSessionFile(filePath: string): Promise<SessionGraph> 
  * Sessions are linked by shared project path. Cross-session links are detected
  * by looking for parentUuid references that cross session boundaries, and a
  * `spawned` edge is emitted for each detected cross-session link.
+ *
+ * Accepts the richer file-entry type produced by discoverSessionFiles so that
+ * subagent parentage information is available when building spawned edges.
  */
-export async function parseSessionFiles(filePaths: string[]): Promise<SessionGraph> {
+export async function parseSessionFiles(
+  filePaths: Array<{ path: string; parentSessionId?: string }>
+): Promise<SessionGraph> {
   if (filePaths.length === 0) {
     return {
       nodes: [],
@@ -166,18 +171,20 @@ export async function parseSessionFiles(filePaths: string[]): Promise<SessionGra
   }
 
   if (filePaths.length === 1) {
-    return parseSessionFile(filePaths[0]);
+    // Single-file fast-path: parse the file directly.
+    // parentSessionId only matters for multi-session edge linking.
+    return parseSessionFile(filePaths[0].path);
   }
 
   // Parse all files independently
   const graphs: SessionGraph[] = [];
-  for (const fp of filePaths) {
+  for (const entry of filePaths) {
     try {
-      const g = await parseSessionFile(fp);
+      const g = await parseSessionFile(entry.path);
       graphs.push(g);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`[session-graph-parser] Skipping file ${fp}: ${msg}`);
+      console.warn(`[session-graph-parser] Skipping file ${entry.path}: ${msg}`);
     }
   }
 
@@ -259,6 +266,29 @@ export async function parseSessionFiles(filePaths: string[]): Promise<SessionGra
 
   mergedEdges.push(...crossSessionEdges);
 
+  // Emit explicit spawned edges for subagent sessions based on file path parentage.
+  // These are files where parentSessionId was set by discoverSessionFiles because
+  // the file lives under <parentUuid>/subagents/<agentId>.jsonl.
+  for (const entry of filePaths) {
+    if (!entry.parentSessionId) continue;
+
+    const agentSessionId = entry.path.split('/').pop()?.replace(/\.jsonl$/, '');
+    if (!agentSessionId) continue;
+
+    const parentSessionNodeId = `session:${entry.parentSessionId}`;
+    const childSessionNodeId = `session:${agentSessionId}`;
+    const pairKey = `${parentSessionNodeId}→${childSessionNodeId}`;
+
+    if (!seenSpawnedPairs.has(pairKey)) {
+      seenSpawnedPairs.add(pairKey);
+      mergedEdges.push({
+        from: parentSessionNodeId,
+        to: childSessionNodeId,
+        type: 'spawned',
+      });
+    }
+  }
+
   // Aggregate metadata
   const allSessionIds = Array.from(new Set(graphs.flatMap(g => g.meta.sessionIds)));
   const allProjectPaths = Array.from(new Set(graphs.flatMap(g => g.meta.projectPaths).filter(Boolean)));
@@ -286,11 +316,16 @@ export async function parseSessionFiles(filePaths: string[]): Promise<SessionGra
  * Discover all session files for a project directory.
  *
  * Maps projectPath → ~/.claude/projects/<encoded-path>/ and returns all .jsonl
- * files found there, sorted by mtime (most recent first).
+ * files found there (top-level sessions) plus any subagent files found under
+ * <uuid>/subagents/*.jsonl directories.
  *
- * Excludes sessions-index.json and any subdirectories (subagent sessions).
+ * Returns file entries sorted by mtime (most recent first).
+ * Top-level session entries have parentSessionId undefined.
+ * Subagent entries have parentSessionId set to the parent <uuid> directory name.
  */
-export async function discoverSessionFiles(projectPath: string): Promise<string[]> {
+export async function discoverSessionFiles(
+  projectPath: string
+): Promise<Array<{ path: string; parentSessionId?: string }>> {
   const encoded = encodeProjectPath(projectPath);
   const claudeProjectsDir = join(homedir(), '.claude', 'projects', encoded);
 
@@ -307,12 +342,9 @@ export async function discoverSessionFiles(projectPath: string): Promise<string[
     return [];
   }
 
-  const jsonlFiles: Array<{ path: string; mtime: number }> = [];
+  const jsonlFiles: Array<{ path: string; mtime: number; parentSessionId?: string }> = [];
 
   for (const entry of entries) {
-    // Skip sessions-index.json and non-.jsonl files
-    if (!entry.endsWith('.jsonl')) continue;
-
     const fullPath = join(claudeProjectsDir, entry);
 
     let stat;
@@ -322,16 +354,47 @@ export async function discoverSessionFiles(projectPath: string): Promise<string[
       continue;
     }
 
-    // Skip directories (subagent sessions are in subdirectories)
-    if (stat.isDirectory()) continue;
+    if (stat.isFile() && entry.endsWith('.jsonl')) {
+      // Top-level session file
+      jsonlFiles.push({ path: fullPath, mtime: stat.mtimeMs });
+    } else if (stat.isDirectory()) {
+      // Check for <uuid>/subagents/*.jsonl
+      const subagentsDir = join(fullPath, 'subagents');
+      if (!existsSync(subagentsDir)) continue;
 
-    jsonlFiles.push({ path: fullPath, mtime: stat.mtimeMs });
+      let subentries: string[];
+      try {
+        subentries = readdirSync(subagentsDir);
+      } catch {
+        continue;
+      }
+
+      for (const subentry of subentries) {
+        if (!subentry.endsWith('.jsonl')) continue;
+
+        const subPath = join(subagentsDir, subentry);
+        let subStat;
+        try {
+          subStat = statSync(subPath);
+        } catch {
+          continue;
+        }
+
+        if (!subStat.isFile()) continue;
+
+        jsonlFiles.push({
+          path: subPath,
+          mtime: subStat.mtimeMs,
+          parentSessionId: entry, // The <uuid> directory name is the parent session ID
+        });
+      }
+    }
   }
 
   // Sort by mtime descending (most recent first)
   jsonlFiles.sort((a, b) => b.mtime - a.mtime);
 
-  return jsonlFiles.map(f => f.path);
+  return jsonlFiles.map(f => ({ path: f.path, parentSessionId: f.parentSessionId }));
 }
 
 // ---------------------------------------------------------------------------
