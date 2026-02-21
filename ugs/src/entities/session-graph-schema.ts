@@ -155,6 +155,13 @@ export interface SessionNode {
   toolCalls?: Array<{ name: string; input: Record<string, unknown> }>;
 
   /**
+   * Text content from the assistant response(s) in this turn.
+   * Concatenated from all text blocks across the assistant chain.
+   * Thinking blocks are encoded as "\x00thinking\x00<content>" for UI rendering.
+   */
+  assistantContent?: string;
+
+  /**
    * Token usage for this turn's API call.
    * Present on assistant turns when type === 'turn'.
    */
@@ -314,6 +321,7 @@ interface ParsedTurn {
   model?: string;
   tools: string[];
   toolCalls: Array<{ name: string; input: Record<string, unknown> }>;
+  assistantContent?: string;
   tokenUsage?: { input: number; output: number };
 }
 
@@ -464,10 +472,11 @@ export function buildSessionGraph(
       }
     }
 
-    // Aggregate model, tools, and token usage from assistant chain
+    // Aggregate model, tools, token usage, and assistant text from assistant chain
     let model: string | undefined;
     const toolNames = new Set<string>();
     const toolCallsList: Array<{ name: string; input: Record<string, unknown> }> = [];
+    const assistantTextParts: string[] = [];
     let inputTokens = 0;
     let outputTokens = 0;
 
@@ -495,11 +504,20 @@ export function buildSessionGraph(
                 ? b.input as Record<string, unknown>
                 : {};
               toolCallsList.push({ name: b.name as string, input });
+            } else if (b.type === 'text' && typeof b.text === 'string' && b.text.trim()) {
+              assistantTextParts.push(b.text.trim());
+            } else if (b.type === 'thinking' && typeof b.thinking === 'string' && b.thinking.trim()) {
+              // Prefix thinking blocks so UI can render them differently
+              assistantTextParts.push('\x00thinking\x00' + b.thinking.trim());
             }
           }
         }
       }
     }
+
+    // Concatenate assistant text — store full content (no truncation)
+    const assistantContentRaw = assistantTextParts.join('\n\n');
+    const assistantContent = assistantContentRaw || undefined;
 
     const tokenUsage = (inputTokens > 0 || outputTokens > 0)
       ? { input: inputTokens, output: outputTokens }
@@ -515,6 +533,7 @@ export function buildSessionGraph(
       model,
       tools: Array.from(toolNames),
       toolCalls: toolCallsList,
+      assistantContent,
       tokenUsage,
     });
   }
@@ -567,6 +586,7 @@ export function buildSessionGraph(
       ...(turn.model !== undefined && { model: turn.model }),
       ...(turn.tools.length > 0 && { tools: turn.tools }),
       ...(turn.toolCalls.length > 0 && { toolCalls: turn.toolCalls }),
+      ...(turn.assistantContent !== undefined && { assistantContent: turn.assistantContent }),
       ...(turn.tokenUsage !== undefined && { tokenUsage: turn.tokenUsage }),
     };
     nodes.push(turnNode);
