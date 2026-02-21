@@ -184,9 +184,16 @@ export class InformationManager {
   private nodeToInformation(node: Node): Information {
     const contentStr = node.properties.get('content');
     const sourcesStr = node.properties.get('sources');
-    const tagsStr = node.properties.get('tags');
+    const tagsRaw = node.properties.get('tags');
     // Handle legacy 'state' property for backwards compatibility
     const lifecycle = (node.properties.get('lifecycle') || node.properties.get('state') || 'draft') as InformationLifecycle;
+
+    // Parse a field that may be a JSON string, a plain value, or undefined
+    const parseJsonField = (v: any): any => {
+      if (v === undefined || v === null) return undefined;
+      if (typeof v !== 'string') return v; // already parsed (e.g. array from WAL replay)
+      try { return JSON.parse(v); } catch { return v; }
+    };
 
     return {
       id: node.id,
@@ -195,10 +202,10 @@ export class InformationManager {
       lifecycle,
       config: {
         infoType: (node.properties.get('infoType') || 'fact') as InformationType,
-        content: contentStr ? JSON.parse(contentStr) : null,
+        content: parseJsonField(contentStr),
         schema: node.properties.get('schema'),
-        sources: sourcesStr ? JSON.parse(sourcesStr) : undefined,
-        tags: tagsStr ? JSON.parse(tagsStr) : undefined,
+        sources: parseJsonField(sourcesStr),
+        tags: parseJsonField(tagsRaw),
         description: node.properties.get('description')
       },
       version: node.properties.get('version') || 1,
