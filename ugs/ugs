@@ -53,7 +53,7 @@ class UGSCLI {
   private outputFormat: OutputFormat;
 
   constructor(dataDir?: string) {
-    this.dataDir = dataDir || process.env.UGS_DATA_DIR || './data';
+    this.dataDir = dataDir || process.env.UGS_DATA_DIR || './.ug';
     this.store = new GraphStore(this.dataDir);
     this.programManager = new ProgramManager(this.store);
     this.providerManager = new ProviderManager(this.store);
@@ -1378,7 +1378,7 @@ class UGSCLI {
             await this.handleTaskPrime(subArgs);
             break;
           default:
-            this.error(`Unknown task subcommand: ${subcommand}. Use 'task' for help.`);
+            this.error(`Unknown task subcommand: "${subcommand}". Valid: create|get|patch|assign|start|complete|fail|list|ready|blocked|stats|dep|close|apply|export. Run "ug task" for full help.`);
         }
       }
     });
@@ -1603,6 +1603,14 @@ class UGSCLI {
           default:
             this.error(`Unknown project subcommand: ${subcommand}. Use 'project' for help.`);
         }
+      }
+    });
+
+    // Generic graph-level JSONL bulk mutations
+    this.commands.set('apply', {
+      description: 'Apply JSONL mutations to the graph: apply [--file <path>] [--dry-run] [--force]',
+      handler: async (args: string[]) => {
+        await this.handleApply(args);
       }
     });
   }
@@ -3026,14 +3034,23 @@ class UGSCLI {
         subcommands: {
           create: 'Create a task: task create <id> --title "..." [--priority P0-P4] [--description "..."] [--assignee "@(id)"]',
           get: 'Get task details: task get <id>',
+          patch: 'Update task fields: task patch <id> [--title "..."] [--priority P1] [--lifecycle pending]',
           assign: 'Assign a task: task assign <id> --to <assignee>',
           start: 'Start working on a task: task start <id>',
           complete: 'Complete a task: task complete <id>',
           fail: 'Fail a task: task fail <id> --reason "..."',
-          list: 'List tasks: task list [--state pending|assigned|in_progress|completed|failed] [--assignee "@(id)"]'
+          list: 'List tasks: task list [--state pending|assigned|in_progress|completed|failed] [--assignee "@(id)"]',
+          ready: 'Show unblocked pending tasks (what to work on next): task ready',
+          blocked: 'Show blocked pending tasks: task blocked',
+          stats: 'Show task counts by state: task stats',
+          dep: 'Manage dependencies: task dep add <id> <depends-on-id> | task dep remove <id> <dep-id> | task dep show <id>',
+          close: 'Close one or more tasks: task close <id> [id2 id3...]',
+          apply: 'Bulk create/update tasks from JSONL (idempotent, partial merge): task apply <file> | echo \'{"id":"x","title":"y"}\' | task apply -',
+          export: 'Export all tasks as JSONL: task export [--filter open|completed] [--file path]'
         },
         lifecycle: 'pending -> assigned -> in_progress -> completed|failed',
-        priorities: ['P0 (critical)', 'P1 (high)', 'P2 (normal)', 'P3 (low)', 'P4 (lowest)']
+        priorities: ['P0 (critical)', 'P1 (high)', 'P2 (normal)', 'P3 (low)', 'P4 (lowest)'],
+        hint: 'Run "ug help workflow" for common patterns or "ug session prime" for project context'
       });
     } else {
       console.log('Task Management Commands\n');
@@ -3471,15 +3488,24 @@ class UGSCLI {
     const blocked = this.taskManager.listBlocked().length;
     const ready = this.taskManager.listReady().length;
 
+    // Detect likely data-dir misconfiguration: zero tasks but no WAL at expected path
+    const walPath = join(this.dataDir, 'events.wal');
+    const walMissing = !existsSync(walPath);
+    const warning = (allTasks.length === 0 && walMissing)
+      ? `No tasks found and no WAL at ${walPath}. Verify data directory: current="${this.dataDir}". Override with UGS_DATA_DIR env var or --data-dir flag. Legacy location was ./data/events.wal — run "cp ./data/events.wal ${walPath}" to migrate.`
+      : undefined;
+
     if (this.outputFormat.isAgent) {
       this.output({
         operation: 'task-stats',
         total: allTasks.length,
         lifecycle: counts,
         blocked,
-        ready
+        ready,
+        ...(warning ? { warning } : {})
       });
     } else {
+      if (warning) console.warn(`⚠️  ${warning}`);
       console.log(`Tasks: ${allTasks.length} total`);
       console.log(`  pending:     ${counts.pending}`);
       console.log(`  assigned:    ${counts.assigned}`);
@@ -3617,6 +3643,268 @@ class UGSCLI {
         for (const e of parseErrors) {
           console.log(`  line ${e.line}: ${e.error}`);
         }
+      }
+    }
+  }
+
+  // === GENERIC APPLY ===
+
+  private async handleApply(args: string[]): Promise<void> {
+    const { named } = this.parseNamedArgs(args);
+    const fileArg = named.file;
+    const dryRun = 'dry-run' in named || named['dry-run'] !== undefined;
+    const force = 'force' in named || named['force'] !== undefined;
+
+    // Read JSONL from file or stdin
+    let input: string;
+    if (fileArg) {
+      try {
+        const { readFile } = await import('node:fs/promises');
+        input = await readFile(fileArg, 'utf-8');
+      } catch (error: any) {
+        this.error(`Cannot read file: ${fileArg}: ${error.message}`);
+        return;
+      }
+    } else {
+      const chunks: Buffer[] = [];
+      for await (const chunk of process.stdin) {
+        chunks.push(chunk);
+      }
+      input = Buffer.concat(chunks).toString('utf-8');
+    }
+
+    const lines = input.trim().split('\n').filter((l: string) => l.trim());
+    if (lines.length === 0) {
+      this.error('No input records found.');
+      return;
+    }
+
+    // Counters
+    let created = 0;
+    let skipped = 0;
+    let patched = 0;
+    let deleted = 0;
+    const errors: Array<{ line: number; id?: string; error: string }> = [];
+
+    // Track dry-run actions
+    const dryRunActions: Array<{ line: number; op: string; id: string; action: string }> = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const lineNum = i + 1;
+      let record: any;
+
+      // Parse JSON
+      try {
+        record = JSON.parse(lines[i]);
+      } catch (e: any) {
+        errors.push({ line: lineNum, error: `JSON parse error: ${e.message}` });
+        continue;
+      }
+
+      const op = record.op;
+      const id = record.id;
+
+      if (!op) {
+        errors.push({ line: lineNum, id, error: 'Missing required field: op' });
+        continue;
+      }
+      if (!id && op !== 'edge') {
+        errors.push({ line: lineNum, error: 'Missing required field: id' });
+        continue;
+      }
+
+      try {
+        switch (op) {
+          case 'node': {
+            const nodeType = record.type || 'information';
+            const existing = this.store.get(id);
+            if (existing) {
+              skipped++;
+              if (dryRun) dryRunActions.push({ line: lineNum, op, id, action: 'skip (exists)' });
+              break;
+            }
+            if (dryRun) {
+              dryRunActions.push({ line: lineNum, op, id, action: `create ${nodeType}` });
+              created++;
+              break;
+            }
+            if (nodeType === 'information') {
+              const infoType = record.infoType || 'fact';
+              if (!['fact', 'schema', 'workflow', 'pattern'].includes(infoType)) {
+                errors.push({ line: lineNum, id, error: `Invalid infoType: ${infoType}. Use: fact, schema, workflow, pattern` });
+                break;
+              }
+              let content = record.content;
+              if (typeof content === 'string') {
+                try { content = JSON.parse(content); } catch { /* keep as string */ }
+              }
+              await this.informationManager.createInformation(id, infoType as any, content ?? null, {
+                description: record.title || record.description,
+                tags: record.tags,
+                schema: record.schema,
+                sources: record.sources
+              });
+            } else if (nodeType === 'task') {
+              await this.taskManager.createTask(id, record.title || id, {
+                priority: record.priority,
+                assignee: record.assignee,
+                description: record.description
+              });
+            } else {
+              // Generic node: store directly via graph store
+              const props: Record<string, any> = {};
+              if (record.title) props.title = record.title;
+              if (record.description) props.description = record.description;
+              // Copy any extra fields except reserved ones
+              const reserved = new Set(['op', 'id', 'type', 'title', 'description']);
+              for (const [k, v] of Object.entries(record)) {
+                if (!reserved.has(k) && v !== undefined) {
+                  props[k] = typeof v === 'object' ? JSON.stringify(v) : v;
+                }
+              }
+              await this.store.addNode(id, nodeType, props);
+            }
+            created++;
+            break;
+          }
+
+          case 'edge': {
+            const edgeId = id || record.id;
+            const source = record.source;
+            const target = record.target;
+            const edgeType = record.edgeType || record.type || null;
+            if (!source || !target) {
+              errors.push({ line: lineNum, id: edgeId, error: 'Edge op requires source and target fields' });
+              break;
+            }
+            if (dryRun) {
+              dryRunActions.push({ line: lineNum, op, id: edgeId || `${source}->${target}`, action: `create edge ${source} -[${edgeType || 'untyped'}]-> ${target}` });
+              created++;
+              break;
+            }
+            const generatedEdgeId = edgeId || `edge_${source}_${target}_${Date.now()}`;
+            await this.store.addEdge(generatedEdgeId, source, target, edgeType, {}, record.weight || 1);
+            created++;
+            break;
+          }
+
+          case 'patch': {
+            const node = this.store.get(id);
+            if (!node) {
+              errors.push({ line: lineNum, id, error: `Node not found: ${id}` });
+              break;
+            }
+            if (dryRun) {
+              dryRunActions.push({ line: lineNum, op, id, action: `patch node` });
+              patched++;
+              break;
+            }
+            // Build properties to update (exclude op/id)
+            const reserved = new Set(['op', 'id']);
+            const props: Record<string, any> = {};
+            for (const [k, v] of Object.entries(record)) {
+              if (!reserved.has(k) && v !== undefined) {
+                props[k] = typeof v === 'object' ? JSON.stringify(v) : v;
+              }
+            }
+            await this.store.updateNode(id, props);
+            patched++;
+            break;
+          }
+
+          case 'lifecycle': {
+            const lifecycle = record.lifecycle;
+            if (!lifecycle) {
+              errors.push({ line: lineNum, id, error: 'lifecycle op requires lifecycle field' });
+              break;
+            }
+            const node = this.store.get(id);
+            if (!node) {
+              errors.push({ line: lineNum, id, error: `Node not found: ${id}` });
+              break;
+            }
+            if (dryRun) {
+              dryRunActions.push({ line: lineNum, op, id, action: `transition lifecycle -> ${lifecycle}` });
+              patched++;
+              break;
+            }
+            // Route to appropriate manager based on node type
+            if (node instanceof Node) {
+              const nodeType = (node as Node).type;
+              if (nodeType === 'information') {
+                if (lifecycle === 'validated') {
+                  await this.informationManager.validateInformation(id);
+                } else if (lifecycle === 'active') {
+                  await this.informationManager.activateInformation(id);
+                } else if (lifecycle === 'archived') {
+                  await this.informationManager.archiveInformation(id);
+                } else {
+                  await this.store.updateNode(id, { lifecycle });
+                }
+              } else {
+                await this.store.updateNode(id, { lifecycle });
+              }
+            } else {
+              await this.store.updateNode(id, { lifecycle });
+            }
+            patched++;
+            break;
+          }
+
+          case 'delete': {
+            if (!force && !dryRun) {
+              errors.push({ line: lineNum, id, error: 'delete op requires --force flag' });
+              break;
+            }
+            const node = this.store.get(id);
+            if (!node) {
+              skipped++;
+              if (dryRun) dryRunActions.push({ line: lineNum, op, id, action: 'skip (not found)' });
+              break;
+            }
+            if (dryRun) {
+              dryRunActions.push({ line: lineNum, op, id, action: 'delete node' });
+              deleted++;
+              break;
+            }
+            await this.store.deleteNode(id);
+            deleted++;
+            break;
+          }
+
+          default:
+            errors.push({ line: lineNum, id, error: `Unknown op: ${op}. Use: node, edge, patch, lifecycle, delete` });
+        }
+      } catch (err: any) {
+        errors.push({ line: lineNum, id, error: err.message });
+      }
+    }
+
+    const summary = { created, skipped, patched, deleted, errors: errors.length };
+
+    if (dryRun) {
+      if (this.outputFormat.isAgent) {
+        this.output({ operation: 'apply', dryRun: true, actions: dryRunActions, summary });
+      } else {
+        console.log(`[dry-run] ${created} would create, ${skipped} would skip, ${patched} would patch, ${deleted} would delete, ${errors.length} error(s)`);
+        for (const a of dryRunActions) {
+          console.log(`  line ${a.line}: ${a.op} ${a.id} -> ${a.action}`);
+        }
+        if (errors.length > 0) {
+          console.log('\nErrors:');
+          for (const e of errors) console.log(`  line ${e.line}${e.id ? ` (${e.id})` : ''}: ${e.error}`);
+        }
+      }
+      return;
+    }
+
+    if (this.outputFormat.isAgent) {
+      this.output({ operation: 'apply', summary, errors });
+    } else {
+      console.log(`${created} created, ${skipped} skipped, ${patched} patched, ${deleted} deleted, ${errors.length} error(s)`);
+      if (errors.length > 0) {
+        console.log('\nErrors:');
+        for (const e of errors) console.log(`  line ${e.line}${e.id ? ` (${e.id})` : ''}: ${e.error}`);
       }
     }
   }
@@ -4656,7 +4944,7 @@ Before ending a session:
         operation: 'embed',
         nodeId,
         dimensions: embedding.length,
-        model: '@cf/baai/bge-base-en-v1.5',
+        model: 'google/gemini-embedding-001',
         customText: !!named.text
       });
     } catch (error: any) {
@@ -5713,7 +6001,8 @@ Before ending a session:
         this.error(error.message);
       }
     } else {
-      this.error(`Unknown command: ${commandName}`);
+      const available = Array.from(this.commands.keys()).sort().join(', ');
+      this.error(`Unknown command: ${commandName}. Available: ${available}. Run "ug help" for docs or "ug task" for task management.`);
     }
   }
 
@@ -5781,7 +6070,7 @@ Before ending a session:
 
 // Run CLI if called directly
 if (import.meta.main) {
-  const dataDir = process.env.UGS_DATA_DIR || './data';
+  const dataDir = process.env.UGS_DATA_DIR || './.ug';
 
   // Create execution context from environment (loads credentials)
   const ctx = createContextFromEnv({ id: 'cli', type: 'human' });
