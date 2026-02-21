@@ -5,11 +5,15 @@ import GraphStore from '../graph.ts';
 // Counter to ensure unique data directories per test
 let testCounter = 0;
 
+// Canonical model after migration to Google Gemini embedding
+const EXPECTED_MODEL = 'google/gemini-embedding-001';
+const EXPECTED_DIMENSIONS = 3072;
+
 // Mock embedding function for unit tests
 // Returns a deterministic embedding based on the text (for testing)
 function mockEmbed(text: string): number[] {
   // Simple hash-based deterministic embedding for testing
-  const embedding = new Array(768).fill(0);
+  const embedding = new Array(EXPECTED_DIMENSIONS).fill(0);
   let hash = 0;
   for (let i = 0; i < text.length; i++) {
     hash = ((hash << 5) - hash) + text.charCodeAt(i);
@@ -17,7 +21,7 @@ function mockEmbed(text: string): number[] {
   }
 
   // Fill embedding with deterministic values
-  for (let i = 0; i < 768; i++) {
+  for (let i = 0; i < EXPECTED_DIMENSIONS; i++) {
     embedding[i] = Math.sin(hash + i) * 0.5;
   }
 
@@ -90,7 +94,7 @@ describe('EmbeddingManager', () => {
       const embedding = await manager.embedNode('test-node');
 
       expect(embedding).toBeDefined();
-      expect(embedding.length).toBe(768);
+      expect(embedding.length).toBe(EXPECTED_DIMENSIONS);
     });
 
     test('stores embedding in node properties', async () => {
@@ -102,7 +106,7 @@ describe('EmbeddingManager', () => {
 
       const node = store.get('store-test');
       expect(node?.properties.get('embedding')).toBeDefined();
-      expect(node?.properties.get('embeddingModel')).toBe('@cf/baai/bge-base-en-v1.5');
+      expect(node?.properties.get('embeddingModel')).toBe(EXPECTED_MODEL);
       expect(node?.properties.get('embeddingTimestamp')).toBeDefined();
     });
 
@@ -118,20 +122,20 @@ describe('EmbeddingManager', () => {
       const dimensions = node?.properties.get('embeddingDimensions');
 
       // Should store dimensions
-      expect(dimensions).toBe(768);
+      expect(dimensions).toBe(EXPECTED_DIMENSIONS);
 
       // Should be base64, not JSON (base64 doesn't start with '[')
       expect(embeddingStr).toBeDefined();
       expect(embeddingStr.startsWith('[')).toBe(false);
 
-      // Base64 for 768 floats should be ~4KB, JSON would be ~15KB
+      // Base64 for 3072 floats should be smaller than JSON representation
       const jsonSize = JSON.stringify(mockEmbed('test')).length;
       expect(embeddingStr.length).toBeLessThan(jsonSize);
 
       // Should decode correctly
       const retrieved = manager.getNodeEmbedding('base64-test');
       expect(retrieved).toBeDefined();
-      expect(retrieved!.length).toBe(768);
+      expect(retrieved!.length).toBe(EXPECTED_DIMENSIONS);
 
       // Values should be close to original (float32 precision)
       const original = mockEmbed('base64-test document Test content for base64');
@@ -167,7 +171,7 @@ describe('EmbeddingManager', () => {
 
       // Node ID is included in text, so embedding should work
       const embedding = await manager.embedNode('minimal-node');
-      expect(embedding.length).toBe(768);
+      expect(embedding.length).toBe(EXPECTED_DIMENSIONS);
     });
 
     test('emits NODE_EMBEDDED event', async () => {
@@ -182,7 +186,7 @@ describe('EmbeddingManager', () => {
 
       const embedEvent = events.find(e => e.type === 'NODE_EMBEDDED' && e.data.nodeId === 'event-test');
       expect(embedEvent).toBeDefined();
-      expect(embedEvent!.data.model).toBe('@cf/baai/bge-base-en-v1.5');
+      expect(embedEvent!.data.model).toBe(EXPECTED_MODEL);
     });
   });
 
@@ -206,7 +210,7 @@ describe('EmbeddingManager', () => {
 
       const embedding = manager.getNodeEmbedding('has-embedding');
       expect(embedding).toBeDefined();
-      expect(embedding!.length).toBe(768);
+      expect(embedding!.length).toBe(EXPECTED_DIMENSIONS);
     });
   });
 
@@ -367,8 +371,8 @@ describe('EmbeddingManager', () => {
 
       expect(stats.totalNodes).toBeGreaterThanOrEqual(3);
       expect(stats.embeddedNodes).toBe(2);
-      expect(stats.model).toBe('@cf/baai/bge-base-en-v1.5');
-      expect(stats.dimensions).toBe(768);
+      expect(stats.model).toBe(EXPECTED_MODEL);
+      expect(stats.dimensions).toBe(EXPECTED_DIMENSIONS);
     });
   });
 

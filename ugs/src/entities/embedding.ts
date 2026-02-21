@@ -3,8 +3,8 @@
  * Embedding Entity for Universal Graph System
  *
  * Provides embedding generation and similarity search capabilities.
- * Uses Cloudflare Workers AI for embeddings via the existing AI Gateway.
- * Model: @cf/baai/bge-base-en-v1.5 (768 dimensions)
+ * Uses Google Gemini embedding model via the ai CLI binary.
+ * Model: google/gemini-embedding-001 (3072 dimensions MRL)
  */
 
 import { homedir } from 'node:os';
@@ -51,9 +51,9 @@ export class EmbeddingManager {
   private embeddingEvents: EmbeddingEvent[] = [];
   private eventCounter = 0;
 
-  // Cloudflare Workers AI model
-  private readonly MODEL = '@cf/baai/bge-base-en-v1.5';
-  private readonly EMBEDDING_DIMENSIONS = 768;
+  // Google Gemini embedding model (canonical)
+  private readonly MODEL = 'google/gemini-embedding-001';
+  private readonly EMBEDDING_DIMENSIONS = 3072;
 
   constructor(store: GraphStore) {
     this.store = store;
@@ -148,7 +148,7 @@ export class EmbeddingManager {
     const aiPath = process.env.AI_PATH
       ?? join(homedir(), '.claude/skills/ai/app/ai');
 
-    const proc = Bun.spawn([aiPath, 'embed', '--model=embed-workers', text], {
+    const proc = Bun.spawn([aiPath, 'embed', '--model=google/gemini-embedding-001', text], {
       stdout: 'pipe',
       stderr: 'pipe',
     });
