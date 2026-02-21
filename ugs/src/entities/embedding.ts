@@ -7,8 +7,9 @@
  * Model: @cf/baai/bge-base-en-v1.5 (768 dimensions)
  */
 
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import GraphStore, { Node } from '../graph.ts';
-import { getCurrentContext, ExecutionContext } from '../context.ts';
 
 // Embedding event types
 export type EmbeddingEventType =
@@ -41,16 +42,6 @@ export interface SimilaritySearchOptions {
   minSimilarity?: number;  // Minimum similarity threshold (default 0)
 }
 
-// Cloudflare Workers AI response type
-interface CloudflareEmbeddingResponse {
-  result: {
-    shape: number[];
-    data: number[][];
-  };
-  success: boolean;
-  errors: any[];
-  messages: any[];
-}
 
 /**
  * EmbeddingManager - Manages embeddings and similarity search
@@ -151,58 +142,35 @@ export class EmbeddingManager {
   }
 
   /**
-   * Get embedding vector from Cloudflare Workers AI
+   * Get embedding vector via the `ai` CLI binary
    */
-  async embed(text: string, ctx?: ExecutionContext): Promise<number[]> {
-    const context = ctx || getCurrentContext();
+  async embed(text: string): Promise<number[]> {
+    const aiPath = process.env.AI_PATH
+      ?? join(homedir(), '.claude/skills/ai/app/ai');
 
-    // Support both /ai config names (CF_*) and standard names (CLOUDFLARE_*)
-    const accountId = context.getCredential('CLOUDFLARE_ACCOUNT_ID')
-                   || context.getCredential('CF_ACCOUNT_ID');
-    // Workers AI requires a Cloudflare API token with "Workers AI Read" permission
-    // This is separate from the AI Gateway token used for unified billing
-    const apiToken = context.getCredential('CLOUDFLARE_WORKERS_AI_TOKEN')
-                  || context.getCredential('CLOUDFLARE_API_TOKEN')
-                  || context.getCredential('CF_AIG_TOKEN');
-
-    if (!accountId) {
-      throw new Error('CLOUDFLARE_ACCOUNT_ID or CF_ACCOUNT_ID not found in context or environment');
-    }
-
-    if (!apiToken) {
-      throw new Error('CLOUDFLARE_WORKERS_AI_TOKEN, CLOUDFLARE_API_TOKEN, or CF_AIG_TOKEN not found in context or environment');
-    }
-
-    // Cloudflare Workers AI direct API (not unified billing - requires separate API token)
-    const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${this.MODEL}`;
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiToken}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        text: [text]  // API expects array of texts
-      })
+    const proc = Bun.spawn([aiPath, 'embed', '--model=embed-workers', text], {
+      stdout: 'pipe',
+      stderr: 'pipe',
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Cloudflare AI API error: ${response.status} - ${errorText}`);
+    await proc.exited;
+
+    if (proc.exitCode !== 0) {
+      const stderr = await new Response(proc.stderr).text();
+      throw new Error(`ai embed failed (exit ${proc.exitCode}): ${stderr}`);
     }
 
-    const data = await response.json() as CloudflareEmbeddingResponse;
+    const stdout = await new Response(proc.stdout).text();
+    const result = JSON.parse(stdout.trim()) as {
+      embeddings: Array<{ index: number; vector: number[] }>;
+      dimensions: number;
+    };
 
-    if (!data.success) {
-      throw new Error(`Cloudflare AI embedding failed: ${JSON.stringify(data.errors)}`);
+    if (!result.embeddings?.[0]?.vector) {
+      throw new Error(`ai embed returned no embeddings: ${stdout}`);
     }
 
-    if (!data.result?.data?.[0]) {
-      throw new Error('No embedding returned from Cloudflare AI');
-    }
-
-    return data.result.data[0];
+    return result.embeddings[0].vector;
   }
 
   /**
