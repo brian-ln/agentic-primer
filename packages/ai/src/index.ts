@@ -12,7 +12,8 @@
  *   ai/gateway/<namespace>          — AI gateway proxy (e.g. ai/gateway/bln_ai)
  *   ai/inference/<ns>/<prov>/<model> — LLM inference (e.g. ai/inference/bln_ai/nim/kimi-k2.5)
  *   ai/tts/<ns>/<prov>/<voice>      — text-to-speech (e.g. ai/tts/bln_ai/deepgram/aura-2)
- *   ai/stt/<ns>/<prov>/<model>      — speech-to-text (e.g. ai/stt/bln_ai/deepgram/nova-3)
+ *   ai/stt/<ns>/<prov>/<model>      — speech-to-text batch REST (e.g. ai/stt/bln_ai/deepgram/nova-3)
+ *   ai/flux/<namespace>             — real-time STT relay via @cf/deepgram/flux WS (e.g. ai/flux/bln_ai)
  *   ai/embeddings/<ns>/<prov>/<mod> — embeddings (e.g. ai/embeddings/bln_ai/nim/llama-3.3)
  *   ai/credentials/<target>         — credential store (e.g. ai/credentials/cf-aig)
  *
@@ -51,6 +52,14 @@ export type { TtsActorConfig, TtsAddress } from './tts-actor.ts';
 export { SttActor, SystemSttActor, createSttFactory, parseSttAddress } from './stt-actor.ts';
 export type { SttActorConfig, SttAddress } from './stt-actor.ts';
 
+export {
+  FluxRelayActor,
+  SystemFluxRelayActor,
+  createFluxRelayFactory,
+  parseFluxRelayAddress,
+} from './flux-relay-actor.ts';
+export type { FluxRelayActorConfig, FluxRelayAddress } from './flux-relay-actor.ts';
+
 export { SessionActor, createSessionFactory } from './session-actor.ts';
 export type { SessionActorConfig } from './session-actor.ts';
 
@@ -76,6 +85,12 @@ export const AI_PREFIXES = {
   TTS: 'ai/tts/',
   /** Speech-to-text actors: ai/stt/<ns>/<provider>/<model> */
   STT: 'ai/stt/',
+  /**
+   * Real-time STT relay actors via @cf/deepgram/flux streaming WebSocket.
+   * One actor per namespace, shared upstream WS for all channels.
+   * ai/flux/<namespace>
+   */
+  FLUX: 'ai/flux/',
   /** Embedding actors: ai/embeddings/<ns>/<provider>/<model> */
   EMBEDDINGS: 'ai/embeddings/',
   /** Credential store actors: ai/credentials/<target> */
@@ -104,6 +119,11 @@ export function ttsAddress(namespace: string, provider: string, voice: string): 
 /** Build an STT actor address. */
 export function sttAddress(namespace: string, provider: string, model: string): string {
   return `${AI_PREFIXES.STT}${namespace}/${provider}/${model}`;
+}
+
+/** Build a FluxRelay actor address. */
+export function fluxRelayAddress(namespace: string): string {
+  return `${AI_PREFIXES.FLUX}${namespace}`;
 }
 
 /** Build an embeddings actor address. */

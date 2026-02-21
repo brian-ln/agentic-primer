@@ -101,6 +101,13 @@ export interface SttTranscriptPayload {
   words?: SttWord[];
 }
 
+export interface SttErrorPayload {
+  /** Human-readable error description. */
+  error: string;
+  /** Optional channel identifier from the originating channel open. */
+  channelId?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Credentials
 // ---------------------------------------------------------------------------
@@ -166,6 +173,8 @@ export const AI_MESSAGE_TYPES = {
   STT_START: 'ai.stt.start',
   STT_STOP: 'ai.stt.stop',
   STT_TRANSCRIPT: 'ai.stt.transcript',
+  /** Upstream failure notification — sent to all active senders when Flux WS drops. */
+  STT_ERROR: 'ai.stt.error',
   SESSION_CREATE: 'ai.session.create',
   SESSION_END: 'ai.session.end',
   SESSION_STATE: 'ai.session.state',
