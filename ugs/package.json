@@ -45,6 +45,7 @@
   "license": "MIT",
   "dependencies": {
     "@agentic-primer/actors": "workspace:*",
+    "@agentic-primer/auth-client": "workspace:*",
     "@agentic-primer/protocols": "workspace:*",
     "@agentic-primer/knowledge": "workspace:*",
     "@ai-sdk/anthropic": "^3.0.23",

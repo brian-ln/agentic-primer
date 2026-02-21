@@ -19,6 +19,7 @@ import { ProjectManager, ProjectStatus } from './src/entities/project.ts';
 import { createContextFromEnv, runWithContextAsync } from './src/context.ts';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
+import { getToken, getCachedToken, clearToken, runDeviceFlow } from '@agentic-primer/auth-client';
 
 interface OutputFormat {
   isAgent: boolean;
@@ -1606,6 +1607,14 @@ class UGSCLI {
       }
     });
 
+    // Query DSL CLI surface
+    this.commands.set('query', {
+      description: 'Execute a graph query: query <json> [--format json|table|ids] [--limit N]',
+      handler: async (args: string[]) => {
+        await this.handleQuery(args);
+      }
+    });
+
     // Generic graph-level JSONL bulk mutations
     this.commands.set('apply', {
       description: 'Apply JSONL mutations to the graph: apply [--file <path>] [--dry-run] [--force]',
@@ -1613,6 +1622,255 @@ class UGSCLI {
         await this.handleApply(args);
       }
     });
+
+    // Auth command
+    this.commands.set('auth', {
+      description: 'Manage brianln.ai authentication: auth <login|status|token|logout>',
+      handler: async (args: string[]) => {
+        const subcommand = args[0] ?? 'status';
+        switch (subcommand) {
+          case 'login':
+            await this.handleAuthLogin();
+            break;
+          case 'status':
+            await this.handleAuthStatus();
+            break;
+          case 'token':
+            await this.handleAuthToken();
+            break;
+          case 'logout':
+            await this.handleAuthLogout();
+            break;
+          default:
+            this.error(`Unknown auth subcommand: "${subcommand}". Valid: login|status|token|logout`);
+        }
+      }
+    });
+  }
+
+  // === QUERY COMMAND ===
+
+  /**
+   * Execute a graph query and output results.
+   *
+   * Accepts two input formats:
+   *
+   * 1. Simple format (for quick CLI use):
+   *    { "type": "match", "pattern": "information/*", "filters": { "state": "active" } }
+   *    - "pattern": glob-style path pattern matching node IDs (e.g. "task-*", "information/*", "*")
+   *    - "filters": key-value pairs matched against node properties (AND semantics)
+   *    - "nodeType": shorthand for filters.type (node label/type filter)
+   *    - "state": shorthand for filters.state
+   *
+   * 2. Full QueryDefinition format (for power users):
+   *    { "patterns": [...], "filters": [...], "returns": [...] }
+   *
+   * Output formats:
+   *   --format json   (default) JSON array of node objects
+   *   --format ids    one ID per line, pipeable
+   *   --format table  human-readable tabular summary
+   *
+   * Examples:
+   *   ugs query '{"type":"match","pattern":"information/*"}'
+   *   ugs query '{"type":"match","pattern":"*","filters":{"state":"pending"}}' --format ids
+   *   echo '{"type":"match","pattern":"task-*"}' | ugs query
+   */
+  private async handleQuery(args: string[]): Promise<void> {
+    const { positional, named } = this.parseNamedArgs(args);
+
+    const format = named.format || 'json';
+    const limit = named.limit ? parseInt(named.limit, 10) : 1000;
+
+    if (!['json', 'ids', 'table'].includes(format)) {
+      this.error(`Unknown format: ${format}. Use json, ids, or table.`);
+      return;
+    }
+
+    // Read query JSON from first positional arg or stdin
+    let queryJson: string;
+    if (positional.length > 0) {
+      queryJson = positional[0];
+    } else {
+      const chunks: Buffer[] = [];
+      for await (const chunk of process.stdin) {
+        chunks.push(chunk);
+      }
+      queryJson = Buffer.concat(chunks).toString('utf-8').trim();
+    }
+
+    if (!queryJson) {
+      this.error('Missing query. Provide JSON as argument or via stdin.');
+      return;
+    }
+
+    // Parse query JSON
+    let queryInput: Record<string, any>;
+    try {
+      queryInput = JSON.parse(queryJson);
+    } catch (e: any) {
+      this.error(`Invalid JSON query: ${e.message}`);
+      return;
+    }
+
+    // Execute query against the store
+    const results = this.executeStoreQuery(queryInput, limit);
+
+    // Output based on format
+    if (format === 'ids') {
+      // One ID per line — pipeable
+      for (const node of results) {
+        console.log(node.id);
+      }
+    } else if (format === 'table') {
+      if (this.outputFormat.isAgent) {
+        this.output({
+          operation: 'query',
+          results: results.map(n => n.toJSON()),
+          count: results.length,
+        });
+      } else {
+        console.log(`Query returned ${results.length} result(s):\n`);
+        for (const node of results) {
+          const name = node.properties.get('name') || node.properties.get('title') || node.properties.get('content') || '';
+          const props = Object.fromEntries(node.properties);
+          console.log(`  ${node.id} (${node.type || 'unknown'})${name ? ': ' + name : ''}`);
+          const keys = Object.keys(props).filter(k => k !== 'name' && k !== 'title').slice(0, 4);
+          if (keys.length > 0) {
+            console.log(`    ${keys.map(k => `${k}=${JSON.stringify(props[k])}`).join(', ')}`);
+          }
+        }
+      }
+    } else {
+      // json (default)
+      if (this.outputFormat.isAgent) {
+        this.output({
+          operation: 'query',
+          results: results.map(n => n.toJSON()),
+          count: results.length,
+        });
+      } else {
+        console.log(JSON.stringify(results.map(n => n.toJSON()), null, 2));
+      }
+    }
+  }
+
+  /**
+   * Execute a query against the GraphStore directly.
+   *
+   * Supports two input shapes:
+   * - Simple: { type: "match", pattern?: string, filters?: Record, nodeType?: string, state?: string }
+   * - Full QueryDefinition: { patterns: PatternSpec[], filters?: FilterExpression[] }
+   *
+   * Pattern matching:
+   * - "pattern" field is a glob matched against node IDs (e.g. "task-*", "information/*", "*")
+   * - "filters" are property key-value filters (AND semantics)
+   * - "nodeType" maps to node.type filter
+   *
+   * Returns an array of matching Node objects.
+   */
+  private executeStoreQuery(queryInput: Record<string, any>, limit: number): Node[] {
+    // Determine if this is simple or full QueryDefinition format
+    const isFullFormat = Array.isArray(queryInput.patterns);
+
+    let patternGlob: string | undefined;
+    let propertyFilters: Record<string, any> = {};
+    let nodeTypeFilter: string | undefined;
+
+    if (isFullFormat) {
+      // Full QueryDefinition format — extract label and where filters from first pattern
+      const firstPattern = queryInput.patterns?.[0];
+      if (firstPattern?.labels?.length > 0) {
+        nodeTypeFilter = firstPattern.labels[0];
+      }
+      if (firstPattern?.where) {
+        propertyFilters = { ...firstPattern.where };
+      }
+      // Additional QueryDefinition-level filters (FilterExpression[]) — handle comparison filters
+      if (Array.isArray(queryInput.filters)) {
+        for (const filter of queryInput.filters) {
+          if (filter.type === 'comparison' && filter.variable && filter.property && filter.value !== undefined) {
+            propertyFilters[filter.property] = filter.value;
+          }
+        }
+      }
+    } else {
+      // Simple format
+      patternGlob = queryInput.pattern as string | undefined;
+      propertyFilters = { ...(queryInput.filters || {}) };
+
+      // Shorthands
+      if (queryInput.nodeType !== undefined) {
+        nodeTypeFilter = queryInput.nodeType as string;
+      }
+      if (queryInput.state !== undefined) {
+        propertyFilters.state = queryInput.state;
+      }
+      // Also accept "id" filter as glob override
+      if (queryInput.id !== undefined) {
+        patternGlob = queryInput.id as string;
+      }
+    }
+
+    // Compile a simple glob to a regex (supports * and ** wildcards, no anchoring on segments)
+    const globToRegex = (glob: string): RegExp => {
+      // Escape regex special chars except * (which we handle specially)
+      const escaped = glob.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+      // Replace ** with a placeholder, then * with [^/]*, then restore **
+      const pattern = escaped
+        .replace(/\*\*/g, '\x00')    // placeholder for **
+        .replace(/\*/g, '[^/]*')     // * matches within a segment
+        .replace(/\x00/g, '.*');     // ** matches across segments
+      return new RegExp(`^${pattern}$`);
+    };
+
+    let candidates: Node[];
+
+    // Narrow candidates using the most selective available index
+    if (nodeTypeFilter !== undefined) {
+      candidates = this.store.getByType(nodeTypeFilter);
+    } else if (Object.keys(propertyFilters).length > 0) {
+      // Use the first property filter as the index key, then filter the rest in-memory
+      const [firstKey, firstValue] = Object.entries(propertyFilters)[0];
+      candidates = this.store.getByProperty(firstKey, firstValue);
+    } else {
+      // Full scan
+      candidates = Array.from(this.store.nodes.values());
+    }
+
+    // Build pattern regex if a glob was provided
+    const patternRegex = patternGlob && patternGlob !== '*' ? globToRegex(patternGlob) : null;
+
+    const results: Node[] = [];
+
+    for (const node of candidates) {
+      if (results.length >= limit) break;
+
+      // Apply glob pattern filter on node ID
+      if (patternRegex && !patternRegex.test(node.id)) {
+        continue;
+      }
+
+      // Apply property filters (AND semantics)
+      let match = true;
+      for (const [key, value] of Object.entries(propertyFilters)) {
+        const nodeValue = node.properties.get(key);
+        if (nodeValue !== value) {
+          match = false;
+          break;
+        }
+      }
+
+      // Apply nodeType filter if not already filtered via index
+      if (match && nodeTypeFilter !== undefined && nodeTypeFilter !== node.type) {
+        match = false;
+      }
+
+      if (match) {
+        results.push(node);
+      }
+    }
+
+    return results;
   }
 
   // === TAG MANAGEMENT HELPERS ===
@@ -3650,8 +3908,10 @@ class UGSCLI {
   // === GENERIC APPLY ===
 
   private async handleApply(args: string[]): Promise<void> {
-    const { named } = this.parseNamedArgs(args);
-    const fileArg = named.file;
+    const { positional, named } = this.parseNamedArgs(args);
+    // Support both positional (ugs apply path/to/ops.jsonl) and named (--file path) arg.
+    // --file wins if both are provided; positional is the first non-flag argument.
+    const fileArg = named.file || positional[0] || undefined;
     const dryRun = 'dry-run' in named || named['dry-run'] !== undefined;
     const force = 'force' in named || named['force'] !== undefined;
 
@@ -3777,6 +4037,12 @@ class UGSCLI {
               errors.push({ line: lineNum, id: edgeId, error: 'Edge op requires source and target fields' });
               break;
             }
+            // Skip-if-exists: idempotent when edge ID is provided and already present
+            if (edgeId && this.store.edges.has(edgeId)) {
+              skipped++;
+              if (dryRun) dryRunActions.push({ line: lineNum, op, id: edgeId, action: 'skip (exists)' });
+              break;
+            }
             if (dryRun) {
               dryRunActions.push({ line: lineNum, op, id: edgeId || `${source}->${target}`, action: `create edge ${source} -[${edgeType || 'untyped'}]-> ${target}` });
               created++;
@@ -3839,6 +4105,45 @@ class UGSCLI {
                 } else if (lifecycle === 'archived') {
                   await this.informationManager.archiveInformation(id);
                 } else {
+                  await this.store.updateNode(id, { lifecycle });
+                }
+              } else if (nodeType === 'task') {
+                // Route task lifecycle changes through TaskManager so events fire correctly.
+                // TaskManager has strict predecessor rules, so we auto-advance through required
+                // intermediate states when needed (matching the applyBatch pattern in task.ts).
+                const currentLifecycle = (
+                  (node as Node).properties.get('lifecycle') ||
+                  (node as Node).properties.get('state') ||
+                  'pending'
+                ) as string;
+                if (lifecycle === 'assigned') {
+                  const assignee = record.assignee || '@(system)';
+                  await this.taskManager.assignTask(id, assignee);
+                } else if (lifecycle === 'in_progress' || lifecycle === 'active') {
+                  // Ensure task is assigned before starting
+                  if (currentLifecycle === 'pending') {
+                    await this.taskManager.assignTask(id, record.assignee || '@(system)');
+                  }
+                  await this.taskManager.startTask(id);
+                } else if (lifecycle === 'completed') {
+                  // Advance through required states to reach completed
+                  if (currentLifecycle === 'pending') {
+                    await this.taskManager.assignTask(id, record.assignee || '@(system)');
+                  }
+                  if (currentLifecycle !== 'in_progress') {
+                    await this.taskManager.startTask(id);
+                  }
+                  await this.taskManager.completeTask(id, record.result);
+                } else if (lifecycle === 'failed') {
+                  if (currentLifecycle === 'pending') {
+                    await this.taskManager.assignTask(id, record.assignee || '@(system)');
+                  }
+                  if (currentLifecycle !== 'in_progress') {
+                    await this.taskManager.startTask(id);
+                  }
+                  await this.taskManager.failTask(id, record.reason || record.failureReason || 'unknown');
+                } else {
+                  // Fallback for unrecognised task lifecycle values (e.g. custom states)
                   await this.store.updateNode(id, { lifecycle });
                 }
               } else {
@@ -6065,6 +6370,72 @@ Before ending a session:
       await this.store.shutdown();
       process.exit(0);
     });
+  }
+
+  // === AUTH COMMAND HANDLERS ===
+
+  private async handleAuthLogin(): Promise<void> {
+    const clientId = 'brainstorm-daemon';
+    process.stderr.write(`Initiating device authorization for client "${clientId}"...\n`);
+    try {
+      await runDeviceFlow(clientId, ['write']);
+      if (this.outputFormat.isAgent) {
+        console.log(JSON.stringify({ ok: true, clientId, message: 'Logged in successfully' }));
+      } else {
+        console.log(`Logged in. Token stored at ~/.config/bln/auth-${clientId}.json`);
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.error(`Login failed: ${message}`);
+    }
+  }
+
+  private async handleAuthStatus(): Promise<void> {
+    const clientId = 'brainstorm-daemon';
+    const cached = getCachedToken(clientId);
+    if (!cached) {
+      if (this.outputFormat.isAgent) {
+        console.log(JSON.stringify({ loggedIn: false, clientId }));
+      } else {
+        console.log(`Not logged in. Run "ugs auth login" to authenticate.`);
+      }
+      return;
+    }
+    const now = Math.floor(Date.now() / 1000);
+    const expired = cached.expires_at < now + 60;
+    const expiresAt = new Date(cached.expires_at * 1000).toISOString();
+    if (this.outputFormat.isAgent) {
+      console.log(JSON.stringify({ loggedIn: !expired, clientId, scope: cached.scope, expiresAt, expired }));
+    } else {
+      if (expired) {
+        console.log(`Token expired at ${expiresAt}. Run "ugs auth login" to re-authenticate.`);
+      } else {
+        console.log(`Logged in (${clientId})`);
+        console.log(`  Scope:   ${cached.scope}`);
+        console.log(`  Expires: ${expiresAt}`);
+      }
+    }
+  }
+
+  private async handleAuthToken(): Promise<void> {
+    const clientId = 'brainstorm-daemon';
+    try {
+      const token = await getToken({ clientId });
+      console.log(token);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.error(`Could not get token: ${message}`);
+    }
+  }
+
+  private async handleAuthLogout(): Promise<void> {
+    const clientId = 'brainstorm-daemon';
+    clearToken(clientId);
+    if (this.outputFormat.isAgent) {
+      console.log(JSON.stringify({ ok: true, clientId, message: 'Logged out' }));
+    } else {
+      console.log(`Logged out. Token removed from ~/.config/bln/auth-${clientId}.json`);
+    }
   }
 }
 

@@ -144,6 +144,7 @@
       },
       "dependencies": {
         "@agentic-primer/actors": "workspace:*",
+        "@agentic-primer/auth-client": "workspace:*",
         "@agentic-primer/knowledge": "workspace:*",
         "@agentic-primer/protocols": "workspace:*",
         "@ai-sdk/anthropic": "^3.0.23",
