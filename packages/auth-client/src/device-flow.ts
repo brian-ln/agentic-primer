@@ -10,7 +10,7 @@
 
 import type { DeviceAuthResponse, TokenApprovedResponse, TokenResponse } from './types.js';
 
-const AUTH_BASE = 'https://brianln.ai';
+const AUTH_BASE = process.env.BLN_AUTH_ISSUER ?? 'https://brianln.ai';
 
 /**
  * Initiate device flow, print instructions to stderr, and poll until the user
