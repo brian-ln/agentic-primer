@@ -1040,6 +1040,12 @@ class UGSCLI {
           case 'backfill':
             await this.handleTagBackfill(subArgs);
             break;
+          case 'repair':
+            await this.handleTagRepair(subArgs);
+            break;
+          case 'validate':
+            await this.handleTagValidate(subArgs);
+            break;
           default:
             this.error(`Unknown tag subcommand: ${subcommand}. Use 'tag' for help.`);
         }
@@ -1447,7 +1453,7 @@ class UGSCLI {
 
     // Session command
     this.commands.set('session', {
-      description: 'Manage sessions: session <create|get|send|history|pause|resume|complete|list> [args...]',
+      description: 'Manage sessions: session <create|get|send|history|pause|resume|complete|list|scan> [args...]',
       handler: async (args: string[]) => {
         if (args.length === 0) {
           this.showSessionHelp();
@@ -1484,6 +1490,15 @@ class UGSCLI {
             break;
           case 'prime':
             await this.handleSessionPrime(subArgs);
+            break;
+          case 'scan':
+            await this.handleSessionScan(subArgs);
+            break;
+          case 'ls':
+            await this.handleSessionLs(subArgs);
+            break;
+          case 'show':
+            await this.handleSessionShow(subArgs);
             break;
           default:
             this.error(`Unknown session subcommand: ${subcommand}. Use 'session' for help.`);
@@ -1670,6 +1685,14 @@ class UGSCLI {
           default:
             this.error(`Unknown auth subcommand: "${subcommand}". Valid: login|status|token|logout`);
         }
+      }
+    });
+
+    // Doctor command
+    this.commands.set('doctor', {
+      description: 'Audit graph integrity: doctor [--fix] [--json] [--checks tag,edge,task,info,session,wal]',
+      handler: async (args: string[]) => {
+        await this.handleDoctor(args);
       }
     });
   }
@@ -1909,22 +1932,67 @@ class UGSCLI {
         subcommands: {
           add: 'Add tags to a node: tag add <node-id> <tag1> [tag2...]',
           remove: 'Remove tags from a node: tag remove <node-id> <tag1> [tag2...]',
-          list: 'List tags for a node: tag list <node-id>'
+          list: 'List tags for a node: tag list <node-id>',
+          find: 'Find nodes by tag: tag find <tag>',
+          backfill: 'Create graph tag nodes from property tags: tag backfill [--dry-run]',
+          repair: 'Remove garbage tag nodes and edges: tag repair [--backfill]',
+          validate: 'Audit tag integrity without modifying anything: tag validate'
         },
-        notes: 'Tags are stored in node.properties.tags as an array. Use "nodes --tag <tag>" to filter nodes by tag.'
+        notes: 'Tags are stored in node.properties.tags as an array. Use "nodes --tag <tag>" to filter nodes by tag. Valid tag names: length >= 2, alphanumeric/underscore/hyphen/dot only.'
       });
     } else {
-      console.log('\n🏷️  Tag Management Commands\n');
+      console.log('\nTag Management Commands\n');
       console.log('Subcommands:');
       console.log('  add <node-id> <tag1> [tag2...]     Add tags to a node');
       console.log('  remove <node-id> <tag1> [tag2...]  Remove tags from a node');
       console.log('  list <node-id>                     List tags for a node');
+      console.log('  find <tag>                         Find nodes with a tag');
+      console.log('  backfill [--dry-run]               Create graph tag nodes from property tags');
+      console.log('  repair [--backfill]                Remove garbage tag nodes and edges');
+      console.log('  validate                           Audit tag integrity (exits 1 if issues found)');
       console.log('\nExamples:');
       console.log('  ./ugs tag add alice important vip');
       console.log('  ./ugs tag remove alice vip');
       console.log('  ./ugs tag list alice');
       console.log('  ./ugs nodes --tag important        # Find all nodes with tag');
+      console.log('  ./ugs tag backfill --dry-run       # Preview backfill');
+      console.log('  ./ugs tag repair --backfill        # Fix corruption + re-wire');
+      console.log('  ./ugs tag validate                 # Check tag integrity');
     }
+  }
+
+  /**
+   * Parse the `tags` property from a node, handling:
+   *   - string[]  → returned as-is
+   *   - string    → JSON.parse'd; if result is not an array, returns []
+   *   - null/undefined/empty string → []
+   *
+   * Only returns tags that pass isValidTagName(). Invalid items are silently
+   * dropped so callers never see garbage single-character or punctuation tags.
+   */
+  private parseTagsProperty(raw: unknown): string[] {
+    let arr: unknown[];
+    if (Array.isArray(raw)) {
+      arr = raw;
+    } else if (typeof raw === 'string' && raw.trim().length > 0) {
+      try {
+        const parsed = JSON.parse(raw);
+        arr = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    } else {
+      return [];
+    }
+    return arr.filter((t): t is string => typeof t === 'string' && this.isValidTagName(t));
+  }
+
+  /**
+   * Returns true if the tag name is valid: at least 2 characters and only
+   * alphanumeric, underscore, hyphen, or dot characters.
+   */
+  private isValidTagName(name: string): boolean {
+    return name.length >= 2 && /^[a-zA-Z0-9_\-\.]+$/.test(name);
   }
 
   private async handleTagAdd(args: string[]): Promise<void> {
@@ -2019,7 +2087,9 @@ class UGSCLI {
       .map((e: any) => e.to.slice(4));
 
     // Fallback: property-based tags (for nodes not yet backfilled)
-    const propTags: string[] = this.store.getNodeTags(nodeId);
+    // Use parseTagsProperty to handle JSON-encoded strings gracefully
+    const rawNodeTags = this.store.nodes.get(nodeId)?.properties.get('tags');
+    const propTags: string[] = this.parseTagsProperty(rawNodeTags);
 
     // Merge: graph tags are authoritative, prop tags fill gaps
     const allTags = Array.from(new Set([...graphTags, ...propTags]));
@@ -2098,45 +2168,313 @@ class UGSCLI {
     }
   }
 
-  private async handleTagBackfill(_args: string[]): Promise<void> {
+  private async handleTagBackfill(args: string[]): Promise<void> {
+    const { named } = this.parseNamedArgs(args);
+    const dryRun = named['dry-run'] === 'true';
+
     let tagNodesCreated = 0;
     let edgesCreated = 0;
     let nodesScanned = 0;
+    let skippedInvalidTags = 0;
+    const dryRunActions: Array<{ nodeId: string; tag: string; action: string }> = [];
 
     for (const node of this.store.nodes.values()) {
       if (node.type === 'tag') continue;
 
       const rawTags = node.properties.get('tags');
-      // Tags may be stored as a JSON string (e.g. '["foo","bar"]') or already an array
-      let tags: string[] = [];
-      if (Array.isArray(rawTags)) {
-        tags = rawTags;
-      } else if (typeof rawTags === 'string' && rawTags.length > 0) {
-        try { tags = JSON.parse(rawTags); } catch { /* skip unparseable */ }
+      // Use parseTagsProperty to handle JSON-encoded strings and validate tag names
+      const tags = this.parseTagsProperty(rawTags);
+
+      // Count invalid tags that were silently dropped
+      if (rawTags !== undefined && rawTags !== null && rawTags !== '') {
+        let rawCount = 0;
+        if (Array.isArray(rawTags)) {
+          rawCount = rawTags.length;
+        } else if (typeof rawTags === 'string' && rawTags.trim().length > 0) {
+          try {
+            const parsed = JSON.parse(rawTags);
+            rawCount = Array.isArray(parsed) ? parsed.length : 0;
+          } catch { rawCount = 0; }
+        }
+        skippedInvalidTags += rawCount - tags.length;
       }
-      if (!Array.isArray(tags) || tags.length === 0) continue;
+
+      if (tags.length === 0) continue;
 
       nodesScanned++;
       for (const tag of tags) {
-        const tagNodeId = `tag:${tag}`;
-        if (!this.store.nodes.has(tagNodeId)) {
-          await this.store.addNode(tagNodeId, 'tag', { label: tag, name: tag });
-          tagNodesCreated++;
+        if (!this.isValidTagName(tag)) {
+          process.stderr.write(`[tag backfill] Skipping invalid tag "${tag}" on node ${node.id}\n`);
+          skippedInvalidTags++;
+          continue;
         }
-        const edgeId = `${node.id}--is-a--${tagNodeId}`;
-        if (!this.store.edges.has(edgeId)) {
-          await this.store.addEdge(edgeId, node.id, tagNodeId, 'is-a');
-          edgesCreated++;
+        const tagNodeId = `tag:${tag}`;
+        if (dryRun) {
+          if (!this.store.nodes.has(tagNodeId)) {
+            dryRunActions.push({ nodeId: node.id, tag, action: `would create tag node ${tagNodeId}` });
+            tagNodesCreated++;
+          }
+          const edgeId = `${node.id}--is-a--${tagNodeId}`;
+          if (!this.store.edges.has(edgeId)) {
+            dryRunActions.push({ nodeId: node.id, tag, action: `would create edge ${edgeId}` });
+            edgesCreated++;
+          }
+        } else {
+          if (!this.store.nodes.has(tagNodeId)) {
+            await this.store.addNode(tagNodeId, 'tag', { label: tag, name: tag });
+            tagNodesCreated++;
+          }
+          const edgeId = `${node.id}--is-a--${tagNodeId}`;
+          if (!this.store.edges.has(edgeId)) {
+            await this.store.addEdge(edgeId, node.id, tagNodeId, 'is-a');
+            edgesCreated++;
+          }
         }
       }
     }
 
-    this.success(`Tag backfill complete`, {
-      operation: 'tag-backfill',
-      nodesScanned,
-      tagNodesCreated,
-      edgesCreated
-    });
+    if (dryRun) {
+      this.success(`Tag backfill dry-run complete (no changes written)`, {
+        operation: 'tag-backfill',
+        dryRun: true,
+        nodesScanned,
+        tagNodesCreated,
+        edgesCreated,
+        skippedInvalidTags,
+        actions: dryRunActions
+      });
+    } else {
+      this.success(`Tag backfill complete`, {
+        operation: 'tag-backfill',
+        dryRun: false,
+        nodesScanned,
+        tagNodesCreated,
+        edgesCreated,
+        skippedInvalidTags
+      });
+    }
+  }
+
+  private async handleTagRepair(args: string[]): Promise<void> {
+    const { named } = this.parseNamedArgs(args);
+    const doBackfill = named['backfill'] === 'true';
+
+    // Step 1: Read the WAL to build a map of original tags per node (from NodeAdded events).
+    // This recovers JSON-encoded tags that were corrupted in memory by character-spread.
+    const originalTagsFromWal = new Map<string, string[]>();
+    try {
+      const { readFile } = await import('node:fs/promises');
+      const { join } = await import('node:path');
+      const walPath = join(this.dataDir, 'events.wal');
+      const walContent = await readFile(walPath, 'utf-8');
+      for (const line of walContent.trim().split('\n')) {
+        if (!line.trim()) continue;
+        try {
+          const event = JSON.parse(line);
+          if (event.type === 'NodeAdded' && event.data?.properties?.tags != null) {
+            const rawTags = event.data.properties.tags;
+            const tags = this.parseTagsProperty(rawTags);
+            if (tags.length > 0) {
+              originalTagsFromWal.set(event.data.id, tags);
+            }
+          }
+        } catch { /* skip malformed lines */ }
+      }
+    } catch { /* WAL not readable — skip recovery step */ }
+
+    // Step 2: Collect all tag:* nodes — garbage vs valid
+    const garbageTagNodes: string[] = [];
+    const validTagNodes: string[] = [];
+
+    for (const node of this.store.nodes.values()) {
+      if (node.type !== 'tag') continue;
+      const tagName = node.properties.get('name') as string || node.id.slice(4);
+      if (this.isValidTagName(tagName)) {
+        validTagNodes.push(node.id);
+      } else {
+        garbageTagNodes.push(node.id);
+      }
+    }
+
+    // Step 3: Remove garbage tag nodes and all their edges
+    let edgesRemoved = 0;
+    for (const tagNodeId of garbageTagNodes) {
+      // Remove all edges pointing TO this tag node (is-a edges from content nodes)
+      const incoming = this.store.adjacencyIn.get(tagNodeId) || [];
+      for (const edgeRef of [...incoming]) {
+        if (this.store.edges.has(edgeRef.edgeId)) {
+          await this.store.deleteEdge(edgeRef.edgeId);
+          edgesRemoved++;
+        }
+      }
+      // Remove all edges going FROM this tag node (unlikely but be thorough)
+      const outgoing = this.store.adjacencyOut.get(tagNodeId) || [];
+      for (const edgeRef of [...outgoing]) {
+        if (this.store.edges.has(edgeRef.edgeId)) {
+          await this.store.deleteEdge(edgeRef.edgeId);
+          edgesRemoved++;
+        }
+      }
+      // Remove the tag node itself
+      await this.store.deleteNode(tagNodeId);
+    }
+
+    // Step 4: Remove any dangling is-a edges to now-deleted tag nodes
+    for (const node of this.store.nodes.values()) {
+      if (node.type === 'tag') continue;
+      const outgoing = this.store.adjacencyOut.get(node.id) || [];
+      for (const edgeRef of [...outgoing]) {
+        if (edgeRef.type === 'is-a' && edgeRef.to.startsWith('tag:')) {
+          if (!this.store.nodes.has(edgeRef.to)) {
+            if (this.store.edges.has(edgeRef.edgeId)) {
+              await this.store.deleteEdge(edgeRef.edgeId);
+              edgesRemoved++;
+            }
+          }
+        }
+      }
+    }
+
+    // Step 5: Fix corrupted tags properties on content nodes.
+    // A node's tags property is corrupted if valid tags from the original WAL NodeAdded
+    // are missing from the current in-memory property (e.g. after character-spread corruption).
+    let nodesFixed = 0;
+    for (const node of this.store.nodes.values()) {
+      if (node.type === 'tag') continue;
+      const currentRaw = node.properties.get('tags');
+      const currentValid = this.parseTagsProperty(currentRaw);
+      const walTags = originalTagsFromWal.get(node.id);
+      if (!walTags || walTags.length === 0) continue;
+
+      // Detect corruption: WAL has valid tags that are absent from current in-memory tags
+      const missingFromCurrent = walTags.filter(t => !currentValid.includes(t));
+      if (missingFromCurrent.length > 0) {
+        // Merge: keep any currently-valid tags plus the WAL-recovered ones
+        const mergedTags = Array.from(new Set([...currentValid, ...walTags]));
+        await this.store.updateNode(node.id, { tags: mergedTags });
+        nodesFixed++;
+      }
+    }
+
+    const repairResult = {
+      operation: 'tag-repair',
+      garbageTagNodesRemoved: garbageTagNodes.length,
+      edgesRemoved,
+      validTagNodesKept: validTagNodes.length,
+      nodesTagsFixed: nodesFixed,
+      removedNodes: garbageTagNodes
+    };
+
+    if (doBackfill) {
+      // Re-run backfill after repair to wire the recovered tags into the graph
+      await this.handleTagBackfill([]);
+      this.success(
+        `Repair complete: removed ${garbageTagNodes.length} garbage tag nodes (${edgesRemoved} edges), fixed ${nodesFixed} node tag properties, kept ${validTagNodes.length} valid tag nodes. Backfill re-run.`,
+        { ...repairResult, backfillRun: true }
+      );
+    } else {
+      this.success(
+        `Removed ${garbageTagNodes.length} garbage tag nodes (${edgesRemoved} edges), fixed ${nodesFixed} node tag properties, kept ${validTagNodes.length} valid tag nodes`,
+        repairResult
+      );
+    }
+  }
+
+  private async handleTagValidate(_args: string[]): Promise<void> {
+    const issues: Array<{ type: string; id: string; detail: string }> = [];
+
+    for (const node of this.store.nodes.values()) {
+      if (node.type !== 'tag') continue;
+      const tagName = node.properties.get('name') as string || node.id.slice(4);
+
+      // Check: single-character or invalid tag name
+      if (!this.isValidTagName(tagName)) {
+        issues.push({
+          type: 'invalid-tag-name',
+          id: node.id,
+          detail: `Tag name "${tagName}" fails validation (length >= 2, alphanumeric/underscore/hyphen/dot only)`
+        });
+      }
+
+      // Check: JSON-encoded string stored as tag name
+      if (tagName.startsWith('[') || tagName.startsWith('"')) {
+        issues.push({
+          type: 'json-encoded-tag-name',
+          id: node.id,
+          detail: `Tag name "${tagName}" looks like a JSON-encoded value, not a real tag name`
+        });
+      }
+
+      // Check: orphan tag node (no is-a edges pointing to it)
+      const incoming = this.store.adjacencyIn.get(node.id) || [];
+      const isAEdges = incoming.filter((e: any) => e.type === 'is-a');
+      if (isAEdges.length === 0) {
+        issues.push({
+          type: 'orphan-tag-node',
+          id: node.id,
+          detail: `Tag node ${node.id} has no is-a edges pointing to it (orphan)`
+        });
+      }
+    }
+
+    // Check: nodes whose tags property doesn't match their is-a graph edges (desync)
+    for (const node of this.store.nodes.values()) {
+      if (node.type === 'tag') continue;
+
+      const rawTags = node.properties.get('tags');
+      const propTags = this.parseTagsProperty(rawTags);
+
+      const outgoing = this.store.adjacencyOut.get(node.id) || [];
+      const graphTags = outgoing
+        .filter((e: any) => e.type === 'is-a' && e.to.startsWith('tag:'))
+        .map((e: any) => e.to.slice(4));
+
+      // Find prop tags not in graph
+      const missingFromGraph = propTags.filter(t => !graphTags.includes(t));
+      if (missingFromGraph.length > 0) {
+        issues.push({
+          type: 'prop-tag-not-in-graph',
+          id: node.id,
+          detail: `Node ${node.id} has prop tags not wired in graph: ${missingFromGraph.join(', ')}`
+        });
+      }
+
+      // Find graph tags whose tag node has an invalid name (corruption indicator)
+      const invalidGraphTags = graphTags.filter(t => !this.isValidTagName(t));
+      if (invalidGraphTags.length > 0) {
+        issues.push({
+          type: 'invalid-graph-edge-tag',
+          id: node.id,
+          detail: `Node ${node.id} has is-a edges to invalid tag nodes: ${invalidGraphTags.join(', ')}`
+        });
+      }
+    }
+
+    const hasIssues = issues.length > 0;
+
+    if (this.outputFormat.isAgent) {
+      this.output({
+        operation: 'tag-validate',
+        issueCount: issues.length,
+        issues,
+        clean: !hasIssues
+      });
+    } else {
+      if (hasIssues) {
+        console.log(`\nTag validation found ${issues.length} issue(s):\n`);
+        issues.forEach(issue => {
+          console.log(`  [${issue.type}] ${issue.id}`);
+          console.log(`    ${issue.detail}`);
+        });
+        console.log(`\nRun 'ugs tag repair' to fix garbage tag nodes.`);
+      } else {
+        console.log('Tag graph is clean. No issues found.');
+      }
+    }
+
+    if (hasIssues) {
+      process.exit(1);
+    }
   }
 
   // === ONTOLOGY COMMAND ===
@@ -5217,12 +5555,15 @@ class UGSCLI {
           resume: 'Resume a paused session: session resume <id>',
           complete: 'Complete a session: session complete <id>',
           list: 'List sessions: session list [--state created|active|paused|completed]',
-          prime: 'Inject workflow context: session prime [--mcp] [--no-git] [--no-ctx]'
+          prime: 'Inject workflow context: session prime [--mcp] [--no-git] [--no-ctx]',
+          scan: 'Scan Claude Code JSONL files and create session:{uuid} nodes: session scan [--since <ISO-date>] [--force]',
+          ls: 'List Claude Code session nodes from graph: session ls [--type main|agent|all] [--since <ISO-date>]',
+          show: 'Get a single Claude Code session node: session show <uuid>'
         },
         lifecycle: 'created -> active (first message) -> paused | completed; paused -> active (resumed)'
       });
     } else {
-      console.log('💬 Session Management Commands\n');
+      console.log('Session Management Commands\n');
       console.log('Lifecycle: created -> active (first message) -> paused | completed\n');
       console.log('           paused -> active (resumed)\n');
       console.log('Subcommands:');
@@ -5233,12 +5574,18 @@ class UGSCLI {
       console.log('  pause <id>                                    Pause an active session');
       console.log('  resume <id>                                   Resume a paused session');
       console.log('  complete <id>                                 Complete a session');
-      console.log('  list [--state ...]                            List sessions');
+      console.log('  list [--state ...]                            List UGS-managed sessions');
+      console.log('  scan [--since <ISO>] [--force]               Scan Claude Code JSONL, create session nodes');
+      console.log('  ls [--type main|agent|all] [--since <ISO>]  List Claude Code session nodes');
+      console.log('  show <uuid>                                  Get a single Claude Code session node');
       console.log('\nExamples:');
       console.log('  ./ugs session create my-chat --model claude-fast');
       console.log('  ./ugs session send my-chat "Hello, how are you?"');
       console.log('  ./ugs session history my-chat --limit 10');
       console.log('  ./ugs session complete my-chat');
+      console.log('  ./ugs session scan --since 2026-02-21');
+      console.log('  ./ugs session ls --type main');
+      console.log('  ./ugs session show 418b960c-e2eb-4743-af11-fd7fce97759f');
     }
   }
 
@@ -5465,6 +5812,427 @@ class UGSCLI {
         console.log(`  ${session.id} (${session.state}, v${session.version}): model ${session.data.defaultModel}${owner}`);
       }
     }
+  }
+
+  // === SESSION SCAN / LS / SHOW HANDLERS (Claude Code provenance) ===
+
+  /**
+   * Scan ~/.claude/projects/ for JSONL files, classify them as main/agent/sidechain,
+   * detect parent-child relationships, and create session:{uuid} nodes in the graph.
+   */
+  private async handleSessionScan(args: string[]): Promise<void> {
+    const { named } = this.parseNamedArgs(args);
+    const force = named.force === 'true';
+
+    // Determine cutoff time: --since <ISO> or today's midnight
+    let since: Date;
+    if (named.since) {
+      since = new Date(named.since);
+      if (isNaN(since.getTime())) {
+        this.error(`Invalid --since value: ${named.since}`);
+      }
+    } else {
+      const now = new Date();
+      since = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    }
+
+    const { readdirSync: fsReaddir, statSync: fsStat, readFileSync: fsReadFile } = await import('node:fs');
+    const { homedir } = await import('node:os');
+    const { basename: fsBasename } = await import('node:path');
+
+    const PROJECTS_DIR = join(homedir(), '.claude', 'projects');
+
+    // Collect all JSONL files modified since the cutoff
+    interface JsonlEntry {
+      path: string;
+      sessionId: string;
+      projectDir: string;   // encoded project dir name
+      parentSessionId?: string; // set for subagent files
+      isSubagent: boolean;  // true when under subagents/
+    }
+
+    const entries: JsonlEntry[] = [];
+
+    let projectDirs: string[] = [];
+    try {
+      projectDirs = fsReaddir(PROJECTS_DIR);
+    } catch {
+      this.output({ operation: 'session-scan', error: `Cannot read ${PROJECTS_DIR}`, created: 0, skipped: 0, sessions: [] });
+      return;
+    }
+
+    for (const projectDir of projectDirs) {
+      const projectPath = join(PROJECTS_DIR, projectDir);
+      let dirStat: ReturnType<typeof fsStat>;
+      try {
+        dirStat = fsStat(projectPath);
+      } catch {
+        continue;
+      }
+      if (!dirStat.isDirectory()) continue;
+      if (dirStat.mtime < since) continue;
+
+      // Top-level JSONL files
+      let files: string[] = [];
+      try {
+        files = fsReaddir(projectPath);
+      } catch {
+        continue;
+      }
+
+      for (const file of files) {
+        if (!file.endsWith('.jsonl')) continue;
+        const filePath = join(projectPath, file);
+        let fStat: ReturnType<typeof fsStat>;
+        try {
+          fStat = fsStat(filePath);
+        } catch {
+          continue;
+        }
+        if (fStat.mtime < since) continue;
+        const sessionId = file.replace(/\.jsonl$/, '');
+        entries.push({ path: filePath, sessionId, projectDir, isSubagent: false });
+      }
+
+      // Check for subagent files under <uuid>/subagents/
+      for (const file of files) {
+        const subDir = join(projectPath, file);
+        let subDirStat: ReturnType<typeof fsStat>;
+        try {
+          subDirStat = fsStat(subDir);
+        } catch {
+          continue;
+        }
+        if (!subDirStat.isDirectory()) continue;
+
+        const subagentsDir = join(subDir, 'subagents');
+        let subagentFiles: string[] = [];
+        try {
+          subagentFiles = fsReaddir(subagentsDir);
+        } catch {
+          continue;
+        }
+
+        for (const subFile of subagentFiles) {
+          if (!subFile.endsWith('.jsonl')) continue;
+          const subFilePath = join(subagentsDir, subFile);
+          let sfStat: ReturnType<typeof fsStat>;
+          try {
+            sfStat = fsStat(subFilePath);
+          } catch {
+            continue;
+          }
+          if (sfStat.mtime < since) continue;
+          // The parent session ID is the uuid directory name (file)
+          const agentSessionId = subFile.replace(/\.jsonl$/, '').replace(/^agent-/, '');
+          entries.push({
+            path: subFilePath,
+            sessionId: agentSessionId,
+            projectDir,
+            parentSessionId: file, // the <uuid> directory name = parent session ID
+            isSubagent: true,
+          });
+        }
+      }
+    }
+
+    // For each entry, classify and create a graph node
+    const created: string[] = [];
+    const skipped: string[] = [];
+
+    // Build a set of parent session IDs that spawn agents (detected from JSONL content)
+    // Map: parentSessionId -> Set<agentId> from progress events
+    const parentToAgents = new Map<string, Set<string>>();
+
+    // First pass: scan parent sessions for agentId references in progress events
+    for (const entry of entries) {
+      if (entry.isSubagent) continue; // Only scan top-level sessions for agentId refs
+      try {
+        const content = fsReadFile(entry.path, 'utf-8');
+        const lines = content.split('\n');
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          // Fast check: skip lines that can't contain agentId
+          if (!trimmed.includes('agentId')) continue;
+          try {
+            const event = JSON.parse(trimmed) as Record<string, unknown>;
+            if (typeof event.agentId === 'string' && event.agentId) {
+              if (!parentToAgents.has(entry.sessionId)) {
+                parentToAgents.set(entry.sessionId, new Set());
+              }
+              parentToAgents.get(entry.sessionId)!.add(event.agentId);
+            }
+          } catch {
+            // Skip malformed lines
+          }
+        }
+      } catch {
+        // Skip unreadable files
+      }
+    }
+
+    // Second pass: create nodes and edges
+    for (const entry of entries) {
+      const nodeId = `session:${entry.sessionId}`;
+
+      // Idempotency: skip if already exists (unless --force)
+      const existing = this.store.get(nodeId);
+      if (existing && !force) {
+        skipped.push(entry.sessionId);
+        continue;
+      }
+
+      // Read the file to extract metadata
+      let firstLine = '';
+      let lastTimestamp = '';
+      let startTime = '';
+      let lineCount = 0;
+      let projectPath = '';
+      let agentIdFromFile = '';
+      let isSidechain = false;
+      let hasRealTurns = false; // has user/assistant messages
+
+      try {
+        const content = fsReadFile(entry.path, 'utf-8');
+        const lines = content.split('\n').filter(l => l.trim());
+        lineCount = lines.length;
+
+        for (const line of lines) {
+          try {
+            const event = JSON.parse(line) as Record<string, unknown>;
+
+            // First line for startTime
+            if (!startTime && typeof event.timestamp === 'string') {
+              startTime = event.timestamp;
+            }
+
+            // Track last timestamp
+            if (typeof event.timestamp === 'string') {
+              lastTimestamp = event.timestamp;
+            }
+
+            // Project path from cwd
+            if (!projectPath && typeof event.cwd === 'string') {
+              projectPath = event.cwd;
+            }
+
+            // Agent ID field
+            if (!agentIdFromFile && typeof event.agentId === 'string') {
+              agentIdFromFile = event.agentId;
+            }
+
+            // Sidechain detection
+            if (event.isSidechain === true) {
+              isSidechain = true;
+            }
+
+            // Real turns detection
+            const eventType = event.type as string;
+            if (eventType === 'user' || eventType === 'assistant') {
+              hasRealTurns = true;
+            }
+          } catch {
+            // Skip malformed lines
+          }
+        }
+      } catch {
+        // Skip unreadable files
+      }
+
+      // Classify session type
+      let sessionType: 'main' | 'agent' | 'sidechain';
+      if (entry.isSubagent || isSidechain) {
+        sessionType = isSidechain ? 'sidechain' : 'agent';
+      } else if (agentIdFromFile && isSidechain) {
+        sessionType = 'sidechain';
+      } else {
+        // Top-level file: agent sessions are referenced by parent via agentId
+        // Check if this session ID appears as an agentId in any parent's set
+        let isAgent = false;
+        for (const [, agentSet] of parentToAgents) {
+          if (agentSet.has(entry.sessionId)) {
+            isAgent = true;
+            break;
+          }
+        }
+        sessionType = isAgent ? 'agent' : (hasRealTurns ? 'main' : 'main');
+      }
+
+      // Derive project path: use encoded dir name if we couldn't find cwd
+      if (!projectPath) {
+        // Lossy decode: -Users-bln-play-foo -> /Users/bln/play/foo
+        projectPath = entry.projectDir.replace(/-/g, '/');
+        if (!projectPath.startsWith('/')) projectPath = '/' + projectPath;
+      }
+
+      const properties: Record<string, unknown> = {
+        sessionType,
+        projectPath,
+        startTime: startTime || null,
+        endTime: lastTimestamp || null,
+        lineCount,
+        agentId: agentIdFromFile || null,
+        source: 'claude-code-jsonl',
+        scannedAt: new Date().toISOString(),
+      };
+
+      try {
+        await this.store.addNode(nodeId, 'claude-session', properties);
+        created.push(entry.sessionId);
+
+        // Wire parent -> child spawned edge if we know the parent
+        const parentId = entry.parentSessionId;
+        if (parentId) {
+          const parentNodeId = `session:${parentId}`;
+          const edgeId = `${parentNodeId}-spawned-${nodeId}`;
+          // Best-effort: parent node may not exist yet
+          try {
+            await this.store.addEdge(edgeId, parentNodeId, nodeId, 'spawned', {}, 1);
+          } catch {
+            // parent node may not exist; skip edge
+          }
+        }
+      } catch (err: any) {
+        // If node already exists (race or force=false check race), skip
+        if (!err?.message?.includes('already exists')) {
+          // log but don't fail
+        }
+        skipped.push(entry.sessionId);
+      }
+    }
+
+    // Wire spawned edges from parent sessions to their detected agent sessions
+    // (for top-level agent sessions detected via progress events, not via subagent dir)
+    for (const [parentSessionId, agentIds] of parentToAgents) {
+      const parentNodeId = `session:${parentSessionId}`;
+      for (const agentId of agentIds) {
+        const childNodeId = `session:${agentId}`;
+        const edgeId = `${parentNodeId}-spawned-${childNodeId}`;
+        // Only wire if both nodes exist
+        if (this.store.get(parentNodeId) && this.store.get(childNodeId)) {
+          try {
+            await this.store.addEdge(edgeId, parentNodeId, childNodeId, 'spawned', {}, 1);
+          } catch {
+            // Edge may already exist; ignore
+          }
+        }
+      }
+    }
+
+    this.output({
+      operation: 'session-scan',
+      since: since.toISOString(),
+      created: created.length,
+      skipped: skipped.length,
+      sessions: created,
+    }, `Scanned: ${created.length} created, ${skipped.length} skipped`);
+  }
+
+  /**
+   * List Claude Code session nodes from the graph, with optional type filtering.
+   * Analogous to `ugs session list` but reads from graph nodes, not UGS session manager.
+   */
+  private async handleSessionLs(args: string[]): Promise<void> {
+    const { named } = this.parseNamedArgs(args);
+    const typeFilter = named.type || 'all';
+    let since: Date | null = null;
+
+    if (named.since) {
+      since = new Date(named.since);
+      if (isNaN(since.getTime())) {
+        this.error(`Invalid --since value: ${named.since}`);
+      }
+    } else {
+      // Default: today
+      const now = new Date();
+      since = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    }
+
+    if (!['main', 'agent', 'sidechain', 'all'].includes(typeFilter)) {
+      this.error('Invalid --type. Use: main, agent, sidechain, or all');
+    }
+
+    // Get all nodes of type 'claude-session'
+    const allNodes = this.store.getByType('claude-session');
+
+    // Filter by sessionType
+    let filtered = allNodes;
+    if (typeFilter !== 'all') {
+      filtered = allNodes.filter(n => n.properties.get('sessionType') === typeFilter);
+    }
+
+    // Filter by since (using startTime property)
+    if (since) {
+      const sinceMs = since.getTime();
+      filtered = filtered.filter(n => {
+        const startTime = n.properties.get('startTime') as string | null;
+        if (!startTime) return true; // include if no startTime
+        const t = new Date(startTime).getTime();
+        return isNaN(t) || t >= sinceMs;
+      });
+    }
+
+    // Sort by startTime ascending
+    filtered.sort((a, b) => {
+      const ta = new Date((a.properties.get('startTime') as string) || 0).getTime();
+      const tb = new Date((b.properties.get('startTime') as string) || 0).getTime();
+      return ta - tb;
+    });
+
+    const sessions = filtered.map(n => ({
+      id: n.id,
+      sessionId: n.id.replace(/^session:/, ''),
+      sessionType: n.properties.get('sessionType'),
+      projectPath: n.properties.get('projectPath'),
+      startTime: n.properties.get('startTime'),
+      endTime: n.properties.get('endTime'),
+      lineCount: n.properties.get('lineCount'),
+      agentId: n.properties.get('agentId') || null,
+    }));
+
+    this.output({
+      operation: 'session-ls',
+      filter: typeFilter,
+      since: since?.toISOString() ?? null,
+      count: sessions.length,
+      sessions,
+    }, `Found ${sessions.length} ${typeFilter === 'all' ? '' : typeFilter + ' '}session(s)`);
+  }
+
+  /**
+   * Get a single Claude Code session node with its edges.
+   */
+  private async handleSessionShow(args: string[]): Promise<void> {
+    if (args.length === 0) {
+      this.error('Usage: session show <uuid>');
+    }
+
+    const uuid = args[0];
+    // Support both bare UUID and "session:uuid" form
+    const nodeId = uuid.startsWith('session:') ? uuid : `session:${uuid}`;
+
+    const node = this.store.get(nodeId);
+    if (!node || !(node instanceof Node)) {
+      if (this.outputFormat.isAgent) {
+        this.output({ found: false, id: nodeId });
+      } else {
+        console.log(`Session node not found: ${nodeId}`);
+      }
+      return;
+    }
+
+    // Get edges involving this node
+    const edges = Array.from(this.store.edges.values()).filter(
+      e => e.from === nodeId || e.to === nodeId
+    );
+
+    this.output({
+      id: node.id,
+      type: node.type,
+      properties: Object.fromEntries(node.properties),
+      edges: edges.map(e => ({ id: e.id, from: e.from, to: e.to, type: e.type })),
+    }, `Session: ${node.id}`);
   }
 
   // === SESSION PRIME HANDLER ===
@@ -6790,6 +7558,517 @@ Before ending a session:
       await this.store.shutdown();
       process.exit(0);
     });
+  }
+
+  // === DOCTOR COMMAND HANDLERS ===
+
+  /**
+   * Issue severity levels for doctor checks.
+   */
+  private static readonly SEVERITY_ERROR = 'error';
+  private static readonly SEVERITY_WARNING = 'warning';
+
+  /**
+   * Main entry point for `ugs doctor`.
+   */
+  private async handleDoctor(args: string[]): Promise<void> {
+    const { named } = this.parseNamedArgs(args);
+    const doFix = named['fix'] === 'true';
+    const forceJson = named['json'] === 'true';
+    const checksArg = named['checks'];
+    const enabledChecks = checksArg
+      ? new Set(checksArg.split(',').map(s => s.trim()))
+      : new Set(['edge', 'tag', 'task', 'info', 'session', 'wal']);
+
+    // Collect results per category
+    interface DoctorIssue {
+      severity: 'error' | 'warning';
+      type: string;
+      id: string;
+      detail: string;
+      fixable: boolean;
+    }
+
+    interface CategoryResult {
+      name: string;
+      issues: DoctorIssue[];
+      fixesApplied: number;
+      skipped: boolean;
+    }
+
+    const results: CategoryResult[] = [];
+
+    // --- edge ---
+    if (enabledChecks.has('edge')) {
+      const r = await this.doctorCheckEdges(doFix);
+      results.push(r);
+    }
+
+    // --- tag ---
+    if (enabledChecks.has('tag')) {
+      const r = await this.doctorCheckTags(doFix);
+      results.push(r);
+    }
+
+    // --- task ---
+    if (enabledChecks.has('task')) {
+      const r = await this.doctorCheckTasks();
+      results.push(r);
+    }
+
+    // --- info ---
+    if (enabledChecks.has('info')) {
+      const r = await this.doctorCheckInfo();
+      results.push(r);
+    }
+
+    // --- session ---
+    if (enabledChecks.has('session')) {
+      const r = await this.doctorCheckSessions(doFix);
+      results.push(r);
+    }
+
+    // --- wal ---
+    if (enabledChecks.has('wal')) {
+      const r = await this.doctorCheckWal();
+      results.push(r);
+    }
+
+    // Compute summary
+    const totalErrors = results.reduce((s, r) => s + r.issues.filter(i => i.severity === 'error').length, 0);
+    const totalWarnings = results.reduce((s, r) => s + r.issues.filter(i => i.severity === 'warning').length, 0);
+    const totalFixes = results.reduce((s, r) => s + r.fixesApplied, 0);
+    const allIssues = results.flatMap(r => r.issues.map(i => ({ ...i, category: r.name })));
+
+    if (forceJson || this.outputFormat.isAgent) {
+      this.output({
+        operation: 'doctor',
+        fix: doFix,
+        checks: Array.from(enabledChecks),
+        summary: {
+          errors: totalErrors,
+          warnings: totalWarnings,
+          fixesApplied: totalFixes,
+          clean: totalErrors === 0 && totalWarnings === 0
+        },
+        categories: results.map(r => ({
+          name: r.name,
+          errors: r.issues.filter(i => i.severity === 'error').length,
+          warnings: r.issues.filter(i => i.severity === 'warning').length,
+          fixesApplied: r.fixesApplied,
+          skipped: r.skipped,
+          issues: r.issues
+        })),
+        issues: allIssues
+      });
+    } else {
+      // Human-readable output
+      const LINE = '══════════════════════════════════════';
+      console.log('\nugs doctor');
+      console.log(LINE);
+      for (const r of results) {
+        if (r.skipped) {
+          console.log(`Checking ${r.name.padEnd(22)}  - skipped`);
+          continue;
+        }
+        const errs = r.issues.filter(i => i.severity === 'error').length;
+        const warns = r.issues.filter(i => i.severity === 'warning').length;
+        let status: string;
+        if (errs === 0 && warns === 0) {
+          status = `OK  0 issues`;
+        } else {
+          const parts: string[] = [];
+          if (errs > 0) parts.push(`${errs} error${errs > 1 ? 's' : ''}`);
+          if (warns > 0) parts.push(`${warns} warning${warns > 1 ? 's' : ''}`);
+          status = `!!  ${parts.join(', ')}`;
+        }
+        if (r.fixesApplied > 0) {
+          status += ` (${r.fixesApplied} fixed)`;
+        }
+        console.log(`Checking ${r.name.padEnd(22)}  ${status}`);
+        // Print issue details
+        for (const issue of r.issues) {
+          const prefix = issue.severity === 'error' ? '  ERROR' : '  WARN ';
+          const fixTag = issue.fixable ? ' [fixable]' : '';
+          console.log(`${prefix}${fixTag}  [${issue.type}] ${issue.id}`);
+          console.log(`           ${issue.detail}`);
+        }
+      }
+      console.log(LINE);
+      if (totalErrors === 0 && totalWarnings === 0) {
+        console.log('Graph is clean. No issues found.');
+      } else {
+        const parts: string[] = [];
+        if (totalErrors > 0) parts.push(`${totalErrors} error${totalErrors > 1 ? 's' : ''}`);
+        if (totalWarnings > 0) parts.push(`${totalWarnings} warning${totalWarnings > 1 ? 's' : ''}`);
+        console.log(parts.join(', '));
+        if (totalFixes > 0) {
+          console.log(`${totalFixes} issue${totalFixes > 1 ? 's' : ''} auto-repaired.`);
+        }
+        const fixableRemaining = allIssues.filter(i => i.fixable && i.severity === 'error').length;
+        if (!doFix && fixableRemaining > 0) {
+          console.log(`Run 'ugs doctor --fix' to auto-repair ${fixableRemaining} fixable issue${fixableRemaining > 1 ? 's' : ''}.`);
+        }
+      }
+      console.log('');
+    }
+
+    // Exit codes: 0 = clean, 1 = errors, 2 = fixes applied (no remaining errors)
+    if (doFix && totalFixes > 0 && totalErrors === 0) {
+      process.exit(2);
+    } else if (totalErrors > 0 || totalWarnings > 0) {
+      process.exit(1);
+    }
+    // else exit 0 (implicitly)
+  }
+
+  /**
+   * Check edge integrity: edges whose from/to node doesn't exist.
+   */
+  private async doctorCheckEdges(doFix: boolean): Promise<{
+    name: string; issues: any[]; fixesApplied: number; skipped: boolean;
+  }> {
+    const issues: any[] = [];
+    let fixesApplied = 0;
+
+    for (const edge of this.store.edges.values()) {
+      const fromMissing = !this.store.nodes.has(edge.from);
+      const toMissing = !this.store.nodes.has(edge.to);
+
+      if (fromMissing || toMissing) {
+        const missingEnd = fromMissing && toMissing
+          ? `both endpoints missing (from=${edge.from}, to=${edge.to})`
+          : fromMissing
+            ? `'from' node missing: ${edge.from}`
+            : `'to' node missing: ${edge.to}`;
+
+        issues.push({
+          severity: 'error' as const,
+          type: 'dangling-edge',
+          id: edge.id,
+          detail: `Edge ${edge.id} has ${missingEnd}`,
+          fixable: true
+        });
+
+        if (doFix) {
+          await this.store.deleteEdge(edge.id);
+          fixesApplied++;
+        }
+      }
+    }
+
+    return { name: 'edge integrity', issues, fixesApplied, skipped: false };
+  }
+
+  /**
+   * Check tag integrity by reusing the tag validate logic.
+   * Reports issues, and if --fix runs tag repair.
+   */
+  private async doctorCheckTags(doFix: boolean): Promise<{
+    name: string; issues: any[]; fixesApplied: number; skipped: boolean;
+  }> {
+    const issues: any[] = [];
+    let fixesApplied = 0;
+
+    // Replicate the tag validate logic inline so we get typed issues
+    for (const node of this.store.nodes.values()) {
+      if (node.type !== 'tag') continue;
+      const tagName = node.properties.get('name') as string || node.id.slice(4);
+
+      if (!this.isValidTagName(tagName)) {
+        issues.push({
+          severity: 'error' as const,
+          type: 'invalid-tag-name',
+          id: node.id,
+          detail: `Tag name "${tagName}" fails validation (length >= 2, alphanumeric/underscore/hyphen/dot only)`,
+          fixable: true
+        });
+      }
+
+      if (tagName.startsWith('[') || tagName.startsWith('"')) {
+        issues.push({
+          severity: 'error' as const,
+          type: 'json-encoded-tag-name',
+          id: node.id,
+          detail: `Tag name "${tagName}" looks like a JSON-encoded value, not a real tag name`,
+          fixable: true
+        });
+      }
+
+      const incoming = this.store.adjacencyIn.get(node.id) || [];
+      const isAEdges = incoming.filter((e: any) => e.type === 'is-a');
+      if (isAEdges.length === 0) {
+        issues.push({
+          severity: 'warning' as const,
+          type: 'orphan-tag-node',
+          id: node.id,
+          detail: `Tag node ${node.id} has no is-a edges pointing to it (orphan)`,
+          fixable: false
+        });
+      }
+    }
+
+    // Check prop/graph tag desync
+    for (const node of this.store.nodes.values()) {
+      if (node.type === 'tag') continue;
+      const rawTags = node.properties.get('tags');
+      const propTags = this.parseTagsProperty(rawTags);
+      const outgoing = this.store.adjacencyOut.get(node.id) || [];
+      const graphTags = outgoing
+        .filter((e: any) => e.type === 'is-a' && e.to.startsWith('tag:'))
+        .map((e: any) => e.to.slice(4));
+      const missingFromGraph = propTags.filter((t: string) => !graphTags.includes(t));
+      if (missingFromGraph.length > 0) {
+        issues.push({
+          severity: 'warning' as const,
+          type: 'prop-tag-not-in-graph',
+          id: node.id,
+          detail: `Node ${node.id} has prop tags not wired in graph: ${missingFromGraph.join(', ')}`,
+          fixable: false
+        });
+      }
+      const invalidGraphTags = graphTags.filter((t: string) => !this.isValidTagName(t));
+      if (invalidGraphTags.length > 0) {
+        issues.push({
+          severity: 'error' as const,
+          type: 'invalid-graph-edge-tag',
+          id: node.id,
+          detail: `Node ${node.id} has is-a edges to invalid tag nodes: ${invalidGraphTags.join(', ')}`,
+          fixable: true
+        });
+      }
+    }
+
+    if (doFix) {
+      const fixableCount = issues.filter(i => i.fixable).length;
+      if (fixableCount > 0) {
+        // Delegate to tag repair for actual fix
+        await this.handleTagRepair([]);
+        fixesApplied = fixableCount;
+      }
+    }
+
+    return { name: 'tag integrity', issues, fixesApplied, skipped: false };
+  }
+
+  /**
+   * Check task integrity: invalid lifecycle states, deps pointing to missing tasks.
+   */
+  private async doctorCheckTasks(): Promise<{
+    name: string; issues: any[]; fixesApplied: number; skipped: boolean;
+  }> {
+    const issues: any[] = [];
+    const VALID_LIFECYCLES = new Set(['pending', 'assigned', 'in_progress', 'completed', 'failed']);
+
+    for (const node of this.store.nodes.values()) {
+      if (node.type !== 'task') continue;
+
+      // Check lifecycle validity
+      const lifecycle = node.properties.get('lifecycle') || node.properties.get('state');
+      if (lifecycle && !VALID_LIFECYCLES.has(lifecycle)) {
+        issues.push({
+          severity: 'error' as const,
+          type: 'invalid-task-lifecycle',
+          id: node.id,
+          detail: `Task ${node.id} has invalid lifecycle "${lifecycle}". Valid: ${Array.from(VALID_LIFECYCLES).join('|')}`,
+          fixable: false
+        });
+      }
+
+      // Check dependencies pointing to missing tasks
+      const depsRaw = node.properties.get('dependsOn');
+      if (depsRaw) {
+        let deps: string[] = [];
+        try {
+          deps = typeof depsRaw === 'string' ? JSON.parse(depsRaw) : depsRaw;
+        } catch { /* ignore parse errors */ }
+        if (Array.isArray(deps)) {
+          for (const depId of deps) {
+            if (!this.store.nodes.has(depId)) {
+              issues.push({
+                severity: 'warning' as const,
+                type: 'missing-task-dep',
+                id: node.id,
+                detail: `Task ${node.id} depends on non-existent task: ${depId}`,
+                fixable: false
+              });
+            }
+          }
+        }
+      }
+
+      // Also check dependency edges (depends-on edge type)
+      const outgoing = this.store.adjacencyOut.get(node.id) || [];
+      for (const edgeRef of outgoing) {
+        if (edgeRef.type === 'depends-on' || edgeRef.type === 'dependsOn') {
+          if (!this.store.nodes.has(edgeRef.to)) {
+            // This would also be caught by edge integrity check; skip duplicate
+          }
+        }
+      }
+    }
+
+    return { name: 'task integrity', issues, fixesApplied: 0, skipped: false };
+  }
+
+  /**
+   * Check info node integrity: invalid lifecycle states, malformed content JSON.
+   */
+  private async doctorCheckInfo(): Promise<{
+    name: string; issues: any[]; fixesApplied: number; skipped: boolean;
+  }> {
+    const issues: any[] = [];
+    const VALID_LIFECYCLES = new Set(['draft', 'validated', 'active', 'archived']);
+
+    for (const node of this.store.nodes.values()) {
+      if (node.type !== 'information') continue;
+
+      // Check lifecycle
+      const lifecycle = node.properties.get('lifecycle') || node.properties.get('state');
+      if (lifecycle && !VALID_LIFECYCLES.has(lifecycle)) {
+        issues.push({
+          severity: 'error' as const,
+          type: 'invalid-info-lifecycle',
+          id: node.id,
+          detail: `Info node ${node.id} has invalid lifecycle "${lifecycle}". Valid: ${Array.from(VALID_LIFECYCLES).join('|')}`,
+          fixable: false
+        });
+      }
+
+      // Check content JSON parseable
+      const contentRaw = node.properties.get('content');
+      if (contentRaw !== undefined && contentRaw !== null && typeof contentRaw === 'string') {
+        try {
+          JSON.parse(contentRaw);
+        } catch {
+          issues.push({
+            severity: 'error' as const,
+            type: 'malformed-content-json',
+            id: node.id,
+            detail: `Info node ${node.id} has malformed content JSON: ${String(contentRaw).slice(0, 80)}`,
+            fixable: false
+          });
+        }
+      }
+    }
+
+    return { name: 'info integrity', issues, fixesApplied: 0, skipped: false };
+  }
+
+  /**
+   * Check session node integrity: claude-session nodes whose projectPath doesn't exist on disk.
+   */
+  private async doctorCheckSessions(doFix: boolean): Promise<{
+    name: string; issues: any[]; fixesApplied: number; skipped: boolean;
+  }> {
+    const issues: any[] = [];
+    let fixesApplied = 0;
+
+    for (const node of this.store.nodes.values()) {
+      if (node.type !== 'claude-session') continue;
+
+      const projectPath = node.properties.get('projectPath') as string | undefined;
+      if (projectPath && !existsSync(projectPath)) {
+        issues.push({
+          severity: 'warning' as const,
+          type: 'stale-session-path',
+          id: node.id,
+          detail: `Session node ${node.id} references non-existent projectPath: ${projectPath}`,
+          fixable: true
+        });
+
+        if (doFix) {
+          // Remove all edges of this session node first
+          const outgoing = this.store.adjacencyOut.get(node.id) || [];
+          for (const edgeRef of [...outgoing]) {
+            if (this.store.edges.has(edgeRef.edgeId)) {
+              await this.store.deleteEdge(edgeRef.edgeId);
+            }
+          }
+          const incoming = this.store.adjacencyIn.get(node.id) || [];
+          for (const edgeRef of [...incoming]) {
+            if (this.store.edges.has(edgeRef.edgeId)) {
+              await this.store.deleteEdge(edgeRef.edgeId);
+            }
+          }
+          await this.store.deleteNode(node.id);
+          fixesApplied++;
+        }
+      }
+    }
+
+    return { name: 'session nodes', issues, fixesApplied, skipped: false };
+  }
+
+  /**
+   * Check WAL consistency: scan events.wal for events referencing node IDs
+   * that don't exist in the current in-memory graph (orphan events).
+   * Also checks for duplicate node IDs in WAL NodeAdded events.
+   */
+  private async doctorCheckWal(): Promise<{
+    name: string; issues: any[]; fixesApplied: number; skipped: boolean;
+  }> {
+    const issues: any[] = [];
+    const walPath = join(this.dataDir, 'events.wal');
+
+    if (!existsSync(walPath)) {
+      return { name: 'WAL consistency', issues, fixesApplied: 0, skipped: true };
+    }
+
+    let walContent: string;
+    try {
+      const { readFile } = await import('node:fs/promises');
+      walContent = await readFile(walPath, 'utf-8');
+    } catch {
+      return { name: 'WAL consistency', issues, fixesApplied: 0, skipped: true };
+    }
+
+    const seenNodeIds = new Set<string>();
+    const dupNodeIds = new Set<string>();
+    let malformedLines = 0;
+
+    for (const line of walContent.trim().split('\n')) {
+      if (!line.trim()) continue;
+      let event: any;
+      try {
+        event = JSON.parse(line);
+      } catch {
+        malformedLines++;
+        continue;
+      }
+
+      if (event.type === 'NodeAdded' && event.data?.id) {
+        const nodeId = event.data.id;
+        if (seenNodeIds.has(nodeId)) {
+          dupNodeIds.add(nodeId);
+        }
+        seenNodeIds.add(nodeId);
+      }
+    }
+
+    // Report duplicate NodeAdded events
+    for (const dupId of dupNodeIds) {
+      issues.push({
+        severity: 'warning' as const,
+        type: 'wal-duplicate-node-added',
+        id: dupId,
+        detail: `NodeAdded event appears multiple times in WAL for node: ${dupId}`,
+        fixable: false
+      });
+    }
+
+    // Report malformed lines
+    if (malformedLines > 0) {
+      issues.push({
+        severity: 'warning' as const,
+        type: 'wal-malformed-lines',
+        id: 'events.wal',
+        detail: `WAL contains ${malformedLines} malformed line${malformedLines > 1 ? 's' : ''} that could not be parsed`,
+        fixable: false
+      });
+    }
+
+    return { name: 'WAL consistency', issues, fixesApplied: 0, skipped: false };
   }
 
   // === AUTH COMMAND HANDLERS ===
