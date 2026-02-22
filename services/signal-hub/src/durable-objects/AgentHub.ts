@@ -24,6 +24,9 @@ import type { ActorSystem } from '@agentic-primer/actors';
 import {
   createSessionFactory,
   createFluxRelayFactory,
+  createInferenceFactory,
+  createTtsFactory,
+  createSttFactory,
   AI_PREFIXES,
 } from '@agentic-primer/ai';
 
@@ -77,6 +80,31 @@ export class AgentHub extends DOActorSystem<AgentHubEnv> {
         },
         system,
       ),
+    });
+
+    // --- AI Gateway base URL (shared by inference / tts / stt) ---
+    const aigBaseUrl =
+      `https://gateway.ai.cloudflare.com/v1/${env.CF_ACCOUNT_ID}/${env.CF_GATEWAY_NAME}`;
+
+    // --- InferenceActor factory ---
+    // Provisions InferenceActors at ai/inference/<ns>/<provider>/<model> on demand.
+    system.registerFactory({
+      prefix: AI_PREFIXES.INFERENCE,
+      factory: createInferenceFactory({ gatewayUrl: aigBaseUrl, apiKey: env.CF_AIG_TOKEN }),
+    });
+
+    // --- TtsActor factory ---
+    // Provisions TtsActors at ai/tts/<ns>/<provider>/<voice> on demand.
+    system.registerFactory({
+      prefix: AI_PREFIXES.TTS,
+      factory: createTtsFactory({ gatewayUrl: aigBaseUrl, apiKey: env.CF_AIG_TOKEN }),
+    });
+
+    // --- SttActor factory ---
+    // Provisions SttActors at ai/stt/<ns>/<provider>/<model> on demand.
+    system.registerFactory({
+      prefix: AI_PREFIXES.STT,
+      factory: createSttFactory({ gatewayUrl: aigBaseUrl, apiKey: env.CF_AIG_TOKEN }, system),
     });
 
     // --- FluxRelayActor factory ---

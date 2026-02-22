@@ -301,11 +301,12 @@ export class FluxRelayActor implements MessageHandler {
       };
 
       ws.onclose = (event: CloseEvent) => {
+        const wasConnecting = this.fluxWsState === 'connecting';
         // Only treat as failure if we didn't close it intentionally (code 1000)
         if (event.code !== 1000) {
           this.handleFluxFailure();
         }
-        if (this.fluxWsState === 'connecting') {
+        if (wasConnecting) {
           // WS failed before onopen — resolve so handleStart can return an error response
           this.fluxWsState = 'failed';
           this.fluxWs = null;
