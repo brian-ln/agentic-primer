@@ -937,8 +937,6 @@ export class MessageRouter {
       }
 
       const impl = node.properties.get('impl') as string;
-      const startTime = Date.now();
-
       // Create actor context with ask/tell capabilities
       const actorContext = {
         ask: async (to: string, type: string, payload: any): Promise<any> => {

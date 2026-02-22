@@ -1,4 +1,5 @@
 .wt/
+.wrangler/
 
 # Generated bindings
 core/bindings/typescript/**/*
@@ -47,10 +48,8 @@ data-test-*/
 data/test-*/
 test-data/
 
-# GraphStore runtime state (WAL + snapshots)
-data/events.wal
-data/*.wal
-data/*.snapshot
+# GraphStore runtime state — old data/ pattern fully superseded by .ug/
+data/
 
 # UGS live graph — snapshot is regeneratable (2.8MB, rewritten on every op)
 .ug/snapshot.json

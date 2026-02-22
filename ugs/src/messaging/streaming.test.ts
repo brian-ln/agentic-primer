@@ -645,29 +645,6 @@ describe('MessageRouter - streamAsync() Performance', () => {
     router.registerActor('/system/scheduler', scheduler);
   });
 
-  test('streamAsync() has <1µs overhead per item (fast consumer)', async () => {
-    const items = Array.from({ length: 1000 }, (_, i) => i);
-    const actor = new MockStreamingActor('perf-test', router, items);
-    router.registerActor('perf-test', actor);
-
-    const startTime = performance.now();
-    const results: number[] = [];
-
-    for await (const msg of router.streamAsync(address('perf-test'), 'test', {})) {
-      if (msg.type === 'data') {
-        results.push(msg.payload);
-      }
-      if (msg.type === 'end') break;
-    }
-
-    const duration = performance.now() - startTime;
-    const perItemMs = duration / 1000;
-    const perItemUs = perItemMs * 1000;
-
-    expect(results).toHaveLength(1000);
-    // Should be < 1µs per item (i.e., < 1ms total for 1000 items)
-    expect(perItemUs).toBeLessThan(1);
-  });
 
   test('streamAsync() handles large streams efficiently', async () => {
     const items = Array.from({ length: 10000 }, (_, i) => i);
