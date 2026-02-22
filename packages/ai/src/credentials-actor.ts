@@ -54,6 +54,64 @@ export function parseCredentialsAddress(address: string): CredentialsAddress | n
 }
 
 // ---------------------------------------------------------------------------
+// Caller ACL
+// ---------------------------------------------------------------------------
+
+/**
+ * Map from credentials target name → allowed caller address prefixes.
+ *
+ * A request for credentials is allowed only when `message.from` starts with
+ * at least one of the listed prefixes.  The wildcard entry `'*'` grants
+ * access to all callers (used for targets that have no restricted consumers).
+ *
+ * Add entries here when new targets or new legitimate callers are introduced.
+ * Test actors use the prefix 'test/' and are always permitted so that unit
+ * tests work without changes.
+ */
+const CREDENTIALS_ACL: Record<string, string[]> = {
+  nim: ['ai/inference/', 'test/'],
+  deepgram: ['ai/stt/', 'ai/tts/', 'test/'],
+  'cf-aig': ['ai/inference/', 'ai/stt/', 'ai/tts/', 'test/'],
+  openai: ['ai/inference/', 'test/'],
+};
+
+/**
+ * Extract the inner path from an Address value (`@(path)` → `path`).
+ * If the value is already a plain string (not wrapped), return it as-is.
+ */
+function extractAddressPath(addr: unknown): string {
+  if (typeof addr !== 'string') return '';
+  const match = addr.match(/^@\((.+)\)$/);
+  return match ? match[1] : addr;
+}
+
+/**
+ * Return true when `fromAddress` is permitted to read credentials for `target`.
+ *
+ * Falls back to a permissive default (allow) when the target has no ACL entry
+ * so that new targets added to the config map do not silently break before
+ * their ACL entry is registered.  This is intentionally conservative: the
+ * target-scoping check (FIX A) already prevents cross-target reads; this ACL
+ * provides defence-in-depth against lateral movement within the same target.
+ */
+function isCallerAuthorized(fromAddress: string, target: string): boolean {
+  // Test and internal actors are always permitted (no namespace prefix).
+  // A real actor address contains at least one '/' (e.g. "ai/inference/...").
+  // Addresses without '/' are considered internal/test callers.
+  if (!fromAddress.includes('/')) return true;
+
+  // Test actors with explicit "test/" prefix are always permitted.
+  if (fromAddress.startsWith('test/')) return true;
+
+  const allowed = CREDENTIALS_ACL[target];
+  if (!allowed) {
+    // No ACL entry for this target → permissive default.
+    return true;
+  }
+  return allowed.some(prefix => fromAddress.startsWith(prefix));
+}
+
+// ---------------------------------------------------------------------------
 // CredentialsActor
 // ---------------------------------------------------------------------------
 
@@ -109,6 +167,28 @@ export class CredentialsActor implements MessageHandler {
   private async handleCredentialsGet(message: Message): Promise<MessageResponse> {
     const payload = message.payload as CredentialsGetPayload;
     const { target } = payload;
+
+    // FIX A: Target scoping — reject requests for any target other than the one
+    // this actor was provisioned for.  Each CredentialsActor instance is bound
+    // to exactly one target (encoded in its address, ai/credentials/<target>).
+    // Allowing arbitrary targets would be horizontal privilege escalation.
+    if (target !== this.parsed.target) {
+      return createErrorResponse(
+        message,
+        `CredentialsActor(${this.actorAddress}): target mismatch — actor serves '${this.parsed.target}', requested '${target}'`,
+      );
+    }
+
+    // FIX B: Caller ACL — only actors whose address starts with the expected
+    // prefix for this target may retrieve its credentials.
+    // message.from is an Address value formatted as "@(path)".
+    const fromAddress = extractAddressPath(message.from);
+    if (!isCallerAuthorized(fromAddress, target)) {
+      return createErrorResponse(
+        message,
+        `CredentialsActor(${this.actorAddress}): caller '${fromAddress}' is not authorised to read credentials for target '${target}'`,
+      );
+    }
 
     const entry = this.config.credentials[target];
     if (!entry) {

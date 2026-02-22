@@ -205,8 +205,21 @@ describe('CredentialsActor — ai.credentials.get (known target)', () => {
 // ---------------------------------------------------------------------------
 
 describe('CredentialsActor — ai.credentials.get (unknown target)', () => {
-  it('returns error response for unknown target', async () => {
+  it('returns error response for unknown target (target mismatch from scoping fix)', async () => {
+    // After the target-scoping fix (FIX A), requesting a target other than the
+    // actor's own target is rejected with a "target mismatch" error rather than
+    // "no credentials found", because cross-target reads are now blocked.
     const actor = new CredentialsActor(VALID_ADDRESS, BASE_CONFIG);
+    const response = await actor.receive(
+      msg(AI_MESSAGE_TYPES.CREDENTIALS_GET, { target: 'nonexistent-provider' }),
+    );
+    expect(response.success).toBe(false);
+    expect(response.error).toContain('target mismatch');
+  });
+
+  it('returns error response when actor own target is not in config', async () => {
+    // An actor for a target not present in the config map returns a "no credentials" error.
+    const actor = new CredentialsActor('ai/credentials/nonexistent-provider', BASE_CONFIG);
     const response = await actor.receive(
       msg(AI_MESSAGE_TYPES.CREDENTIALS_GET, { target: 'nonexistent-provider' }),
     );
@@ -216,6 +229,7 @@ describe('CredentialsActor — ai.credentials.get (unknown target)', () => {
   });
 
   it('is case-sensitive — "NIM" != "nim"', async () => {
+    // An actor at ai/credentials/nim rejects a request for target "NIM" (target mismatch).
     const actor = new CredentialsActor(VALID_ADDRESS, BASE_CONFIG);
     const response = await actor.receive(
       msg(AI_MESSAGE_TYPES.CREDENTIALS_GET, { target: 'NIM' }),
