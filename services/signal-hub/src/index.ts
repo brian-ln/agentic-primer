@@ -11,6 +11,7 @@
 import type { Env } from './types';
 import { SignalHub } from './durable-objects/SignalHub';
 import { AgentHub } from './durable-objects/AgentHub';
+import { validateJWT } from './auth/jwt';
 
 // Export Durable Object classes for Cloudflare Workers
 export { SignalHub, AgentHub };
@@ -46,6 +47,35 @@ export default {
       if (!env.AGENT_HUB) {
         return new Response('AgentHub binding not configured', { status: 503 });
       }
+
+      // FIX C: Auth gate — validate bearer token before forwarding to AgentHub.
+      // When AUTH_ENABLED=true, a valid JWT must be provided either via:
+      //   Authorization: Bearer <token>   (preferred for HTTP clients)
+      //   ?token=<token>                  (fallback for WS upgrade, where
+      //                                   custom headers are not always supported)
+      // If no valid token is present, return 401 before any actor is provisioned.
+      if (env.AUTH_ENABLED === 'true') {
+        if (!env.JWT_SECRET) {
+          return new Response('JWT_SECRET not configured', { status: 503 });
+        }
+
+        // Extract token: prefer Authorization header, fall back to ?token= param.
+        const authHeader = request.headers.get('Authorization') ?? '';
+        const tokenFromHeader = authHeader.replace(/^[Bb]earer\s+/, '');
+        const tokenFromParam = url.searchParams.get('token') ?? '';
+        const rawToken = tokenFromHeader || tokenFromParam;
+
+        if (!rawToken) {
+          return new Response('Unauthorized: missing bearer token', { status: 401 });
+        }
+
+        try {
+          await validateJWT(rawToken, env.JWT_SECRET);
+        } catch {
+          return new Response('Unauthorized: invalid or expired token', { status: 401 });
+        }
+      }
+
       // One AgentHub per namespace (namespace-keyed for sharding)
       const namespace = url.searchParams.get('ns') ?? 'default';
       const id = env.AGENT_HUB.idFromName(namespace);
