@@ -8,7 +8,7 @@ The Signal Hub Client enables SEAG's local actor system to communicate with remo
 
 **Architecture:**
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    SEAG/UGS (Local Runtime)                     │
 │                                                                 │

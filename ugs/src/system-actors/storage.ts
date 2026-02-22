@@ -14,7 +14,7 @@
 
 import { Database } from 'bun:sqlite';
 import { Actor, createResponse, createErrorResponse } from '@agentic-primer/actors';
-import type { Message, MessageResponse, MessageRouter } from '@agentic-primer/actors';
+import type { Message, MessageResponse, IMessageRouter } from '@agentic-primer/actors';
 
 /**
  * Storage operations
@@ -53,7 +53,7 @@ export class StorageActor extends Actor {
   private allowedTables: Set<string>;
   private operations: Set<StorageOperation>;
 
-  constructor(id: string, router: MessageRouter, config: StorageActorConfig) {
+  constructor(id: string, router: IMessageRouter, config: StorageActorConfig) {
     super(id, router);
     this.db = new Database(config.dbPath);
     this.allowedTables = new Set(config.allowedTables);

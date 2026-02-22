@@ -10,7 +10,7 @@ This directory contains JSON Schema definitions and generated Zod validators for
 
 ## Architecture
 
-```
+```text
 packages/protocols/
 ├── schema/
 │   └── hub-messages.schema.json    # Source of truth (24 message types)
@@ -180,13 +180,13 @@ git diff packages/protocols/src/hub-messages.validators.ts
 }
 ```
 
-2. **Regenerate:**
+1. **Regenerate:**
 
 ```bash
 pnpm exec tsx scripts/generate-hub-types.ts
 ```
 
-3. **Use in code:**
+1. **Use in code:**
 
 ```typescript
 import { HubMessageValidators } from '@agentic-primer/protocols/hub-messages.validators';

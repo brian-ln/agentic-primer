@@ -250,7 +250,7 @@ const response = await actor.receive({
 
 ### Architecture
 
-```
+```text
 Parent Process (Actor)
   |
   ├─> Spawn subprocess via Bun.spawn()

@@ -14,7 +14,7 @@
  */
 
 import { Actor, createResponse, createErrorResponse } from '@agentic-primer/actors';
-import type { Message, MessageResponse, MessageRouter } from '@agentic-primer/actors';
+import type { Message, MessageResponse, IMessageRouter } from '@agentic-primer/actors';
 
 /**
  * HTTP methods
@@ -119,7 +119,7 @@ export class HTTPClientActor extends Actor {
   private rateLimiter: RateLimiter;
   private defaultTimeout: number;
 
-  constructor(id: string, router: MessageRouter, config: HTTPClientConfig) {
+  constructor(id: string, router: IMessageRouter, config: HTTPClientConfig) {
     super(id, router);
     this.allowedHosts = new Set(config.allowedHosts);
     this.allowedMethods = new Set(config.methods);

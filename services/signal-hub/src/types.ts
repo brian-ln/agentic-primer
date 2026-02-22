@@ -14,8 +14,10 @@ export type { SharedMessage, CanonicalAddress };
 // ===========================
 
 export interface Env {
-  // Durable Object binding
+  // Durable Object bindings
   SIGNAL_HUB: DurableObjectNamespace;
+  /** AgentHub DO — actor mesh for AI capability actors (SessionActor, FluxRelayActor). Optional — only bound when agent-hub route is deployed. */
+  AGENT_HUB?: DurableObjectNamespace;
 
   // Environment variables
   PROTOCOL_VERSION: string;

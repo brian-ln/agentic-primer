@@ -189,7 +189,7 @@ To add a new compute actor type:
 
 All compute actors follow this pattern:
 
-```
+```text
 ┌─────────────────────────────────────────────────────┐
 │              Compute Actor                          │
 │  (UnsafeCode/Worker/Subprocess/Formula/Rules)       │

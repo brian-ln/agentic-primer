@@ -1,5 +1,5 @@
 import { test, expect, describe, beforeEach } from 'bun:test';
-import { ModelManager, Model, ModelLifecycle, SituationParams, StreamingOptions } from './model.ts';
+import { ModelManager, Model, ModelLifecycle, SituationParams, StreamingOptions, InferenceModelConfig } from './model.ts';
 import { ProviderManager } from './provider.ts';
 import GraphStore from '../graph.ts';
 
@@ -51,11 +51,12 @@ describe('ModelManager', () => {
         }
       });
 
-      expect(model.config.name).toBe('Claude Fast');
-      expect(model.config.temperature).toBe(0.7);
-      expect(model.config.maxTokens).toBe(4000);
-      expect(model.config.topP).toBe(0.9);
-      expect(model.config.situations).toEqual({
+      const cfg = model.config as InferenceModelConfig;
+      expect(cfg.name).toBe('Claude Fast');
+      expect(cfg.temperature).toBe(0.7);
+      expect(cfg.maxTokens).toBe(4000);
+      expect(cfg.topP).toBe(0.9);
+      expect(cfg.situations).toEqual({
         coding: { temperature: 0, maxTokens: 8000 },
         creative: { temperature: 0.95 }
       });
@@ -109,7 +110,7 @@ describe('ModelManager', () => {
       expect(model).not.toBeNull();
       expect(model!.id).toBe('get-test');
       expect(model!.config.name).toBe('Get Test Model');
-      expect(model!.config.temperature).toBe(0.5);
+      expect((model!.config as InferenceModelConfig).temperature).toBe(0.5);
     });
   });
 
@@ -123,9 +124,10 @@ describe('ModelManager', () => {
         maxTokens: 2000
       });
 
-      expect(updated.config.name).toBe('Updated Model');
-      expect(updated.config.temperature).toBe(0.8);
-      expect(updated.config.maxTokens).toBe(2000);
+      const updatedCfg = updated.config as InferenceModelConfig;
+      expect(updatedCfg.name).toBe('Updated Model');
+      expect(updatedCfg.temperature).toBe(0.8);
+      expect(updatedCfg.maxTokens).toBe(2000);
       expect(updated.version).toBe(2);
     });
 
@@ -136,7 +138,7 @@ describe('ModelManager', () => {
         situation: { name: 'coding', params: { temperature: 0, maxTokens: 8000 } }
       });
 
-      expect(updated.config.situations).toEqual({
+      expect((updated.config as InferenceModelConfig).situations).toEqual({
         coding: { temperature: 0, maxTokens: 8000 }
       });
     });

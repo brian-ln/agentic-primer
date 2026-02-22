@@ -19,7 +19,7 @@
  */
 
 import { Actor, createResponse, createErrorResponse, createMessage, address } from '@agentic-primer/actors';
-import type { Message, MessageResponse, Address, MessageRouter } from '@agentic-primer/actors';
+import type { Message, MessageResponse, Address, IMessageRouter } from '@agentic-primer/actors';
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -85,7 +85,7 @@ export class SignalHubBridgeActor extends Actor {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private connected = false;
 
-  constructor(router: MessageRouter, config: SignalHubBridgeConfig) {
+  constructor(router: IMessageRouter, config: SignalHubBridgeConfig) {
     super('bridges/signal-hub', router);
     this.config = config;
   }

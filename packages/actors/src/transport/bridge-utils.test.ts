@@ -6,6 +6,12 @@ import {
   deserializeWsMessage,
   routeWsActorMessage,
   makeHeartbeatPong,
+  fnv32a,
+  addressToChannelId,
+  encodeBinaryFrame,
+  decodeBinaryFrame,
+  handleBinaryFrame,
+  binaryChannelMiddleware,
   type WsContext,
   type WsMiddleware,
 } from './bridge-utils.ts';
@@ -363,5 +369,260 @@ describe('makeHeartbeatPong', () => {
       payload: {},
       id: 'test-id',
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fnv32a / addressToChannelId
+// ---------------------------------------------------------------------------
+
+describe('fnv32a', () => {
+  it('returns a number', () => {
+    expect(typeof fnv32a('hello')).toBe('number');
+  });
+
+  it('is deterministic for the same input', () => {
+    const addr = 'ai/inference/bln_ai/nim/kimi-k2.5';
+    expect(fnv32a(addr)).toBe(fnv32a(addr));
+  });
+
+  it('produces different values for different inputs', () => {
+    expect(fnv32a('ai/tts/bln_ai/deepgram/aura-2')).not.toBe(
+      fnv32a('ai/stt/bln_ai/deepgram/nova-3')
+    );
+  });
+
+  it('returns an unsigned 32-bit integer (0 ≤ n ≤ 0xFFFFFFFF)', () => {
+    const h = fnv32a('any-address');
+    expect(h).toBeGreaterThanOrEqual(0);
+    expect(h).toBeLessThanOrEqual(0xFFFFFFFF);
+  });
+
+  it('empty string returns the FNV-1a offset basis', () => {
+    // fnv32a('') = 0x811c9dc5 (2166136261) — offset basis XOR'd with nothing
+    expect(fnv32a('')).toBe(0x811c9dc5);
+  });
+});
+
+describe('addressToChannelId', () => {
+  it('returns same result as fnv32a', () => {
+    const addr = 'ai/stt/bln_ai/deepgram/nova-3';
+    expect(addressToChannelId(addr)).toBe(fnv32a(addr));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// encodeBinaryFrame / decodeBinaryFrame
+// ---------------------------------------------------------------------------
+
+describe('encodeBinaryFrame / decodeBinaryFrame', () => {
+  it('round-trips channelId and payload', () => {
+    const channelId = 0xDEADBEEF;
+    const payload = new Uint8Array([1, 2, 3, 4, 5]);
+    const frame = encodeBinaryFrame(channelId, payload);
+
+    const decoded = decodeBinaryFrame(frame);
+    expect(decoded).not.toBeNull();
+    expect(decoded!.channelId).toBe(channelId >>> 0); // unsigned
+    expect(decoded!.payload).toEqual(payload);
+  });
+
+  it('encoded frame length is 4 + payload.byteLength', () => {
+    const payload = new Uint8Array(100);
+    expect(encodeBinaryFrame(0, payload).byteLength).toBe(104);
+  });
+
+  it('channelId is stored little-endian (first 4 bytes)', () => {
+    const frame = encodeBinaryFrame(1, new Uint8Array(0));
+    expect(frame[0]).toBe(1);
+    expect(frame[1]).toBe(0);
+    expect(frame[2]).toBe(0);
+    expect(frame[3]).toBe(0);
+  });
+
+  it('decodeBinaryFrame returns null for frames shorter than 4 bytes', () => {
+    expect(decodeBinaryFrame(new Uint8Array(3))).toBeNull();
+    expect(decodeBinaryFrame(new Uint8Array(0))).toBeNull();
+  });
+
+  it('handles empty payload', () => {
+    const frame = encodeBinaryFrame(42, new Uint8Array(0));
+    const decoded = decodeBinaryFrame(frame);
+    expect(decoded).not.toBeNull();
+    expect(decoded!.channelId).toBe(42);
+    expect(decoded!.payload.byteLength).toBe(0);
+  });
+
+  it('preserves large channelId (0xFFFFFFFF)', () => {
+    const frame = encodeBinaryFrame(0xFFFFFFFF, new Uint8Array([9]));
+    const decoded = decodeBinaryFrame(frame);
+    expect(decoded!.channelId).toBe(0xFFFFFFFF);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// handleBinaryFrame
+// ---------------------------------------------------------------------------
+
+describe('handleBinaryFrame', () => {
+  it('routes to system.send when channelId is registered', () => {
+    const system = makeSystem();
+    const addr = 'ai/stt/bln_ai/deepgram/nova-3';
+    const channelId = fnv32a(addr);
+    const channelMap = new Map([[channelId, addr]]);
+
+    const payload = new Uint8Array([0xAA, 0xBB]);
+    const frame = encodeBinaryFrame(channelId, payload);
+
+    const routed = handleBinaryFrame(frame, channelMap, system as unknown as ActorSystem);
+
+    expect(routed).toBe(true);
+    expect(system.send).toHaveBeenCalledTimes(1);
+    const [toArg, typeArg, payloadArg] = (system.send as ReturnType<typeof mock>).mock.calls[0];
+    expect(String(toArg)).toBe(`@(${addr})`);
+    expect(typeArg).toBe('audio.frame');
+    expect(payloadArg).toEqual(payload);
+  });
+
+  it('returns false when channelId is not registered', () => {
+    const system = makeSystem();
+    const frame = encodeBinaryFrame(0x12345678, new Uint8Array([1]));
+    const routed = handleBinaryFrame(frame, new Map(), system as unknown as ActorSystem);
+    expect(routed).toBe(false);
+    expect(system.send).not.toHaveBeenCalled();
+  });
+
+  it('returns false for frames shorter than 4 bytes', () => {
+    const system = makeSystem();
+    const routed = handleBinaryFrame(new Uint8Array(2), new Map(), system as unknown as ActorSystem);
+    expect(routed).toBe(false);
+    expect(system.send).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// binaryChannelMiddleware
+// ---------------------------------------------------------------------------
+
+describe('binaryChannelMiddleware', () => {
+  it('registers address and sends channel:opened on channel:open', async () => {
+    const channelMap = new Map<number, string>();
+    const addr = 'ai/tts/bln_ai/deepgram/aura-2';
+    const expectedChannelId = fnv32a(addr);
+    const sent: string[] = [];
+
+    const mw = binaryChannelMiddleware(channelMap);
+    const ctx = makeCtx({ type: 'channel:open', address: addr }, sent);
+    await mw(ctx, mock(noop));
+
+    // Should have registered in the channel map
+    expect(channelMap.get(expectedChannelId)).toBe(addr);
+
+    // Should have sent channel:opened
+    expect(sent).toHaveLength(1);
+    const opened = JSON.parse(sent[0]);
+    expect(opened.type).toBe('channel:opened');
+    expect(opened.channelId).toBe(expectedChannelId);
+    expect(opened.address).toBe(addr);
+  });
+
+  it('consumes channel:open — does not call next()', async () => {
+    const channelMap = new Map<number, string>();
+    const next = mock(noop);
+    const mw = binaryChannelMiddleware(channelMap);
+    const ctx = makeCtx({ type: 'channel:open', address: 'ai/stt/bln_ai/deepgram/nova-3' });
+    await mw(ctx, next);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('sends channel:error on channelId collision (different address)', async () => {
+    const addr1 = 'ai/tts/bln_ai/deepgram/aura-2';
+    const channelId = fnv32a(addr1);
+    // Pre-populate map with a different address that hashes to the same id
+    const channelMap = new Map([[channelId, 'some/other/address']]);
+    const sent: string[] = [];
+
+    const mw = binaryChannelMiddleware(channelMap);
+    const ctx = makeCtx({ type: 'channel:open', address: addr1 }, sent);
+    await mw(ctx, mock(noop));
+
+    expect(sent).toHaveLength(1);
+    const err = JSON.parse(sent[0]);
+    expect(err.type).toBe('channel:error');
+    expect(err.code).toBe('channel_id_collision');
+    // Map should not have been overwritten
+    expect(channelMap.get(channelId)).toBe('some/other/address');
+  });
+
+  it('allows re-opening the same address (idempotent)', async () => {
+    const addr = 'ai/stt/bln_ai/deepgram/nova-3';
+    const channelId = fnv32a(addr);
+    const channelMap = new Map([[channelId, addr]]); // already registered
+    const sent: string[] = [];
+
+    const mw = binaryChannelMiddleware(channelMap);
+    await mw(makeCtx({ type: 'channel:open', address: addr }, sent), mock(noop));
+
+    // No error, channel:opened sent again
+    expect(sent).toHaveLength(1);
+    expect(JSON.parse(sent[0]).type).toBe('channel:opened');
+  });
+
+  it('removes address from channelMap on channel:close', async () => {
+    const addr = 'ai/tts/bln_ai/deepgram/aura-2';
+    const channelId = fnv32a(addr);
+    const channelMap = new Map([[channelId, addr]]);
+
+    const mw = binaryChannelMiddleware(channelMap);
+    await mw(makeCtx({ type: 'channel:close', channelId }), mock(noop));
+
+    expect(channelMap.has(channelId)).toBe(false);
+  });
+
+  it('consumes channel:close — does not call next()', async () => {
+    const channelId = fnv32a('ai/tts/bln_ai/deepgram/aura-2');
+    const channelMap = new Map([[channelId, 'any']]);
+    const next = mock(noop);
+
+    const mw = binaryChannelMiddleware(channelMap);
+    await mw(makeCtx({ type: 'channel:close', channelId }), next);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('passes non-channel messages to next()', async () => {
+    const channelMap = new Map<number, string>();
+    const next = mock(noop);
+    const mw = binaryChannelMiddleware(channelMap);
+    await mw(makeCtx({ type: 'actor/ping', to: 'ai/inference/bln_ai/nim/kimi-k2.5' }), next);
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it('integrates correctly with full middleware stack', async () => {
+    const system = makeSystem();
+    const addr = 'ai/inference/bln_ai/nim/kimi-k2.5';
+    const channelMap = new Map<number, string>();
+    const sent: string[] = [];
+
+    const handle = composeWsMiddleware(
+      binaryChannelMiddleware(channelMap),
+      heartbeatMiddleware,
+      actorRoutingMiddleware(system as unknown as ActorSystem),
+    );
+
+    // channel:open — should register and send channel:opened
+    await handle(
+      JSON.stringify({ type: 'channel:open', address: addr }),
+      (json) => sent.push(json),
+    );
+    expect(sent).toHaveLength(1);
+    expect(JSON.parse(sent[0]).type).toBe('channel:opened');
+    expect(system.send).not.toHaveBeenCalled();
+
+    // actor message — should route through to system
+    await handle(
+      JSON.stringify({ type: 'ai.inference.request', to: addr, payload: { messages: [] } }),
+      (json) => sent.push(json),
+    );
+    expect(system.send).toHaveBeenCalledTimes(1);
   });
 });

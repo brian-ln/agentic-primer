@@ -96,4 +96,3 @@ If you need `instanceof ArrayBuffer` checks to work, set `ws.binaryType = "array
 ### Important gotcha: `send()` backpressure
 
 `BunWebSocketBridge.broadcast()` implements a per-connection drain queue. If `send()` returns `0` (dropped) or `-1` (backpressured), subsequent broadcasts for that socket are queued locally and flushed when the `drain` event fires.
-

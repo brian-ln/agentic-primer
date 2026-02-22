@@ -127,3 +127,22 @@
 {"id":"test-task-1","title":"Test task","lifecycle":"completed","assignee":"system"}
 {"id":"test-validate-001","title":"test-validate-001","lifecycle":"completed","assignee":"system"}
 {"id":"test-tag-node-001","title":"test-tag-node-001","lifecycle":"completed","assignee":"system"}
+{"id":"ap-bin-proto","title":"Binary channel protocol types: ChannelOpen/Opened/Close/Error","lifecycle":"completed","priority":"P1","assignee":"claude"}
+{"id":"ap-bin-fnv32a","title":"fnv32a hash utility in bridge-utils.ts","lifecycle":"completed","priority":"P1","assignee":"claude"}
+{"id":"ap-bin-serde","title":"PassthroughSerde: identity serde for binary payloads","lifecycle":"completed","priority":"P1","assignee":"claude"}
+{"id":"ap-bin-mw","title":"binaryChannelMiddleware: channel.open/close control plane","lifecycle":"completed","priority":"P1","assignee":"claude"}
+{"id":"ap-bin-frame","title":"handleBinaryFrame() utility: channelId lookup -> actor tell","lifecycle":"completed","priority":"P1","assignee":"claude"}
+{"id":"ap-bin-client","title":"Client-side binary channel: channelOpen(), encodeBinaryFrame(), fnv32a for browser/Bun callers","lifecycle":"completed","priority":"P1","assignee":"claude"}
+{"id":"ap-bin-cf","title":"CF WebSocketBridge: ArrayBuffer dispatch via channel map","lifecycle":"completed","priority":"P1","assignee":"claude"}
+{"id":"ap-bin-bun","title":"Bun WebSocketBridge: Uint8Array dispatch via channel map","lifecycle":"completed","priority":"P1","assignee":"claude"}
+{"id":"ap-virt-hier","title":"Hierarchical routing: virtual actor creation at segment boundaries","lifecycle":"completed","priority":"P1","assignee":"claude"}
+{"id":"ap-virt-tests","title":"Virtual actor routing: tests","lifecycle":"completed","priority":"P1","assignee":"claude"}
+{"id":"ai-creds","title":"CredentialsActor: @(ai/credentials/*) — CF AIG tokens, API keys","lifecycle":"completed","priority":"P2","assignee":"claude"}
+{"id":"ai-embeddings","title":"EmbeddingsActor: @(ai/embeddings/*) — virtual embeddings with batching","lifecycle":"completed","priority":"P2","assignee":"claude"}
+{"id":"bl-flux-relay","title":"FluxRelayActor: replaces VoiceSession DO, uses SttActor + binary channel","lifecycle":"completed","priority":"P2","assignee":"claude"}
+{"id":"bl-session","title":"agent-hub: wire SessionActor, replace SignalHubAgent impl","lifecycle":"completed","priority":"P3","assignee":"claude"}
+{"id":"bl-wrangler","title":"brianln.ai: wrangler.toml/jsonc updates for actor-based services","lifecycle":"completed","priority":"P3","assignee":"claude"}
+{"id":"dm-inference","title":"daemon: InferenceActor adapter wrapping chat/messages handlers","lifecycle":"completed","priority":"P3","assignee":"claude"}
+{"id":"dm-tts","title":"daemon: TtsActor adapter wrapping TTS handler","lifecycle":"completed","priority":"P3","assignee":"claude"}
+{"id":"dm-stt","title":"daemon: SttActor adapter wrapping STT handler","lifecycle":"completed","priority":"P3","assignee":"claude"}
+{"id":"dm-embeddings","title":"daemon: EmbeddingsActor adapter wrapping embeddings handler","lifecycle":"completed","priority":"P3","assignee":"claude"}

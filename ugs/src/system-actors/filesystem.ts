@@ -17,7 +17,7 @@ import * as fs from 'node:fs/promises';
 import * as fsSync from 'node:fs';
 import * as path from 'node:path';
 import { Actor, createResponse, createErrorResponse } from '@agentic-primer/actors';
-import type { Message, MessageResponse, MessageRouter } from '@agentic-primer/actors';
+import type { Message, MessageResponse, IMessageRouter } from '@agentic-primer/actors';
 
 /**
  * Filesystem operations
@@ -52,7 +52,7 @@ export class FileSystemActor extends Actor {
   private operations: Set<FileSystemOperation>;
   private watchers = new Map<string, fsSync.FSWatcher>();
 
-  constructor(id: string, router: MessageRouter, config: FileSystemActorConfig) {
+  constructor(id: string, router: IMessageRouter, config: FileSystemActorConfig) {
     super(id, router);
     // Resolve all paths at construction (prevents escapes)
     this.allowedPaths = config.allowedPaths.map(p => path.resolve(p));

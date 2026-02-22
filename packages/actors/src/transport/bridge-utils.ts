@@ -36,6 +36,135 @@ import type { ActorSystem } from '../actor-system.js';
 import { address, type Message } from '../message.js';
 
 // ---------------------------------------------------------------------------
+// Binary channel protocol types
+// (Schema source of truth: packages/protocols/schema/hub-messages.schema.json)
+// ---------------------------------------------------------------------------
+
+/**
+ * Client → Server: open a binary channel to an actor address.
+ * Message type: 'channel:open'
+ * Server replies with ChannelOpened containing the assigned channelId.
+ */
+export interface ChannelOpen {
+  type: 'channel:open';
+  /** Target actor address, e.g. @(ai/stt/bln_ai/deepgram/flux) */
+  address: string;
+}
+
+/**
+ * Server → Client: binary channel confirmed.
+ * Message type: 'channel:opened'
+ * channelId = fnv32a(address) & 0xFFFFFFFF.
+ * All subsequent binary frames prefixed with these 4 bytes (LE uint32) route to the bound actor.
+ */
+export interface ChannelOpened {
+  type: 'channel:opened';
+  channelId: number;
+  address: string;
+}
+
+/**
+ * Client or Server → peer: close a binary channel.
+ * Message type: 'channel:close'
+ */
+export interface ChannelClose {
+  type: 'channel:close';
+  channelId: number;
+  reason?: string;
+}
+
+/**
+ * Server → Client: error during channel open or frame delivery.
+ * Message type: 'channel:error'
+ */
+export interface ChannelError {
+  type: 'channel:error';
+  channelId: number;
+  code: 'address_not_found' | 'channel_id_collision' | 'channel_not_open' | 'actor_rejected' | 'internal_error';
+  message: string;
+}
+
+// ---------------------------------------------------------------------------
+// Binary channel utilities
+// ---------------------------------------------------------------------------
+
+/**
+ * FNV-1a 32-bit hash — deterministic, non-crypto, no external deps.
+ * Returns an unsigned 32-bit integer.
+ *
+ * Used to derive binary channel IDs from actor addresses:
+ *   channelId = fnv32a(actorAddress) & 0xFFFFFFFF
+ *
+ * Collision probability across 16 distinct actors: ~0.5%.
+ * On collision, channel:open returns 'channel_id_collision' and the
+ * client should retry with a salted address.
+ */
+export function fnv32a(str: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    hash ^= str.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0; // unsigned 32-bit
+  }
+  return hash;
+}
+
+/**
+ * Derive the channel ID for an actor address.
+ * Matches the server-side derivation in binaryChannelMiddleware.
+ */
+export function addressToChannelId(actorAddress: string): number {
+  return fnv32a(actorAddress);
+}
+
+/**
+ * Encode a binary frame: 4-byte LE channelId prefix + payload bytes.
+ * Used by clients (browser, Bun CLI) to send audio/binary data on a channel.
+ */
+export function encodeBinaryFrame(channelId: number, payload: Uint8Array): Uint8Array {
+  const frame = new Uint8Array(4 + payload.byteLength);
+  const view = new DataView(frame.buffer);
+  view.setUint32(0, channelId, /* littleEndian= */ true);
+  frame.set(payload, 4);
+  return frame;
+}
+
+/**
+ * Decode a binary frame: extract channelId and payload from a prefixed frame.
+ * Returns null if the frame is too short to contain a valid channelId prefix.
+ */
+export function decodeBinaryFrame(frame: Uint8Array): { channelId: number; payload: Uint8Array } | null {
+  if (frame.byteLength < 4) return null;
+  const view = new DataView(frame.buffer, frame.byteOffset, frame.byteLength);
+  const channelId = view.getUint32(0, /* littleEndian= */ true);
+  const payload = frame.subarray(4);
+  return { channelId, payload };
+}
+
+/**
+ * Route an incoming binary frame to a registered actor via the actor system.
+ *
+ * Called by bridge handleMessage implementations BEFORE composeWsMiddleware
+ * when the frame is binary. The channel map is maintained per-connection by
+ * binaryChannelMiddleware (populated on channel:open, cleared on channel:close).
+ *
+ * Returns true if routed, false if channelId not registered (frame is dropped).
+ */
+export function handleBinaryFrame(
+  frame: Uint8Array,
+  channelMap: Map<number, string>,
+  system: ActorSystem,
+): boolean {
+  const decoded = decodeBinaryFrame(frame);
+  if (!decoded) return false;
+
+  const actorAddress = channelMap.get(decoded.channelId);
+  if (!actorAddress) return false;
+
+  system.send(address(actorAddress), 'audio.frame', decoded.payload);
+  return true;
+}
+
+// ---------------------------------------------------------------------------
 // Heartbeat protocol types
 // ---------------------------------------------------------------------------
 
@@ -160,6 +289,63 @@ export const heartbeatMiddleware: WsMiddleware = (ctx, next) => {
   if (ctx.data.type !== 'HEARTBEAT_PING') return next();
   ctx.send(JSON.stringify(makeHeartbeatPong(ctx.data as { id: string })));
 };
+
+/**
+ * Binary channel control-plane middleware.
+ *
+ * Intercepts channel:open and channel:close text frames and manages a per-connection
+ * channel map (channelId → actor address). Binary data frames are NOT handled here —
+ * they bypass composeWsMiddleware entirely via handleBinaryFrame() in each bridge's
+ * handleMessage implementation.
+ *
+ * Usage:
+ *   const channelMap = new Map<number, string>();
+ *   const handle = composeWsMiddleware(
+ *     binaryChannelMiddleware(channelMap),
+ *     heartbeatMiddleware,
+ *     actorRoutingMiddleware(system),
+ *   );
+ *
+ * Each bridge creates one channelMap per connection and passes it to this middleware.
+ * The map is ephemeral — cleared on WebSocket close. Actors are durable; the channel
+ * binding is not.
+ */
+export function binaryChannelMiddleware(channelMap: Map<number, string>): WsMiddleware {
+  return (ctx, next) => {
+    const { type } = ctx.data;
+
+    if (type === 'channel:open') {
+      const { address: actorAddress } = ctx.data as { address: string };
+      const channelId = fnv32a(actorAddress);
+
+      // Collision check: reject if a *different* address already holds this channelId
+      const existing = channelMap.get(channelId);
+      if (existing && existing !== actorAddress) {
+        const err: ChannelError = {
+          type: 'channel:error',
+          channelId,
+          code: 'channel_id_collision',
+          message: `Channel ID ${channelId} already bound to ${existing}`,
+        };
+        ctx.send(JSON.stringify(err));
+        return;
+      }
+
+      channelMap.set(channelId, actorAddress);
+      const opened: ChannelOpened = { type: 'channel:opened', channelId, address: actorAddress };
+      ctx.send(JSON.stringify(opened));
+      return; // consume — do not route as actor message
+    }
+
+    if (type === 'channel:close') {
+      const { channelId } = ctx.data as { channelId: number };
+      channelMap.delete(channelId);
+      return; // consume
+    }
+
+    return next();
+  };
+}
 
 /**
  * Routes actor protocol messages ({ to, type, ... }) to the ActorSystem.

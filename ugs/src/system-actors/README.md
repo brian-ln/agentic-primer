@@ -224,7 +224,7 @@ class VirtualClock implements Clock {
 
 ### Message Flow
 
-```
+```text
 Actor
   └─> schedule(5000, 'timeout')
         └─> ask('/system/scheduler', 'scheduler.schedule', {...})
@@ -236,7 +236,7 @@ Actor
 
 ### Virtual Time Flow
 
-```
+```text
 Actor
   └─> schedule(5000, 'timeout')
         └─> VirtualClock.setTimeout(callback, 5000)

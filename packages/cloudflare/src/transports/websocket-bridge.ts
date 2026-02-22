@@ -17,21 +17,36 @@ import {
   composeWsMiddleware,
   heartbeatMiddleware,
   actorRoutingMiddleware,
+  binaryChannelMiddleware,
+  handleBinaryFrame,
 } from '@agentic-primer/actors';
 
 export class WebSocketBridge {
   private readonly ctx: DurableObjectState;
+  private readonly system: ActorSystem;
   private readonly serde: ISerde | undefined;
-  private readonly handle: ReturnType<typeof composeWsMiddleware>;
+  private readonly extraMiddleware: WsMiddleware[];
+  /**
+   * Per-connection binary channel maps: channelId → actor address.
+   * Populated by binaryChannelMiddleware on channel:open, cleared on channel:close.
+   * Map (not WeakMap) so handleClose can explicitly delete entries.
+   */
+  private readonly channelMaps = new Map<WebSocket, Map<number, string>>();
 
   constructor(ctx: DurableObjectState, system: ActorSystem, serde?: ISerde, ...extraMiddleware: WsMiddleware[]) {
     this.ctx = ctx;
+    this.system = system;
     this.serde = serde;
-    this.handle = composeWsMiddleware(
-      heartbeatMiddleware,
-      actorRoutingMiddleware(system),
-      ...extraMiddleware,
-    );
+    this.extraMiddleware = extraMiddleware;
+  }
+
+  private getChannelMap(ws: WebSocket): Map<number, string> {
+    let map = this.channelMaps.get(ws);
+    if (!map) {
+      map = new Map();
+      this.channelMaps.set(ws, map);
+    }
+    return map;
   }
 
   /**
@@ -52,13 +67,34 @@ export class WebSocketBridge {
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  /** Routes the message through the middleware stack. */
+  /**
+   * Route an incoming WebSocket frame.
+   *
+   * Binary frames (ArrayBuffer): binary channel fast-path — look up the actor
+   * address from the per-connection channel map via the 4-byte channelId prefix,
+   * deliver as Message<Uint8Array> to the actor. Bypasses middleware entirely.
+   *
+   * Text/string frames: channel control (channel:open/close) and actor protocol
+   * messages are handled via the composable middleware stack.
+   */
   handleMessage(ws: WebSocket, message: string | ArrayBuffer): void {
-    void this.handle(message, (json) => ws.send(json), this.serde);
+    if (message instanceof ArrayBuffer) {
+      handleBinaryFrame(new Uint8Array(message), this.getChannelMap(ws), this.system);
+      return;
+    }
+    const channelMap = this.getChannelMap(ws);
+    void composeWsMiddleware(
+      binaryChannelMiddleware(channelMap),
+      heartbeatMiddleware,
+      actorRoutingMiddleware(this.system),
+      ...this.extraMiddleware,
+    )(message, (json) => ws.send(json), this.serde);
   }
 
-  /** No-op — hibernation handles connection lifecycle. */
-  handleClose(_ws: WebSocket): void {}
+  /** Clears the binary channel map for this connection. */
+  handleClose(ws: WebSocket): void {
+    this.channelMaps.delete(ws);
+  }
 
   /** Broadcasts a message to all connected WebSockets. */
   broadcast<T>(message: T): void {

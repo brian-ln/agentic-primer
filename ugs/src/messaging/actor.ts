@@ -22,6 +22,8 @@ import {
   type HandlerRegistration,
   type ActorMetadata,
   type IntrospectResponse,
+  type Channel,
+  type ChannelOptions,
   address,
   createMessage,
   generateCorrelationId,
@@ -31,7 +33,6 @@ import {
   findClosestMatch,
   createPortChannel,
 } from '@agentic-primer/actors';
-import type { Channel, ChannelOptions } from './channel.ts';
 
 /**
  * Actor system statistics for monitoring

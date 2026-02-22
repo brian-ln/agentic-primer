@@ -184,7 +184,7 @@ export {
 
 // Transport and serialization implementations
 export { LocalTransport } from './transport/local-transport.ts';
-export { JsonSerde } from './transport/serde.ts';
+export { JsonSerde, PassthroughSerde } from './transport/serde.ts';
 
 // WebSocket bridge middleware — shared across Bun, Cloudflare, and future bridge targets
 export {
@@ -193,11 +193,21 @@ export {
   composeWsMiddleware,
   heartbeatMiddleware,
   actorRoutingMiddleware,
+  binaryChannelMiddleware,
+  handleBinaryFrame,
+  fnv32a,
+  addressToChannelId,
+  encodeBinaryFrame,
+  decodeBinaryFrame,
   type HeartbeatPing,
   type HeartbeatPong,
   makeHeartbeatPong,
   deserializeWsMessage,
   routeWsActorMessage,
+  type ChannelOpen,
+  type ChannelOpened,
+  type ChannelClose,
+  type ChannelError,
 } from './transport/bridge-utils.ts';
 
 // Storage validation (defense-in-depth)

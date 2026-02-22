@@ -262,7 +262,7 @@ Agentic Primer is a **protocol-first convergence platform** for multi-agent acto
 
 ### Three-Layer Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                   Protocol Layer (WIT)                       │
 │  • domain.wit (63+ types: Address, Node, Edge, etc.)        │
@@ -403,7 +403,7 @@ See `AGENTS.md` for:
 
 **Package:**
 - npm: `@agentic-primer/protocols`
-- Registry: https://www.npmjs.com/package/@agentic-primer/protocols
+- Registry: <https://www.npmjs.com/package/@agentic-primer/protocols>
 
 **Author:** Brian Lloyd-Newberry
 **License:** MIT

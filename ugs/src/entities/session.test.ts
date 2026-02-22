@@ -340,7 +340,9 @@ describe('SessionManager', () => {
         success: true,
         text: 'Hello! How can I help you?',
         model: 'claude-sonnet-4-5',
-        usage: { promptTokens: 10, completionTokens: 15, totalTokens: 25 }
+        usage: { promptTokens: 10, completionTokens: 15, totalTokens: 25 },
+        duration: 100,
+        timestamp: Date.now()
       }));
 
       await sessionManager.createSession('msg-session', 'test-model');
@@ -352,7 +354,7 @@ describe('SessionManager', () => {
 
     test('sendMessage accepts streaming options', async () => {
       const receivedTokens: string[] = [];
-      modelManager.invokeModel = mock(async (id, opts) => {
+      modelManager.invokeModel = mock(async (id: any, opts: any) => {
         // Simulate streaming by calling onToken
         if (opts.stream && opts.onToken) {
           opts.onToken('Hello');
@@ -362,7 +364,9 @@ describe('SessionManager', () => {
           success: true,
           text: 'Hello world',
           model: 'claude-sonnet-4-5',
-          usage: { promptTokens: 5, completionTokens: 2, totalTokens: 7 }
+          usage: { promptTokens: 5, completionTokens: 2, totalTokens: 7 },
+          duration: 50,
+          timestamp: Date.now()
         };
       });
 
@@ -381,7 +385,9 @@ describe('SessionManager', () => {
         success: true,
         text: 'Test response',
         model: 'claude-sonnet-4-5',
-        usage: { promptTokens: 5, completionTokens: 5, totalTokens: 10 }
+        usage: { promptTokens: 5, completionTokens: 5, totalTokens: 10 },
+        duration: 50,
+        timestamp: Date.now()
       }));
 
       await sessionManager.createSession('history-session', 'test-model');

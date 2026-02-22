@@ -76,7 +76,7 @@ describe('ExecutionContext', () => {
       const ctx = new ExecutionContext({
         config: { timeout: 5000 },
       });
-      expect(ctx.getConfig('timeout')).toBe(5000);
+      expect(ctx.getConfig<number>('timeout')).toBe(5000);
     });
 
     test('returns default if not found', () => {

@@ -1,0 +1,22 @@
+# Archived/historical docs — not actively maintained
+archive/
+
+# Internal AI/tooling state files
+.beads/
+.claude/
+
+# Generated test data directories
+data-test-*/
+data/
+
+# WIT domain generated docs
+core/wit/
+
+# Worktree and git internals
+.git/
+
+# node_modules (markdownlint-cli2 skips these by default, but be explicit)
+node_modules/
+
+# External package READMEs pulled in by bun
+**/node_modules/

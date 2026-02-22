@@ -24,7 +24,7 @@ Successfully integrated Signal Hub client into SEAG/UGS to enable local actors t
 
 ### Files Created
 
-```
+```text
 ugs/
 ├── src/
 │   ├── messaging/
@@ -42,7 +42,7 @@ ugs/
 
 ### Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    SEAG/UGS (Local Runtime)                     │
 │                                                                 │
@@ -407,13 +407,13 @@ Demonstrates:
 
 ### Short Term (P1)
 
-3. **SEAG Router Integration**
+1. **SEAG Router Integration**
    - Update MessageRouter to detect remote addresses
    - Implement bridge routing logic
    - Add configuration for Signal Hub bridge
    - Estimated effort: 3-4 hours
 
-4. **Deployment**
+2. **Deployment**
    - Set up environment variables
    - Deploy Signal Hub to Cloudflare
    - Configure JWT authentication
@@ -422,13 +422,13 @@ Demonstrates:
 
 ### Medium Term (P2)
 
-5. **Advanced Features**
+1. **Advanced Features**
    - Broadcast support (hub:broadcast)
    - Pub/sub support (hub:subscribe, hub:publish)
    - Flow control (hub:pause, hub:resume)
    - Estimated effort: 6-8 hours
 
-6. **Monitoring & Observability**
+2. **Monitoring & Observability**
    - Add metrics (connection uptime, message throughput)
    - Structured logging
    - Health checks
@@ -436,13 +436,13 @@ Demonstrates:
 
 ### Long Term (P3)
 
-7. **Optimization**
+1. **Optimization**
    - Connection pooling
    - Message batching
    - Compression
    - Estimated effort: 8-10 hours
 
-8. **Security Enhancements**
+2. **Security Enhancements**
    - JWT refresh
    - Message signing
    - Rate limiting

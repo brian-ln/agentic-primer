@@ -285,16 +285,32 @@ export class MessageRouter implements IMessageRouter {
       }
     }
 
-    // 5. Virtual actor factory — provision on demand
-    if (this.factories.length > 0) {
+    // 5. Virtual actor factory — provision on demand (Virtual Actor pattern)
+    //
+    // Hierarchical prefix fallback: for an address like `ai/stt/ns/deepgram/nova-3`,
+    // each factory is tried against the full address first, then against each parent
+    // prefix in order:
+    //   ai/stt/ns/deepgram/nova-3  →  ai/stt/ns/deepgram  →  ai/stt/ns  →  ai/stt  →  ai
+    //
+    // A factory with no prefix is tried for every candidate address.
+    // The first factory that returns non-null wins, and the actor is registered
+    // at the FULL original address (not the prefix that triggered the match).
+    {
+      const candidateAddresses: string[] = [targetPath];
+      const segments = targetPath.split('/');
+      for (let i = segments.length - 1; i >= 1; i--) {
+        candidateAddresses.push(segments.slice(0, i).join('/'));
+      }
+
       for (const entry of this.factories) {
-        if (entry.prefix && !targetPath.startsWith(entry.prefix)) continue;
-        const actor = await entry.factory(targetPath);
-        if (actor) {
-          // Cache at the full address so future sends bypass factory lookup
-          this.actorRegistry.set(targetPath, actor);
-          this.pathCache.set(targetPath, actor);
-          return await actor.receive(message);
+        for (const candidate of candidateAddresses) {
+          if (entry.prefix && !candidate.startsWith(entry.prefix)) continue;
+          const actor = await entry.factory(candidate);
+          if (actor) {
+            this.actorRegistry.set(targetPath, actor);
+            this.pathCache.set(targetPath, actor);
+            return await actor.receive(message);
+          }
         }
       }
     }
